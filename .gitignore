@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.pyc
+pipeline/.venv/
+.pytest_cache/
+
+# Raw API pull cache (rebuildable)
+data/raw_cache/
+
+# Node
+app/node_modules/
+app/dist/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+desktop.ini

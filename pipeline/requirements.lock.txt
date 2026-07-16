@@ -1,0 +1,13 @@
+# Pinned to match the old app's conda env (pda-ie) for exact model parity.
+# Python 3.11.x
+# NOTE: nfl_data_py 0.3.3 declares pandas<3, but the reference env runs pandas 3.0.0.
+# Install in two steps (see README/runbook):
+#   pip install pandas==3.0.0 numpy==1.26.4 scikit-learn==1.8.0 nflreadpy==0.1.2 pyarrow joblib
+#   pip install --no-deps nfl_data_py==0.3.3 appdirs fastparquet
+pandas==3.0.0
+numpy==1.26.4
+scikit-learn==1.8.0
+nfl_data_py==0.3.3
+nflreadpy==0.1.2
+pyarrow
+joblib

@@ -1,0 +1,37 @@
+name: weekly-data-refresh
+
+on:
+  schedule:
+    - cron: "0 12 * * 2" # Tuesday 12:00 UTC (after Monday Night Football)
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install pinned dependencies
+        run: |
+          pip install pandas==3.0.0 numpy==1.26.4 scikit-learn==1.8.0 nflreadpy==0.1.2 pyarrow joblib
+          pip install --no-deps nfl_data_py==0.3.3 appdirs fastparquet
+
+      - name: Run pipeline
+        run: python pipeline/run_pipeline.py --stage all --refresh
+
+      - name: Validate outputs
+        run: python pipeline/run_pipeline.py --stage validate
+
+      - name: Commit updated data
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "data: weekly refresh"
+          file_pattern: "data/nfl.sqlite app/public/data/**"
