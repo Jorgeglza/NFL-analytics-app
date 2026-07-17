@@ -17,12 +17,12 @@ Status legend: ☐ not started · ◐ in progress · ✅ done · ⛔ blocked
 - ⚠️ grades parity vs model_results.pkl: SKIPPED — old pkl unpicklable under pandas 3 (written by pandas 1.x; even the old app can't load it anymore). Parity relies on verbatim port + pinned sklearn. If exact confirmation needed: recompute grades inside `pda-ie` env from old code and diff.
 - Compatibility fixes (behavior-preserving, documented): nflreadpy 2025 frame now ships game_id/game_type → dropped in fetch.py before schedule merge; pandas 3 groupby.apply drops keys → ranks computed via per-column groupby.rank (identical output).
 
-### M2 — TS data layer + shared logic ◐
+### M2 — TS data layer + shared logic ✅ (zod schemas deferred)
 - ✅ Vite + React + TS + Tailwind v4 + ECharts + TanStack Table + react-router (HashRouter for static hosting); `npm run build` green
 - ✅ `src/lib/data/loader.ts` (compact column format), `src/lib/team/meta.ts` (colors/logos/WCAG)
 - ✅ `src/lib/logic/`: winType, wilson, spreadBins, moneyline, probBlend, edgeComposite, gameId, ranks
-- ☐ Vitest golden-fixture tests for the logic modules (pipeline should emit fixtures to `app/src/lib/logic/__fixtures__/`)
-- ☐ zod schemas (loader currently returns untyped records)
+- ✅ Vitest golden-fixture tests: `app/src/lib/logic/logic.test.ts` + `__fixtures__/golden.json` (fixtures generated from Python/numpy replicas of the old formulas — wilson, winType, moneyline, grade logistic/blend, polyfit slopes, edge composite, spread buckets, rank helpers). 42 tests green via `npm test`.
+- ☐ zod schemas (loader currently returns untyped records) — deferred; not needed for parity
 
 ### M3 — Page-by-page parity (order = simplest data first)
 - ◐ Home (functional; final design in M4)
@@ -42,8 +42,11 @@ Status legend: ☐ not started · ◐ in progress · ✅ done · ⛔ blocked
 **M3 page list complete** — all 12 pages + Grading Model tabs ported and number-checked.
 Per page: run old app side-by-side (`pda-ie` env), match tables/KPIs/chart series on ≥3 filter combos (incl. unplayed games, week 1, multi-season). Log deviations in page-mapping.md.
 
-### M4 — UI modernization (zero logic changes)
-- ☐ Responsive layouts, no clipped labels/overlap, loading/empty states, consistent spacing
+### M4 — UI modernization (zero logic changes) ◐
+- ✅ Route-level code splitting (React.lazy + Suspense) and vendor chunking (echarts/react) — initial JS ~15 kB + 164 kB react chunk; ECharts loads per page (was one 1.2 MB bundle).
+- ✅ Shared `components/Loading` spinner applied to every page (replaces blank screens / ad-hoc text).
+- ✅ `app/tsconfig.tsbuildinfo` untracked + gitignored.
+- ☐ Deeper responsive/label-overlap pass per page (visual review with the browser open).
 
 ### M5 — Deploy + automation
 - ☐ `.github/workflows/weekly-refresh.yml` (cron Tue 12:00 UTC + dispatch → pipeline → validate → auto-commit)

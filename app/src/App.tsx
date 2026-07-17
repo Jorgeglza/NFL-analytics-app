@@ -1,33 +1,24 @@
+import { Suspense, lazy, type ComponentType, type LazyExoticComponent } from "react";
 import { Route, Routes } from "react-router-dom";
 import Navbar from "./components/Navbar";
+import { Loading } from "./components/Loading";
 import Home from "./pages/Home";
-import GamePicks from "./pages/game-analysis/GamePicks";
-import WinTypes from "./pages/game-analysis/WinTypes";
-import SpreadWinPct from "./pages/game-analysis/SpreadWinPct";
-import GradingModel from "./pages/grading-model/GradingModel";
-import TeamComparison from "./pages/game-analysis/TeamComparison";
-import Scorecards from "./pages/game-analysis/Scorecards";
-import MatchupPreviews from "./pages/game-analysis/previews/MatchupPreviews";
-import PropBets from "./pages/player-analysis/PropBets";
-import ParlayBuilder from "./pages/player-analysis/ParlayBuilder";
-import PlayerTeamStats from "./pages/player-analysis/PlayerTeamStats";
-import MatchupBets from "./pages/player-analysis/MatchupBets";
-import ValueBets from "./pages/player-analysis/ValueBets";
 import { NAV_GROUPS } from "./nav";
 
-const IMPLEMENTED: Record<string, () => JSX.Element> = {
-  "/game_analysis/game_picks": GamePicks,
-  "/game_analysis/win_types": WinTypes,
-  "/game_analysis/spread_win_percentage": SpreadWinPct,
-  "/data/grading_model": GradingModel,
-  "/game_analysis/team_comparison": TeamComparison,
-  "/game_analysis/scorecards_teams": Scorecards,
-  "/game_analysis/matchup_previews": MatchupPreviews,
-  "/player_analysis/prop_bets_players": PropBets,
-  "/player_analysis/build_parlay": ParlayBuilder,
-  "/player_analysis/player_team_stats": PlayerTeamStats,
-  "/player_analysis/matchup_bets": MatchupBets,
-  "/player_analysis/value_bets": ValueBets,
+// Pages are lazy-loaded so ECharts-heavy routes don't bloat the initial bundle (M4).
+const IMPLEMENTED: Record<string, LazyExoticComponent<ComponentType>> = {
+  "/game_analysis/game_picks": lazy(() => import("./pages/game-analysis/GamePicks")),
+  "/game_analysis/win_types": lazy(() => import("./pages/game-analysis/WinTypes")),
+  "/game_analysis/spread_win_percentage": lazy(() => import("./pages/game-analysis/SpreadWinPct")),
+  "/game_analysis/team_comparison": lazy(() => import("./pages/game-analysis/TeamComparison")),
+  "/game_analysis/scorecards_teams": lazy(() => import("./pages/game-analysis/Scorecards")),
+  "/game_analysis/matchup_previews": lazy(() => import("./pages/game-analysis/previews/MatchupPreviews")),
+  "/player_analysis/prop_bets_players": lazy(() => import("./pages/player-analysis/PropBets")),
+  "/player_analysis/build_parlay": lazy(() => import("./pages/player-analysis/ParlayBuilder")),
+  "/player_analysis/player_team_stats": lazy(() => import("./pages/player-analysis/PlayerTeamStats")),
+  "/player_analysis/matchup_bets": lazy(() => import("./pages/player-analysis/MatchupBets")),
+  "/player_analysis/value_bets": lazy(() => import("./pages/player-analysis/ValueBets")),
+  "/data/grading_model": lazy(() => import("./pages/grading-model/GradingModel")),
 };
 
 function Placeholder({ name, description }: { name: string; description: string }) {
@@ -48,19 +39,21 @@ export default function App() {
     <div className="min-h-screen">
       <Navbar />
       <main className="mx-auto max-w-screen-2xl px-4 py-6">
-        <Routes>
-          <Route path="/" element={<Home />} />
-          {NAV_GROUPS.flatMap((g) => g.pages).map((page) => {
-            const Impl = IMPLEMENTED[page.path];
-            return (
-              <Route
-                key={page.path}
-                path={page.path}
-                element={Impl ? <Impl /> : <Placeholder name={page.label} description={page.description} />}
-              />
-            );
-          })}
-        </Routes>
+        <Suspense fallback={<Loading />}>
+          <Routes>
+            <Route path="/" element={<Home />} />
+            {NAV_GROUPS.flatMap((g) => g.pages).map((page) => {
+              const Impl = IMPLEMENTED[page.path];
+              return (
+                <Route
+                  key={page.path}
+                  path={page.path}
+                  element={Impl ? <Impl /> : <Placeholder name={page.label} description={page.description} />}
+                />
+              );
+            })}
+          </Routes>
+        </Suspense>
       </main>
     </div>
   );

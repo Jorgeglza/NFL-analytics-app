@@ -6,6 +6,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { getSchedule, type Row } from "../../lib/data/loader";
 import { useECharts } from "../../components/charts/useECharts";
+import { Loading } from "../../components/Loading";
 
 type Category =
   | "Favorite home"
@@ -277,7 +278,7 @@ export default function WinTypes() {
         </div>
       </div>
 
-      {!reg.length && <div className="py-16 text-center text-sm text-slate-400">Loading schedule…</div>}
+      {!reg.length && <Loading label="Loading schedule…" />}
 
       {mode === "season" ? (
         <div className="space-y-8">

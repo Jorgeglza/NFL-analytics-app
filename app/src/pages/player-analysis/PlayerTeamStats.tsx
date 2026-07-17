@@ -5,6 +5,7 @@ import type { EChartsOption } from "echarts";
 import { getPlayerWeek, getMeta, type Row } from "../../lib/data/loader";
 import { getTeamMetaMap, readableTextColor, type TeamMeta } from "../../lib/team/meta";
 import { Select } from "../../components/filters/Select";
+import { Loading } from "../../components/Loading";
 import { useECharts } from "../../components/charts/useECharts";
 
 const EXCLUDE = new Set([
@@ -190,7 +191,7 @@ export default function PlayerTeamStats() {
     return { blocks, xMax };
   }, [typed, selStat, weekLo, weekHi, meta]);
 
-  if (!meta) return <div className="py-16 text-center text-sm text-slate-400">Loading…</div>;
+  if (!meta) return <Loading />;
 
   let prevConf = "";
   return (

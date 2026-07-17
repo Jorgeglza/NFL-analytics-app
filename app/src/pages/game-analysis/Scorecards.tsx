@@ -5,6 +5,7 @@ import { getTeamWeek, type Row } from "../../lib/data/loader";
 import { getTeamMetaMap, type TeamMeta } from "../../lib/team/meta";
 import { Select } from "../../components/filters/Select";
 import { useECharts } from "../../components/charts/useECharts";
+import { Loading } from "../../components/Loading";
 import { getMeta } from "../../lib/data/loader";
 
 const STAT_MAP: Record<string, [string, string, string][]> = {
@@ -138,7 +139,7 @@ export default function Scorecards() {
     );
   }
 
-  if (!meta) return <div className="py-16 text-center text-sm text-slate-400">Loading…</div>;
+  if (!meta) return <Loading />;
   const tm = meta.get(team);
 
   return (

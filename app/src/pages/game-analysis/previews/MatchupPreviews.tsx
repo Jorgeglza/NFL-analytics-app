@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { getSchedule, getGrades, getTeamWeek, getTeamWeekRanks, getMeta, type Row } from "../../../lib/data/loader";
 import { getTeamMetaMap, type TeamMeta } from "../../../lib/team/meta";
 import { buildHist, buildGradesIndex, buildTeamWeekIndex } from "./engine";
+import { Loading } from "../../../components/Loading";
 import WeekPreviewTab from "./WeekPreviewTab";
 import MatchupTab from "./MatchupTab";
 import ModelOverviewTab from "./ModelOverviewTab";
@@ -60,7 +61,7 @@ export default function MatchupPreviews() {
       </div>
 
       {loading ? (
-        <div className="py-16 text-center text-sm text-slate-400">Loading all seasons…</div>
+        <Loading label="Loading all seasons…" />
       ) : (
         <>
           {tab === "Week Preview" && <WeekPreviewTab schedule={schedule} meta={meta} hist={hist} gradesIdx={gradesIdx} twIdx={twIdx} />}

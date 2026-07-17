@@ -1,0 +1,315 @@
+{
+ "wilson": [
+  {
+   "p": 0.5,
+   "n": 10,
+   "center": 0.5,
+   "low": 0.23658959361548731,
+   "high": 0.7634104063845126
+  },
+  {
+   "p": 0.65,
+   "n": 271,
+   "center": 0.647903374161699,
+   "low": 0.5914739637330131,
+   "high": 0.7043327845903848
+  },
+  {
+   "p": 0.9714285714285714,
+   "n": 35,
+   "center": 0.9248022738507167,
+   "low": 0.8546659090672868,
+   "high": 0.9949386386341466
+  },
+  {
+   "p": 1.0,
+   "n": 3,
+   "center": 0.7192469597754911,
+   "low": 0.43849391955098227,
+   "high": 1
+  },
+  {
+   "p": 0.0,
+   "n": 7,
+   "center": 0.17716942148760328,
+   "low": 0,
+   "high": 0.35433884297520657
+  },
+  {
+   "p": 0.583,
+   "n": 1200,
+   "center": 0.5827351372472923,
+   "low": 0.5548807674028938,
+   "high": 0.6105895070916908
+  },
+  {
+   "p": 0.25,
+   "n": 4,
+   "center": 0.3724750051009998,
+   "low": 0.045586062644636216,
+   "high": 0.6993639475573634
+  }
+ ],
+ "winType": [
+  {
+   "homeScore": 28,
+   "awayScore": 21,
+   "spread": -7.5,
+   "expected": "Favorite home"
+  },
+  {
+   "homeScore": 21,
+   "awayScore": 28,
+   "spread": -7.5,
+   "expected": "Underdog away"
+  },
+  {
+   "homeScore": 10,
+   "awayScore": 10,
+   "spread": -3,
+   "expected": null
+  },
+  {
+   "homeScore": 30,
+   "awayScore": 20,
+   "spread": 3.5,
+   "expected": "Underdog home"
+  },
+  {
+   "homeScore": 20,
+   "awayScore": 30,
+   "spread": 3.5,
+   "expected": "Favorite away"
+  },
+  {
+   "homeScore": null,
+   "awayScore": null,
+   "spread": -7.5,
+   "expected": null
+  },
+  {
+   "homeScore": 17,
+   "awayScore": 14,
+   "spread": 0,
+   "expected": null
+  },
+  {
+   "homeScore": 17,
+   "awayScore": 14,
+   "spread": null,
+   "expected": null
+  }
+ ],
+ "moneyline": [
+  {
+   "awayMl": 130,
+   "homeMl": -155,
+   "awayImplied": 0.43478260869565216,
+   "homeImplied": 0.6078431372549019,
+   "awayFair": 0.4170073589533933,
+   "homeFair": 0.5829926410466066,
+   "overround": 0.04262574595055413
+  },
+  {
+   "awayMl": -110,
+   "homeMl": -110,
+   "awayImplied": 0.5238095238095238,
+   "homeImplied": 0.5238095238095238,
+   "awayFair": 0.5,
+   "homeFair": 0.5,
+   "overround": 0.04761904761904767
+  },
+  {
+   "awayMl": 250,
+   "homeMl": -320,
+   "awayImplied": 0.2857142857142857,
+   "homeImplied": 0.7619047619047619,
+   "awayFair": 0.27272727272727276,
+   "homeFair": 0.7272727272727274,
+   "overround": 0.04761904761904745
+  },
+  {
+   "awayMl": 100,
+   "homeMl": -120,
+   "awayImplied": 0.5,
+   "homeImplied": 0.5454545454545454,
+   "awayFair": 0.4782608695652174,
+   "homeFair": 0.5217391304347826,
+   "overround": 0.045454545454545414
+  }
+ ],
+ "gradeModel": [
+  {
+   "gradeAway": 60.0,
+   "gradeHome": 50.0,
+   "pAway": 0.700567142473973,
+   "blendWithMarket0_6": 0.4797731430104108
+  },
+  {
+   "gradeAway": 50.0,
+   "gradeHome": 60.0,
+   "pAway": 0.29943285752602705,
+   "blendWithMarket0_6": 0.6402268569895893
+  },
+  {
+   "gradeAway": 55.5,
+   "gradeHome": 55.5,
+   "pAway": 0.5,
+   "blendWithMarket0_6": 0.56
+  },
+  {
+   "gradeAway": 70.2,
+   "gradeHome": 41.9,
+   "pAway": 0.9172457456464407,
+   "blendWithMarket0_6": 0.3931017017414237
+  }
+ ],
+ "slopes": [
+  {
+   "values": [
+    -5.02,
+    18.03,
+    9.28,
+    3.95,
+    -13.76
+   ],
+   "n": 5,
+   "slope": -3.1560000000000015,
+   "meanLast3": -0.17666666666666644
+  },
+  {
+   "values": [
+    -13.76,
+    -17.68,
+    14.65,
+    4.04,
+    8.32
+   ],
+   "n": 5,
+   "slope": 6.588000000000001,
+   "meanLast3": 9.003333333333334
+  },
+  {
+   "values": [
+    -19.18,
+    18.8,
+    13.3,
+    -11.51,
+    -12.73
+   ],
+   "n": 5,
+   "slope": -1.741,
+   "meanLast3": -3.6466666666666665
+  },
+  {
+   "values": [
+    -12.66,
+    -7.83,
+    0.99,
+    -2.72,
+    -8.35
+   ],
+   "n": 5,
+   "slope": 1.3730000000000016,
+   "meanLast3": -3.36
+  }
+ ],
+ "edgeComposite": [
+  {
+   "gradeAway": 60,
+   "gradeHome": 50,
+   "away": {
+    "pmL3": 5,
+    "epaL3": 0.1,
+    "tomL3": 1,
+    "pmSlope": 0.5
+   },
+   "home": {
+    "pmL3": 2,
+    "epaL3": -0.05,
+    "tomL3": -1,
+    "pmSlope": 0.2
+   },
+   "edge": 4.91,
+   "pAway": 0.643181567501221
+  },
+  {
+   "gradeAway": 45,
+   "gradeHome": 55,
+   "away": {
+    "pmL3": -3,
+    "epaL3": -0.2,
+    "tomL3": 0,
+    "pmSlope": -1
+   },
+   "home": {
+    "pmL3": 4,
+    "epaL3": 0.3,
+    "tomL3": 2,
+    "pmSlope": 0.8
+   },
+   "edge": -6.129999999999999,
+   "pAway": 0.32396705095680206
+  }
+ ],
+ "spreadBuckets": [
+  {
+   "value": -7.5,
+   "binSize": 1.0,
+   "label": "-8 to -7",
+   "lo": -8.0
+  },
+  {
+   "value": -7.5,
+   "binSize": 0.5,
+   "label": "-7.5 to -7.0",
+   "lo": -7.5
+  },
+  {
+   "value": 3.0,
+   "binSize": 1.0,
+   "label": "3 to 4",
+   "lo": 3.0
+  },
+  {
+   "value": 0.0,
+   "binSize": 1.0,
+   "label": "0 to 1",
+   "lo": 0.0
+  },
+  {
+   "value": -0.5,
+   "binSize": 0.5,
+   "label": "-0.5 to 0.0",
+   "lo": -0.5
+  },
+  {
+   "value": 13.5,
+   "binSize": 2.0,
+   "label": "12 to 14",
+   "lo": 12.0
+  },
+  {
+   "value": -14.0,
+   "binSize": 1.0,
+   "label": "-14 to -13",
+   "lo": -14.0
+  }
+ ],
+ "ranks": [
+  {
+   "offRank": 3,
+   "defAllowedRank": 28,
+   "maxRank": 32,
+   "score": 25,
+   "edge": 58
+  },
+  {
+   "offRank": 30,
+   "defAllowedRank": 2,
+   "maxRank": 32,
+   "score": -28,
+   "edge": 5
+  }
+ ]
+}

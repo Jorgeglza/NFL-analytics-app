@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { getGrades, getFeatureImportance, getSchedule, getContribParams, type Row, type ContribParams } from "../../lib/data/loader";
 import { getTeamMetaMap, type TeamMeta } from "../../lib/team/meta";
+import { Loading } from "../../components/Loading";
 import SeasonTab from "./SeasonTab";
 import TeamsTab from "./TeamsTab";
 import WeeklyTab from "./WeeklyTab";
@@ -46,7 +47,7 @@ export default function GradingModel() {
       </div>
 
       {loading ? (
-        <div className="py-16 text-center text-sm text-slate-400">Loading model data…</div>
+        <Loading label="Loading model data…" />
       ) : (
         <>
           {tab === "Season" && <SeasonTab grades={grades} schedule={schedule} meta={meta} />}

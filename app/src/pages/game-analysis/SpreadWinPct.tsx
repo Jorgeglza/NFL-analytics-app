@@ -10,6 +10,7 @@ import { useECharts } from "../../components/charts/useECharts";
 import type { EChartsOption } from "echarts";
 import { wilson } from "../../lib/logic/wilson";
 import { WIN_TYPE_COLORS, type WinType } from "../../lib/logic/winType";
+import { Loading } from "../../components/Loading";
 
 const WIN_TYPE_CATS: WinType[] = ["Favorite home", "Favorite away", "Underdog home", "Underdog away"];
 
@@ -438,6 +439,8 @@ export default function SpreadWinPct() {
   const stackedRef = useECharts(stackedOption as EChartsOption | null);
   const heatRef = useECharts(heatOption as EChartsOption | null);
   const liftRef = useECharts(liftOption);
+
+  if (!schedule.length) return <Loading label="Loading schedule…" />;
 
   return (
     <div className="space-y-4">

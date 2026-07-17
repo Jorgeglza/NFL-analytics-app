@@ -8,6 +8,7 @@ import { getTeamMetaMap, type TeamMeta } from "../../lib/team/meta";
 import { Select } from "../../components/filters/Select";
 import { useECharts } from "../../components/charts/useECharts";
 import { opponentLabel } from "../grading-model/shared";
+import { Loading } from "../../components/Loading";
 
 const PRIORITY = [
   "passing_yards", "rushing_yards", "receiving_yards", "passing_tds", "rushing_tds", "receiving_tds",
@@ -405,6 +406,8 @@ export default function MatchupBets() {
   const playerDonutRef = useECharts(playerDonutOption);
 
   const fmt = (v: number | null | undefined) => (v == null ? "" : Number.isInteger(v) ? String(v) : v.toFixed(1));
+
+  if (!pw.length || !meta) return <Loading label="Loading matchup data…" />;
 
   return (
     <div className="space-y-4">

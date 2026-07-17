@@ -7,6 +7,7 @@ import { getPlayerWeek, getMeta, type Row } from "../../lib/data/loader";
 import { Select } from "../../components/filters/Select";
 import { useECharts } from "../../components/charts/useECharts";
 import { opponentLabel } from "../grading-model/shared";
+import { Loading } from "../../components/Loading";
 
 const EXCLUDE = new Set([
   "season", "week", "team", "opponent_team", "gameday", "game_id",
@@ -229,6 +230,8 @@ export default function ParlayBuilder() {
   const probs = legs.map((_, i) => pcts[i]).filter((p): p is number => p != null).map((p) => p / 100);
   const expectedProb = probs.length ? probs.reduce((a, b) => a * b, 1) : null;
   const expectedOdds = expectedProb != null && expectedProb > 0 ? 1 / expectedProb : null;
+
+  if (!legs.length) return <Loading label="Loading player data…" />;
 
   return (
     <div className="space-y-4">

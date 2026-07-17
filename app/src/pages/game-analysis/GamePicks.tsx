@@ -6,6 +6,7 @@ import type { EChartsOption } from "echarts";
 import { getSchedule, type Row } from "../../lib/data/loader";
 import { Select } from "../../components/filters/Select";
 import { useECharts } from "../../components/charts/useECharts";
+import { Loading } from "../../components/Loading";
 
 const LABEL_FOR_NONE = "No result yet";
 const COLORS: Record<string, string> = {
@@ -182,6 +183,8 @@ export default function GamePicks() {
   }, [games]);
 
   const chartRef = useECharts(chartOption);
+
+  if (!schedule.length) return <Loading label="Loading schedule…" />;
 
   return (
     <div className="space-y-6">

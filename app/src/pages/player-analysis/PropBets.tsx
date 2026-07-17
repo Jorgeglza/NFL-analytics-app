@@ -6,6 +6,7 @@ import { getPlayerWeek, getMeta, type Row } from "../../lib/data/loader";
 import { Select } from "../../components/filters/Select";
 import { useECharts } from "../../components/charts/useECharts";
 import { opponentLabel } from "../grading-model/shared";
+import { Loading } from "../../components/Loading";
 
 const EXCLUDE = new Set([
   "season", "week", "team", "opponent_team", "gameday", "game_id",
@@ -179,6 +180,8 @@ export default function PropBets() {
 
   const fmt = (v: number | null | undefined) =>
     v == null ? "" : Number.isInteger(v) ? String(v) : v.toFixed(1);
+
+  if (!rows.length) return <Loading label="Loading player data…" />;
 
   return (
     <div className="space-y-4">

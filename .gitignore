@@ -15,3 +15,6 @@ app/dist/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# TS build cache
+app/tsconfig.tsbuildinfo

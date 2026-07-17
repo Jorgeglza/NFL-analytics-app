@@ -6,6 +6,7 @@ import { getTeamWeek, getTeamWeekRanks, getGrades, type Row } from "../../lib/da
 import { getTeamMetaMap, type TeamMeta } from "../../lib/team/meta";
 import { Select } from "../../components/filters/Select";
 import { useECharts } from "../../components/charts/useECharts";
+import { Loading } from "../../components/Loading";
 import { opponentLabel } from "../grading-model/shared";
 
 const STAT_LIST = ["points", "total_yards", "total_tds", "passing_yards", "rushing_yards", "turnovers"];
@@ -299,7 +300,7 @@ export default function TeamComparison() {
   const m2MainRef = useECharts(m2?.main ?? null);
   const m2RankRef = useECharts(m2?.rank ?? null);
 
-  if (!meta) return <div className="py-16 text-center text-sm text-slate-400">Loading…</div>;
+  if (!meta) return <Loading />;
 
   function GradesBox({ team }: { team: string }) {
     const [ovr, off, def] = gradesOf(team);
@@ -376,6 +377,8 @@ export default function TeamComparison() {
             ))}
           </div>
           <hr className="mb-4" />
+          <div className="overflow-x-auto">
+          <div className="min-w-[560px]">
           <div className="mb-3 flex items-center justify-center gap-4 text-xs font-bold text-slate-600">
             <div className="flex flex-1 justify-end gap-1.5">
               <div className="w-16 text-center">Prev</div>
@@ -392,6 +395,8 @@ export default function TeamComparison() {
           <Section name="Overall" stats={["points_margin", "turnover_margin", "epa_diff"]} />
           <Section name="Offensive stats" stats={STAT_LIST} bg="rgba(255,0,0,0.025)" />
           <Section name="Defensive stats" stats={STAT_LIST.map((s) => `${s}_allowed`)} bg="rgba(0,123,255,0.025)" />
+          </div>
+          </div>
         </div>
 
         <TeamColumn team={team2} setTeam={setTeam2} trendRef={trend2Ref} mainRef={m2MainRef} rankRef={m2RankRef} label="Team 2" />
