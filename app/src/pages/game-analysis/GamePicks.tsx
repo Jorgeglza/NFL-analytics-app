@@ -1,16 +1,46 @@
-// Port of game_picks_page_1.py — weekly results, win-type counts, spread scatter.
+// Port of game_picks_page_1.py — weekly results table with manual-winner
+// checkboxes for unplayed games (persisted in localStorage), win-type counts
+// bar, and spread-by-win-type scatter with ×N collision markers.
 import { useEffect, useMemo, useState } from "react";
+import type { EChartsOption } from "echarts";
 import { getSchedule, type Row } from "../../lib/data/loader";
 import { Select } from "../../components/filters/Select";
 import { useECharts } from "../../components/charts/useECharts";
-import { WIN_TYPE_COLORS, type WinType } from "../../lib/logic/winType";
 
-const WIN_TYPES: WinType[] = ["Favorite home", "Favorite away", "Underdog home", "Underdog away"];
+const LABEL_FOR_NONE = "No result yet";
+const COLORS: Record<string, string> = {
+  "Favorite home": "#3C9A5F",
+  "Favorite away": "#2459A7",
+  "Underdog home": "#E87722",
+  "Underdog away": "#C8102E",
+  [LABEL_FOR_NONE]: "#e0e0e0",
+};
+const ROW_BG: Record<string, string> = {
+  "Favorite home": "rgba(60,154,95,0.2)",
+  "Favorite away": "rgba(36,89,167,0.2)",
+  "Underdog home": "rgba(232,119,34,0.2)",
+  "Underdog away": "rgba(200,16,46,0.2)",
+};
+const ORDER = ["Favorite home", "Favorite away", "Underdog home", "Underdog away", LABEL_FOR_NONE];
+const LS_KEY = "gamePicks.manualWinners";
+
+function loadManual(): string[] {
+  try {
+    return JSON.parse(localStorage.getItem(LS_KEY) ?? "[]");
+  } catch {
+    return [];
+  }
+}
 
 export default function GamePicks() {
   const [schedule, setSchedule] = useState<Row[]>([]);
   const [season, setSeason] = useState("");
   const [week, setWeek] = useState("");
+  const [manual, setManual] = useState<string[]>(loadManual);
+
+  useEffect(() => {
+    localStorage.setItem(LS_KEY, JSON.stringify(manual));
+  }, [manual]);
 
   useEffect(() => {
     getSchedule().then((rows) => {
@@ -19,107 +49,145 @@ export default function GamePicks() {
       if (seasons.length) {
         const s = seasons[0];
         setSeason(String(s));
-        // default to the last week with a played game, else week 1
         const played = rows.filter((r) => Number(r.season) === s && r.home_score != null);
-        const w = played.length ? Math.max(...played.map((r) => Number(r.week))) : 1;
-        setWeek(String(w));
+        setWeek(String(played.length ? Math.max(...played.map((r) => Number(r.week))) : 1));
       }
     });
   }, []);
 
-  const seasons = useMemo(
-    () => [...new Set(schedule.map((r) => Number(r.season)))].sort((a, b) => b - a),
-    [schedule],
-  );
+  const seasons = useMemo(() => [...new Set(schedule.map((r) => Number(r.season)))].sort((a, b) => b - a), [schedule]);
   const weeks = useMemo(
-    () =>
-      [...new Set(schedule.filter((r) => String(r.season) === season).map((r) => Number(r.week)))].sort(
-        (a, b) => a - b,
-      ),
+    () => [...new Set(schedule.filter((r) => String(r.season) === season).map((r) => Number(r.week)))].sort((a, b) => a - b),
     [schedule, season],
   );
 
-  const games = useMemo(
-    () =>
-      schedule
-        .filter((r) => String(r.season) === season && String(r.week) === week)
-        .sort((a, b) => String(a.gameday ?? "").localeCompare(String(b.gameday ?? ""))),
-    [schedule, season, week],
-  );
+  const games = useMemo(() => {
+    return schedule
+      .filter((r) => String(r.season) === season && String(r.week) === week)
+      .map((g) => {
+        const gid = String(g.game_id);
+        const hs = g.home_score == null ? null : Number(g.home_score);
+        const as_ = g.away_score == null ? null : Number(g.away_score);
+        const manualWinner = hs == null && as_ == null ? (manual.includes(`${gid}_home`) ? "home" : manual.includes(`${gid}_away`) ? "away" : null) : null;
+        const winner = hs != null && as_ != null ? (hs > as_ ? "home" : as_ > hs ? "away" : null) : manualWinner;
+        const spread = g.spread_line == null ? null : Number(g.spread_line);
+        const favorite = spread == null ? null : spread < 0 ? "home" : spread > 0 ? "away" : "none";
+        let winType: string | null = null;
+        if (winner != null && favorite != null && favorite !== "none") {
+          if (winner === favorite) winType = winner === "home" ? "Favorite home" : "Favorite away";
+          else winType = winner === "home" ? "Underdog home" : "Underdog away";
+        }
+        const winnerTeam = winner === "home" ? String(g.home_team) : winner === "away" ? String(g.away_team) : null;
+        return { g, gid, hs, as_, spread, winner, winType, winnerTeam, label: winType ?? LABEL_FOR_NONE };
+      })
+      .sort((a, b) => String(a.g.gameday ?? "").localeCompare(String(b.g.gameday ?? "")));
+  }, [schedule, season, week, manual]);
 
-  const counts = useMemo(() => {
-    const c: Record<string, number> = {};
+  const toggleManual = (gid: string, side: "home" | "away") => {
+    setManual((cur) => {
+      const cleared = cur.filter((c) => !c.startsWith(`${gid}_`));
+      const key = `${gid}_${side}`;
+      return cur.includes(key) ? cleared : [...cleared, key];
+    });
+  };
+
+  const chartOption = useMemo<EChartsOption | null>(() => {
+    if (!games.length) return null;
+    const counts = new Map<string, number>();
+    for (const g of games) counts.set(g.label, (counts.get(g.label) ?? 0) + 1);
+    const present = ORDER.filter((l) => counts.has(l));
+    const total = games.length;
+
+    // scatter collisions per (label, spread rounded 2)
+    const groups = new Map<string, typeof games>();
     for (const g of games) {
-      const wt = g["Win Type"];
-      if (wt != null) c[String(wt)] = (c[String(wt)] ?? 0) + 1;
+      if (g.spread == null || !present.includes(g.label)) continue;
+      const key = `${g.label}|${g.spread.toFixed(2)}`;
+      groups.set(key, [...(groups.get(key) ?? []), g]);
     }
-    return c;
-  }, [games]);
+    const singles: { label: string; spread: number; g: (typeof games)[number] }[] = [];
+    const overlaps: { label: string; spread: number; items: typeof games }[] = [];
+    for (const [key, items] of groups) {
+      const [label, spreadStr] = key.split("|");
+      if (items.length > 1) overlaps.push({ label, spread: Number(spreadStr), items });
+      else singles.push({ label, spread: Number(spreadStr), g: items[0] });
+    }
 
-  const total = Object.values(counts).reduce((a, b) => a + b, 0);
-
-  const barOption = useMemo(() => {
-    if (!total) return null;
     return {
-      grid: { left: 10, right: 10, top: 30, bottom: 10, containLabel: true },
-      xAxis: { type: "value" as const, max: total, show: false },
-      yAxis: { type: "category" as const, data: ["Win types"], show: false },
-      series: WIN_TYPES.filter((wt) => counts[wt]).map((wt) => ({
-        name: wt,
-        type: "bar" as const,
-        stack: "total",
-        data: [counts[wt]],
-        itemStyle: { color: WIN_TYPE_COLORS[wt] },
-        label: {
-          show: true,
-          formatter: () => `${wt}\n${counts[wt]} | ${Math.round((counts[wt] / total) * 100)}%`,
-          color: "#fff",
-          fontSize: 11,
-        },
-      })),
-      legend: { show: true, top: 0 },
-      tooltip: { trigger: "item" as const },
-    };
-  }, [counts, total]);
-
-  const scatterOption = useMemo(() => {
-    const pts = games.filter((g) => g.spread_line != null);
-    if (!pts.length) return null;
-    return {
-      grid: { left: 10, right: 20, top: 30, bottom: 10, containLabel: true },
-      xAxis: { type: "value" as const, name: "Spread (home persp.)", nameLocation: "middle" as const, nameGap: 28 },
-      yAxis: { type: "category" as const, data: pts.map((g) => `${g.away_team} @ ${g.home_team}`) },
-      tooltip: {
-        trigger: "item" as const,
-        formatter: (params: unknown) => {
-          const p = params as { dataIndex: number };
-          const g = pts[p.dataIndex];
-          return `${g.away_team} ${g.away_score ?? "—"} @ ${g.home_team} ${g.home_score ?? "—"}<br/>Spread: ${g.spread_line}<br/>${g["Win Type"] ?? "No result"}`;
-        },
-      },
+      grid: [
+        { left: 10, right: 15, top: 25, height: "32%", containLabel: true },
+        { left: 10, right: 15, top: "52%", bottom: 10, containLabel: true },
+      ],
+      xAxis: [
+        { type: "category", gridIndex: 0, data: present, axisLabel: { fontSize: 10 } },
+        { type: "category", gridIndex: 1, data: present, axisLabel: { fontSize: 10 } },
+      ],
+      yAxis: [
+        { type: "value", gridIndex: 0, name: "Games" },
+        { type: "value", gridIndex: 1, name: "Spread" },
+      ],
+      tooltip: { trigger: "item" },
       series: [
         {
-          type: "scatter" as const,
-          symbolSize: 14,
-          data: pts.map((g, i) => ({
-            value: [Number(g.spread_line), i],
-            itemStyle: {
-              color: g["Win Type"] ? WIN_TYPE_COLORS[g["Win Type"] as WinType] : "#D4AF37",
-            },
+          type: "bar",
+          xAxisIndex: 0,
+          yAxisIndex: 0,
+          data: present.map((l) => ({
+            value: counts.get(l) ?? 0,
+            itemStyle: { color: COLORS[l] },
+          })),
+          label: {
+            show: true,
+            position: "top",
+            formatter: (p: { value?: unknown; name: string }) =>
+              `${p.value}  (${total ? (((counts.get(p.name) ?? 0) / total) * 100).toFixed(1) : 0}%)`,
+            fontSize: 11,
+          },
+        },
+        {
+          type: "scatter",
+          xAxisIndex: 1,
+          yAxisIndex: 1,
+          symbolSize: 9,
+          data: singles.map(({ label, spread, g }) => ({
+            value: [label, spread],
+            itemStyle: { color: COLORS[label], opacity: 0.9 },
+            tooltip: { formatter: () => `Game=${g.gid}<br/>${g.winnerTeam ?? "—"}, ${label}<br/>Spread=${spread.toFixed(2)}` },
           })),
         },
+        {
+          type: "scatter",
+          xAxisIndex: 1,
+          yAxisIndex: 1,
+          symbolSize: 10,
+          data: overlaps.map(({ label, spread, items }) => {
+            const c = new Map<string, number>();
+            for (const it of items) c.set(it.label, (c.get(it.label) ?? 0) + 1);
+            const sorted = [...c.entries()].sort((a, b) => b[1] - a[1]);
+            const fill = COLORS[sorted[0][0]] ?? "#000";
+            const border = sorted.length > 1 ? COLORS[sorted[1][0]] ?? fill : fill;
+            return {
+              value: [label, spread],
+              itemStyle: { color: fill, borderColor: border, borderWidth: 2, opacity: 0.95 },
+              label: { show: true, position: "top" as const, fontSize: 8, formatter: `×${items.length}` },
+              tooltip: {
+                formatter: () =>
+                  items.map((it) => `${it.gid} | Winner: ${it.winnerTeam ?? "—"} | Win Type: ${it.label} | Spread: ${it.spread}`).join("<br/>"),
+              },
+            };
+          }),
+        },
       ],
-    };
+    } as EChartsOption;
   }, [games]);
 
-  const barRef = useECharts(barOption);
-  const scatterRef = useECharts(scatterOption);
+  const chartRef = useECharts(chartOption);
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end gap-4">
         <h1 className="mr-auto text-2xl font-bold text-[#002f6c]">Game Picks</h1>
-        <Select label="Season" value={season} onChange={(v) => setSeason(v)} options={seasons.map((s) => ({ value: String(s), label: String(s) }))} />
+        <Select label="Season" value={season} onChange={setSeason} options={seasons.map((s) => ({ value: String(s), label: String(s) }))} />
         <Select label="Week" value={week} onChange={setWeek} options={weeks.map((w) => ({ value: String(w), label: `Week ${w}` }))} />
       </div>
 
@@ -127,34 +195,39 @@ export default function GamePicks() {
         <table className="w-full text-sm">
           <thead className="bg-slate-100 text-left text-xs uppercase tracking-wide text-slate-500">
             <tr>
-              <th className="px-3 py-2">Date</th>
-              <th className="px-3 py-2">Away</th>
-              <th className="px-3 py-2 text-center">A</th>
-              <th className="px-3 py-2 text-center">H</th>
-              <th className="px-3 py-2">Home</th>
-              <th className="px-3 py-2 text-center">Spread</th>
-              <th className="px-3 py-2">Win Type</th>
+              {["Date", "Away", "A Score", "H Score", "Home", "Spread", "Win Type"].map((h) => (
+                <th key={h} className="px-3 py-2">{h}</th>
+              ))}
             </tr>
           </thead>
           <tbody>
-            {games.map((g) => (
-              <tr key={String(g.game_id)} className="border-t border-slate-100 hover:bg-slate-50">
-                <td className="px-3 py-2 text-slate-500">{String(g.gameday ?? "")}</td>
+            {games.map(({ g, gid, hs, as_, spread, winType }) => (
+              <tr key={gid} className="border-t border-slate-100" style={{ background: winType ? ROW_BG[winType] : "rgba(224,224,224,0.1)" }}>
+                <td className="px-3 py-2 text-slate-600">{String(g.gameday ?? "")}</td>
                 <td className="px-3 py-2 font-medium">{String(g.away_team)}</td>
-                <td className="px-3 py-2 text-center">{g.away_score ?? "—"}</td>
-                <td className="px-3 py-2 text-center">{g.home_score ?? "—"}</td>
+                <td className="px-3 py-2 text-center">
+                  {as_ != null ? Math.round(as_) : (
+                    <label className="cursor-pointer select-none" title="Mark away team as manual winner">
+                      <input type="checkbox" checked={manual.includes(`${gid}_away`)} onChange={() => toggleManual(gid, "away")} /> ✔
+                    </label>
+                  )}
+                </td>
+                <td className="px-3 py-2 text-center">
+                  {hs != null ? Math.round(hs) : (
+                    <label className="cursor-pointer select-none" title="Mark home team as manual winner">
+                      <input type="checkbox" checked={manual.includes(`${gid}_home`)} onChange={() => toggleManual(gid, "home")} /> ✔
+                    </label>
+                  )}
+                </td>
                 <td className="px-3 py-2 font-medium">{String(g.home_team)}</td>
-                <td className="px-3 py-2 text-center">{g.spread_line ?? "—"}</td>
+                <td className="px-3 py-2 text-center">{spread ?? "—"}</td>
                 <td className="px-3 py-2">
-                  {g["Win Type"] ? (
-                    <span
-                      className="rounded-full px-2 py-0.5 text-xs font-semibold text-white"
-                      style={{ background: WIN_TYPE_COLORS[g["Win Type"] as WinType] }}
-                    >
-                      {String(g["Win Type"])}
+                  {winType ? (
+                    <span className="rounded-full px-2 py-0.5 text-xs font-semibold text-white" style={{ background: COLORS[winType] }}>
+                      {winType}
                     </span>
                   ) : (
-                    <span className="text-xs text-slate-400">Not played</span>
+                    <span className="text-xs text-slate-400">{LABEL_FOR_NONE}</span>
                   )}
                 </td>
               </tr>
@@ -163,15 +236,9 @@ export default function GamePicks() {
         </table>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <div className="rounded-xl border bg-white p-4 shadow-sm">
-          <h2 className="mb-2 text-sm font-semibold text-slate-700">Win types — Week {week}</h2>
-          <div ref={barRef} className="h-40" />
-        </div>
-        <div className="rounded-xl border bg-white p-4 shadow-sm">
-          <h2 className="mb-2 text-sm font-semibold text-slate-700">Spread by game</h2>
-          <div ref={scatterRef} className="h-80" />
-        </div>
+      <div className="rounded-xl border bg-white p-4 shadow-sm">
+        <h2 className="mb-2 text-sm font-semibold text-slate-700">Win types &amp; spread — Week {week}</h2>
+        <div ref={chartRef} className="h-[560px]" />
       </div>
     </div>
   );

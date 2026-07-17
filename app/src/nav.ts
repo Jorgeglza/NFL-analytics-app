@@ -84,7 +84,7 @@ export const NAV_GROUPS: NavGroup[] = [
         label: "Value Bets",
         path: "/player_analysis/value_bets",
         description: "Offense vs defense ranking mismatches to find weekly value spots",
-        implemented: false,
+        implemented: true,
       },
     ],
   },
