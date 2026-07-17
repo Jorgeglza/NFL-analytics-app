@@ -36,10 +36,10 @@ export default function GradingModel() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-4">
-        <h1 className="mr-auto text-2xl font-bold text-[#002f6c]">Grading Model</h1>
-        <div className="flex gap-1 rounded-full bg-slate-100 p-1">
+        <h1 className="mr-auto flex items-center gap-2.5 text-2xl font-extrabold tracking-tight text-[#002f6c]"><span className="h-6 w-1.5 rounded-full bg-gradient-to-b from-[#002f6c] to-[#164a9c]" />Grading Model</h1>
+        <div className="flex rounded-full border border-slate-200 bg-slate-100 p-0.5">
           {TABS.map((t) => (
-            <button key={t} onClick={() => setTab(t)} className={`rounded-full px-4 py-1.5 text-sm font-medium ${tab === t ? "bg-[#002f6c] text-white" : "text-slate-600 hover:bg-slate-200"}`}>
+            <button key={t} onClick={() => setTab(t)} className={`rounded-full px-4 py-1.5 text-sm normal-case tracking-normal font-medium ${tab === t ? "bg-[#002f6c] text-white shadow-sm" : "text-slate-600 hover:text-slate-900"}`}>
               {t}
             </button>
           ))}

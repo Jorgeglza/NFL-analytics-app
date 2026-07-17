@@ -118,7 +118,7 @@ export default function Scorecards() {
   function StatCard({ label, col, color }: { label: string; col: string; color: string }) {
     if (!df.length || df.every((r) => r[col] == null)) return null;
     return (
-      <div className="w-40 rounded-xl border-2 bg-white p-2 text-center" style={{ borderColor: color }}>
+      <div className="w-40 rounded-2xl border border-slate-200 bg-white p-2.5 text-center shadow-sm" style={{ borderTop: `3px solid ${color}` }}>
         <div className="mb-1 text-xl font-bold">{cardValue(col)}</div>
         <Sparkline weeks={weeks} values={df.map((r) => (r[col] == null ? null : Number(r[col])))} color={color} wins={wins} />
         <div className="mt-1 text-xs text-slate-500">{label}</div>
@@ -144,8 +144,9 @@ export default function Scorecards() {
 
   return (
     <div className="space-y-6">
+      <h1 className="flex items-center gap-2.5 text-2xl font-extrabold tracking-tight text-[#002f6c]"><span className="h-6 w-1.5 rounded-full bg-gradient-to-b from-[#002f6c] to-[#164a9c]" />Scorecards — Teams</h1>
       <div className="flex flex-col gap-4 lg:flex-row">
-        <div className="flex w-full flex-col gap-3 rounded-xl border border-slate-800 bg-white p-4 lg:w-60">
+        <div className="flex w-full flex-col gap-3 rounded-2xl border border-slate-200 bg-white shadow-sm p-4 lg:w-60">
           <Select label="Season" value={season} onChange={setSeason} options={seasons.map((s) => ({ value: String(s), label: String(s) }))} />
           <Select label="Team" value={team} onChange={setTeam} options={teams.map((t) => ({ value: t, label: meta.get(t)?.name ?? t }))} />
           <div className="mt-2 text-center">
@@ -155,14 +156,14 @@ export default function Scorecards() {
           </div>
         </div>
 
-        <div className="relative flex-1 rounded-xl border border-[#c0392b] bg-[rgba(231,76,60,0.05)] p-4 pt-5">
+        <div className="relative flex-1 rounded-2xl border border-[#c0392b]/40 bg-[rgba(231,76,60,0.05)] p-4 pt-5">
           <div className="absolute -top-3 left-4 px-1 text-sm font-semibold text-[#c0392b]">Offense Style</div>
           <div className="flex gap-4">
             <Donut values={[sum("attempts"), sum("carries")]} labels={["Pass Attempts", "Carries"]} colors={["#e74c3c", "#f5b7b1"]} />
             <Donut values={[sum("passing_first_downs"), sum("rushing_first_downs")]} labels={["Pass 1st Downs", "Rush 1st Downs"]} colors={["#c0392b", "#f1948a"]} />
           </div>
         </div>
-        <div className="relative flex-1 rounded-xl border border-[#2980b9] bg-[rgba(52,152,219,0.05)] p-4 pt-5">
+        <div className="relative flex-1 rounded-2xl border border-[#2980b9]/40 bg-[rgba(52,152,219,0.05)] p-4 pt-5">
           <div className="absolute -top-3 left-4 px-1 text-sm font-semibold text-[#2980b9]">Defense Style</div>
           <div className="flex gap-4">
             <Donut values={[sum("attempts_allowed"), sum("carries_allowed")]} labels={["Pass Att. Allowed", "Carries Allowed"]} colors={["#3498db", "#aed6f1"]} />
@@ -172,13 +173,13 @@ export default function Scorecards() {
       </div>
 
       <div className="flex flex-col gap-6 lg:flex-row">
-        <div className="relative flex-1 rounded-xl border border-[#c0392b] bg-[rgba(231,76,60,0.05)] p-4">
+        <div className="relative flex-1 rounded-2xl border border-[#c0392b]/40 bg-[rgba(231,76,60,0.05)] p-4">
           <div className="absolute -top-3 left-4 bg-white px-2 font-semibold text-[#c0392b]">Offense</div>
           {Object.entries(STAT_MAP).map(([name, stats]) => (
             <Section key={name} name={name} stats={stats} />
           ))}
         </div>
-        <div className="relative flex-1 rounded-xl border border-[#2980b9] bg-[rgba(52,152,219,0.05)] p-4">
+        <div className="relative flex-1 rounded-2xl border border-[#2980b9]/40 bg-[rgba(52,152,219,0.05)] p-4">
           <div className="absolute -top-3 left-4 bg-white px-2 font-semibold text-[#2980b9]">Defense</div>
           {Object.entries(STAT_MAP).map(([name, stats]) => (
             <Section

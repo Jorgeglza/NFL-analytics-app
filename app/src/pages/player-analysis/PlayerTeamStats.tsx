@@ -197,21 +197,21 @@ export default function PlayerTeamStats() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end gap-4">
-        <h1 className="mr-auto text-2xl font-bold text-[#002f6c]">Player Team Stats</h1>
+        <h1 className="mr-auto flex items-center gap-2.5 text-2xl font-extrabold tracking-tight text-[#002f6c]"><span className="h-6 w-1.5 rounded-full bg-gradient-to-b from-[#002f6c] to-[#164a9c]" />Player Team Stats</h1>
         <Select label="Season Type" value={seasonType} onChange={setSeasonType} options={(seasonTypes.length ? seasonTypes : ["REG"]).map((t) => ({ value: t, label: t }))} />
         <Select label="Season" value={season} onChange={setSeason} options={seasons.map((s) => ({ value: String(s), label: String(s) }))} />
-        <div className="flex flex-col gap-1 text-xs font-medium text-slate-600">
+        <div className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
           Side
           <div className="flex gap-2">
             {(["offense", "defense"] as const).map((sd) => (
-              <button key={sd} onClick={() => setSide(sd)} className={`rounded-full px-3 py-1.5 text-sm capitalize ${side === sd ? "bg-[#002f6c] text-white" : "border border-slate-300 bg-white text-slate-600"}`}>
+              <button key={sd} onClick={() => setSide(sd)} className={`rounded-full px-3 py-1.5 text-sm normal-case tracking-normal capitalize ${side === sd ? "bg-[#002f6c] text-white shadow-sm" : "bg-slate-100 text-slate-600 hover:text-slate-900"}`}>
                 {sd}
               </button>
             ))}
           </div>
         </div>
         <Select label="Stat" value={selStat} onChange={setStat} options={sideCols.map((c) => ({ value: c, label: c }))} />
-        <label className="flex flex-col gap-1 text-xs font-medium text-slate-600">
+        <label className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
           Weeks: {Math.min(weekLo, weekHi)}–{Math.max(weekLo, weekHi)}
           <div className="flex items-center gap-2">
             <input type="range" min={allWeeks[0] ?? 1} max={allWeeks[allWeeks.length - 1] ?? 18} value={weekLo} onChange={(e) => setWeekLo(Number(e.target.value))} className="w-32" />

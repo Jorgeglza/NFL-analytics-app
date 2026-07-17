@@ -323,22 +323,22 @@ export default function TeamsTab({
         <Select label="Team" value={team} onChange={setTeam} options={teams.map((t) => ({ value: t, label: meta.get(t)?.name ?? t }))} />
         <div className="flex gap-2">
           {GRADE_OPTS.map((g) => (
-            <button key={g} onClick={() => setGradeType(g)} className={`rounded-full px-3 py-1.5 text-sm ${gradeType === g ? "bg-[#002f6c] text-white" : "border border-slate-300 bg-white text-slate-600"}`}>
+            <button key={g} onClick={() => setGradeType(g)} className={`rounded-full px-3 py-1.5 text-sm normal-case tracking-normal ${gradeType === g ? "bg-[#002f6c] text-white shadow-sm" : "bg-slate-100 text-slate-600 hover:text-slate-900"}`}>
               {g.replace(" Grade", "")}
             </button>
           ))}
         </div>
-        <label className="flex flex-col gap-1 text-xs font-medium text-slate-600">
+        <label className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
           Through week: {tw}
           <input type="range" min={weeks[0] ?? 1} max={maxWeek} step={1} value={tw} onChange={(e) => setThroughWeek(Number(e.target.value))} className="w-48" />
         </label>
-        <label className="flex flex-col gap-1 text-xs font-medium text-slate-600">
+        <label className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
           Top N drivers: {topN}
           <input type="range" min={3} max={12} step={1} value={topN} onChange={(e) => setTopN(Number(e.target.value))} className="w-48" />
         </label>
       </div>
 
-      <div className="rounded-xl border bg-white p-3 shadow-sm">
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <h3 className="mb-1 text-sm font-semibold text-slate-700">
           {meta.get(team)?.name ?? team} – {gradeType} Contributions by Week ({sel})
         </h3>
@@ -346,25 +346,25 @@ export default function TeamsTab({
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <div className="rounded-xl border bg-white p-3 shadow-sm">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <h3 className="mb-1 text-sm font-semibold text-slate-700">Top Drivers (Average, Weeks 1–{tw})</h3>
           <div ref={driversRef} className="h-[420px]" />
         </div>
-        <div className="rounded-xl border bg-white p-3 shadow-sm">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <h3 className="mb-1 text-sm font-semibold text-slate-700">Grade Waterfall (Average, Weeks 1–{tw})</h3>
           <div ref={waterfallRef} className="h-[420px]" />
         </div>
       </div>
 
       {driversTable && (
-        <div className="rounded-xl border bg-white p-3 shadow-sm">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <h3 className="mb-1 text-sm font-semibold text-slate-700">Top Drivers – Actual Stats</h3>
           <p className="mb-2 text-xs text-slate-500">
             Top {topN} drivers ranked by average contribution. Cells show the actual game stat per week; 'Avg' is the mean raw stat, 'Avg. Cont.' is the mean scaled contribution to the model grade.
           </p>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
-              <thead className="bg-slate-100 text-left uppercase tracking-wide text-slate-500">
+              <thead className="bg-slate-50 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">
                 <tr>
                   <th className="px-2 py-2">Feature</th>
                   {driversTable.weeks.map((w) => (
@@ -391,7 +391,7 @@ export default function TeamsTab({
         </div>
       )}
 
-      <div className="rounded-xl border bg-white p-3 shadow-sm">
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="mb-2 flex items-end gap-4">
           <Select label="Select Stat" value={selStat} onChange={setStat} options={statOptions.map((c) => ({ value: c, label: c.replace(/_/g, " ").replace(/\b\w/g, (ch) => ch.toUpperCase()) }))} />
         </div>

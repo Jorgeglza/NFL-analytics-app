@@ -63,7 +63,7 @@ export default function SeasonTab({
         { title: `🚀 Offensive Grades – ${sel}`, ref: offRef, h: "h-[600px]" },
         { title: `🛡️ Defensive Grades – ${sel}`, ref: defRef, h: "h-[600px]" },
       ].map((c) => (
-        <div key={c.title} className="rounded-xl border bg-white p-4 shadow-sm">
+        <div key={c.title} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <h3 className="mb-2 text-sm font-semibold text-slate-700">{c.title}</h3>
           <div ref={c.ref} className={c.h} />
         </div>

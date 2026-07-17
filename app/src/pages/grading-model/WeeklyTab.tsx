@@ -165,7 +165,7 @@ export default function WeeklyTab({
         <Select label="Week" value={selWeek} onChange={setWeek} options={weeks.map((w) => ({ value: String(w), label: String(w) }))} />
         <div className="flex gap-2">
           {GRADE_OPTS.map((g) => (
-            <button key={g} onClick={() => setGradeType(g)} className={`rounded-full px-3 py-1.5 text-sm ${gradeType === g ? "bg-[#002f6c] text-white" : "border border-slate-300 bg-white text-slate-600"}`}>
+            <button key={g} onClick={() => setGradeType(g)} className={`rounded-full px-3 py-1.5 text-sm normal-case tracking-normal ${gradeType === g ? "bg-[#002f6c] text-white shadow-sm" : "bg-slate-100 text-slate-600 hover:text-slate-900"}`}>
               {g.replace(" Grade", "")}
             </button>
           ))}
@@ -182,8 +182,8 @@ export default function WeeklyTab({
             ["IQR", stats.iqr.toFixed(1)],
             ["Min / Max", `${stats.min.toFixed(1)} / ${stats.max.toFixed(1)}`],
           ].map(([l, v]) => (
-            <div key={l} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-              <div className="text-[11px] text-slate-500">{l}</div>
+            <div key={l} className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+              <div className="text-[11px] font-medium uppercase tracking-wider text-slate-400">{l}</div>
               <div className="text-xl font-bold text-slate-900">{v}</div>
             </div>
           ))}
@@ -191,29 +191,29 @@ export default function WeeklyTab({
       )}
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <div className="rounded-xl border bg-white p-3 shadow-sm">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <h3 className="mb-1 text-sm font-semibold text-slate-700">{gradeType} – Histogram (Season {sel}, Week {selWeek})</h3>
           <div ref={histRef} className="h-[380px]" />
         </div>
-        <div className="rounded-xl border bg-white p-3 shadow-sm">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <h3 className="mb-1 text-sm font-semibold text-slate-700">{gradeType} – Box Plot</h3>
           <div ref={boxRef} className="h-[380px]" />
         </div>
       </div>
 
-      <div className="rounded-xl border bg-white p-3 shadow-sm">
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <h3 className="mb-1 text-sm font-semibold text-slate-700">{gradeType} – Team Ranking (Season {sel}, Week {selWeek})</h3>
         <div ref={rankRef} className="h-[600px]" />
       </div>
-      <div className="rounded-xl border bg-white p-3 shadow-sm">
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <h3 className="mb-1 text-sm font-semibold text-slate-700">📊 Offense vs Defense Grade – Season {sel}, Week {selWeek}</h3>
         <div ref={odRef} className="h-[700px]" />
       </div>
 
-      <div className="rounded-xl border bg-white p-3 shadow-sm">
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
-            <thead className="bg-slate-100 text-left uppercase tracking-wide text-slate-500">
+            <thead className="bg-slate-50 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">
               <tr>
                 <th className="px-3 py-2">Team</th>
                 <th className="px-3 py-2 text-right">Grade</th>

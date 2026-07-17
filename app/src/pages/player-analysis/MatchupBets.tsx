@@ -412,12 +412,12 @@ export default function MatchupBets() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end gap-3">
-        <h1 className="mr-auto text-2xl font-bold text-[#002f6c]">Matchup Bets</h1>
+        <h1 className="mr-auto flex items-center gap-2.5 text-2xl font-extrabold tracking-tight text-[#002f6c]"><span className="h-6 w-1.5 rounded-full bg-gradient-to-b from-[#002f6c] to-[#164a9c]" />Matchup Bets</h1>
         <Select label="Season" value={season} onChange={setSeason} options={seasons.map((x) => ({ value: String(x), label: String(x) }))} />
         <Select label="Week" value={selWeek} onChange={setWeek} options={weeks.map((x) => ({ value: String(x), label: `W${x}` }))} />
         <Select label="Game" value={selGameId} onChange={setGameId} options={games.map((g) => ({ value: String(g.game_id), label: `${g.away_team} @ ${g.home_team} — ${g.gameday ?? ""}` }))} />
         <Select label="Stat" value={selStat} onChange={setStat} options={numericCols.map((c) => ({ value: c, label: c }))} />
-        <label className="flex flex-col gap-1 text-xs font-medium text-slate-600">
+        <label className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
           Set line
           <input type="number" value={setLine} onChange={(e) => setSetLine(e.target.value)} placeholder="set_line" className="w-28 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
         </label>
@@ -427,7 +427,7 @@ export default function MatchupBets() {
       <div className="rounded-2xl border border-slate-200 bg-white p-3">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
           <span className="text-sm font-semibold">Matchup Mismatches (by Stat)</span>
-          <label className="flex items-center gap-2 text-xs font-medium text-slate-600">
+          <label className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-wider text-slate-400">
             Top-N: {topN}
             <input type="range" min={3} max={16} step={1} value={topN} onChange={(e) => setTopN(Number(e.target.value))} className="w-40" />
           </label>
@@ -437,8 +437,8 @@ export default function MatchupBets() {
             ["Best Edge", mismatches?.length ? mismatches[0].edge.toFixed(1) : "—"],
             ["Avg Edge (Top-N)", mismatches?.length ? (mismatches.reduce((a, m) => a + m.edge, 0) / mismatches.length).toFixed(1) : "—"],
           ].map(([l, v]) => (
-            <div key={l} className="min-w-40 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-              <div className="text-xs text-slate-500">{l}</div>
+            <div key={l} className="min-w-40 rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
+              <div className="text-[11px] font-medium uppercase tracking-wider text-slate-400">{l}</div>
               <div className="text-xl font-bold">{v}</div>
             </div>
           ))}
@@ -452,26 +452,26 @@ export default function MatchupBets() {
 
       {/* Team totals */}
       <div className="flex flex-wrap gap-3">
-        <div className="min-w-72 flex-1 rounded-xl border bg-white p-3 shadow-sm">
+        <div className="min-w-72 flex-1 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="mb-1 text-sm font-semibold">{away} @ {home} — {selStat}</div>
           <div ref={totalsBarRef} className="h-60" />
         </div>
-        <div className="min-w-72 flex-1 rounded-xl border bg-white p-3 shadow-sm">
+        <div className="min-w-72 flex-1 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <div ref={totalsDonutRef} className="h-64" />
         </div>
       </div>
 
       {/* Opponent allowed & rank */}
-      <div className="rounded-xl border bg-white p-3 shadow-sm">
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="mb-1 text-sm font-semibold">Opponent Avg Allowed &amp; Rank by Week — {away} vs {home}</div>
         <div ref={oppAllowedRef} className="h-80" />
       </div>
 
       {/* Pivot */}
       {pivot && (
-        <div className="overflow-x-auto rounded-xl border bg-white shadow-sm">
+        <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
           <table className="w-full text-xs">
-            <thead className="bg-slate-100 uppercase tracking-wide text-slate-500">
+            <thead className="bg-slate-50 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
               <tr>
                 <th className="px-2 py-2" />
                 <th className="px-2 py-2 text-left">Team</th>
@@ -510,14 +510,14 @@ export default function MatchupBets() {
       {/* Player detail */}
       {playerRow && (
         <div className="flex flex-wrap gap-4">
-          <div className="min-w-80 flex-1 rounded-xl border bg-white p-3 shadow-sm">
+          <div className="min-w-80 flex-1 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="mb-2 flex min-h-14 items-center gap-3">
               {headshot && <img src={headshot} alt={playerRow.player} className="h-14 w-14 rounded-full object-cover" />}
               <span className="text-lg font-semibold">{playerRow.player} — {selStat}</span>
             </div>
             <div ref={playerBarRef} className="h-[360px]" />
           </div>
-          <div className="min-w-80 flex-1 rounded-xl border bg-white p-3 shadow-sm">
+          <div className="min-w-80 flex-1 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="mb-2 min-h-14 text-lg font-semibold">Made vs Below line</div>
             <div ref={playerDonutRef} className="h-[360px]" />
           </div>

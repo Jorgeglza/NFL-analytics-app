@@ -186,31 +186,31 @@ export default function PropBets() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end gap-3">
-        <h1 className="mr-auto text-2xl font-bold text-[#002f6c]">Prop Bets — Players</h1>
+        <h1 className="mr-auto flex items-center gap-2.5 text-2xl font-extrabold tracking-tight text-[#002f6c]"><span className="h-6 w-1.5 rounded-full bg-gradient-to-b from-[#002f6c] to-[#164a9c]" />Prop Bets — Players</h1>
         <Select label="Season Type" value={seasonType} onChange={setSeasonType} options={(seasonTypes.length ? seasonTypes : ["REG"]).map((t) => ({ value: t, label: t }))} />
         <Select label="Season" value={season} onChange={setSeason} options={seasons.map((s) => ({ value: String(s), label: String(s) }))} />
         <Select label="Team" value={selTeam} onChange={setTeam} options={teams.map((t) => ({ value: t, label: t }))} />
-        <div className="flex flex-col gap-1 text-xs font-medium text-slate-600">
+        <div className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
           Side
           <div className="flex gap-2">
             {(["offense", "defense"] as const).map((sd) => (
-              <button key={sd} onClick={() => setSide(sd)} className={`rounded-full px-3 py-1.5 text-sm capitalize ${side === sd ? "bg-[#002f6c] text-white" : "border border-slate-300 bg-white text-slate-600"}`}>
+              <button key={sd} onClick={() => setSide(sd)} className={`rounded-full px-3 py-1.5 text-sm normal-case tracking-normal capitalize ${side === sd ? "bg-[#002f6c] text-white shadow-sm" : "bg-slate-100 text-slate-600 hover:text-slate-900"}`}>
                 {sd}
               </button>
             ))}
           </div>
         </div>
         <Select label="Stat" value={selStat} onChange={setStat} options={sideCols.map((c) => ({ value: c, label: c }))} />
-        <label className="flex flex-col gap-1 text-xs font-medium text-slate-600">
+        <label className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
           Set line
           <input type="number" value={setLine} onChange={(e) => setSetLine(e.target.value)} placeholder="set_line" className="w-28 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
         </label>
       </div>
 
       {pivot && (
-        <div className="overflow-x-auto rounded-xl border bg-white shadow-sm">
+        <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
           <table className="w-full text-xs">
-            <thead className="bg-slate-100 uppercase tracking-wide text-slate-500">
+            <thead className="bg-slate-50 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
               <tr>
                 <th className="px-3 py-2 text-left">Player</th>
                 {pivot.weeks.map((w) => (
@@ -244,14 +244,14 @@ export default function PropBets() {
 
       {playerRow && (
         <div className="flex flex-wrap gap-4">
-          <div className="min-w-80 flex-1 rounded-xl border bg-white p-3 shadow-sm">
+          <div className="min-w-80 flex-1 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="mb-2 flex min-h-14 items-center gap-3">
               {headshot && <img src={headshot} alt={playerRow.player} className="h-14 w-14 rounded-full object-cover" />}
               <span className="text-lg font-semibold">{playerRow.player} — {selStat}</span>
             </div>
             <div ref={barRef} className="h-[360px]" />
           </div>
-          <div className="min-w-80 flex-1 rounded-xl border bg-white p-3 shadow-sm">
+          <div className="min-w-80 flex-1 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="mb-2 min-h-14 text-lg font-semibold">Made vs Below line</div>
             <div ref={donutRef} className="h-[360px]" />
           </div>

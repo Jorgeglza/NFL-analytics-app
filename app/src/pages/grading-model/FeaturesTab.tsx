@@ -81,18 +81,18 @@ export default function FeaturesTab({ importance }: { importance: Row[] }) {
       <div className="flex items-center gap-2">
         <h3 className="mr-4 text-lg font-semibold text-slate-800">📊 Feature Importance</h3>
         {(["Overall", "Offense", "Defense"] as ImpType[]).map((t) => (
-          <button key={t} onClick={() => setImpType(t)} className={`rounded-full px-3 py-1.5 text-sm ${impType === t ? "bg-[#002f6c] text-white" : "border border-slate-300 bg-white text-slate-600"}`}>
+          <button key={t} onClick={() => setImpType(t)} className={`rounded-full px-3 py-1.5 text-sm normal-case tracking-normal ${impType === t ? "bg-[#002f6c] text-white shadow-sm" : "bg-slate-100 text-slate-600 hover:text-slate-900"}`}>
             {t}
           </button>
         ))}
       </div>
 
-      <div className="rounded-xl border bg-white p-3 shadow-sm">
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div ref={barRef} className="h-[650px]" />
       </div>
 
       <h3 className="text-lg font-semibold text-slate-800">📈 Cumulative Feature Importance</h3>
-      <div className="rounded-xl border bg-white p-3 shadow-sm">
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div ref={cumRef} className="h-[500px]" />
       </div>
 
@@ -104,9 +104,9 @@ export default function FeaturesTab({ importance }: { importance: Row[] }) {
       </p>
 
       <h3 className="text-lg font-semibold text-slate-800">📄 Full Feature Importances</h3>
-      <div className="max-h-[70vh] overflow-auto rounded-xl border bg-white shadow-sm">
+      <div className="max-h-[70vh] overflow-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
         <table className="w-full text-xs">
-          <thead className="sticky top-0 bg-slate-100 text-left uppercase tracking-wide text-slate-500">
+          <thead className="sticky top-0 bg-slate-50 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">
             <tr>
               <th className="px-3 py-2">Feature</th>
               {(["Overall", "Offense", "Defense"] as ImpType[]).map((t) => (

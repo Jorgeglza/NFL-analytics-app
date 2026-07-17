@@ -189,14 +189,14 @@ export default function GamePicks() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end gap-4">
-        <h1 className="mr-auto text-2xl font-bold text-[#002f6c]">Game Picks</h1>
+        <h1 className="mr-auto flex items-center gap-2.5 text-2xl font-extrabold tracking-tight text-[#002f6c]"><span className="h-6 w-1.5 rounded-full bg-gradient-to-b from-[#002f6c] to-[#164a9c]" />Game Picks</h1>
         <Select label="Season" value={season} onChange={setSeason} options={seasons.map((s) => ({ value: String(s), label: String(s) }))} />
         <Select label="Week" value={week} onChange={setWeek} options={weeks.map((w) => ({ value: String(w), label: `Week ${w}` }))} />
       </div>
 
-      <div className="overflow-x-auto rounded-xl border bg-white shadow-sm">
+      <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
         <table className="w-full text-sm">
-          <thead className="bg-slate-100 text-left text-xs uppercase tracking-wide text-slate-500">
+          <thead className="bg-slate-50 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">
             <tr>
               {["Date", "Away", "A Score", "H Score", "Home", "Spread", "Win Type"].map((h) => (
                 <th key={h} className="px-3 py-2">{h}</th>
@@ -239,7 +239,7 @@ export default function GamePicks() {
         </table>
       </div>
 
-      <div className="rounded-xl border bg-white p-4 shadow-sm">
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <h2 className="mb-2 text-sm font-semibold text-slate-700">Win types &amp; spread — Week {week}</h2>
         <div ref={chartRef} className="h-[560px]" />
       </div>

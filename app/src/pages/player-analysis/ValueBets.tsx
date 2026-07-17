@@ -303,11 +303,11 @@ export default function ValueBets() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end gap-3">
-        <h1 className="mr-auto text-2xl font-bold text-[#002f6c]">Value Bets — Mismatches</h1>
+        <h1 className="mr-auto flex items-center gap-2.5 text-2xl font-extrabold tracking-tight text-[#002f6c]"><span className="h-6 w-1.5 rounded-full bg-gradient-to-b from-[#002f6c] to-[#164a9c]" />Value Bets — Mismatches</h1>
         <Select label="Season" value={season} onChange={setSeason} options={seasons.map((x) => ({ value: String(x), label: String(x) }))} />
         <Select label="Week" value={selWeek} onChange={setWeek} options={weeks.map((x) => ({ value: String(x), label: `W${x}` }))} />
         <Select label="Stat" value={selStat} onChange={setStat} options={numericCols.map((c) => ({ value: c, label: c }))} />
-        <label className="flex items-center gap-2 text-xs font-medium text-slate-600">
+        <label className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-wider text-slate-400">
           Top-N: {topN}
           <input type="range" min={1} max={32} step={1} value={topN} onChange={(e) => setTopN(Number(e.target.value))} className="w-44" />
         </label>
@@ -320,29 +320,29 @@ export default function ValueBets() {
           [`Avg Opp Allowed (Top ${topN})`, kpis?.opp ?? "-"],
           ["Avg per Player (table)", pivot?.kpiPlayerAvg ?? "-"],
         ].map(([l, v]) => (
-          <div key={l} className="min-w-44 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5">
-            <div className="text-xs text-slate-500">{l}</div>
+          <div key={l} className="min-w-44 flex-1 rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 shadow-sm">
+            <div className="text-[11px] font-medium uppercase tracking-wider text-slate-400">{l}</div>
             <div className="text-[22px] font-bold">{v}</div>
           </div>
         ))}
       </div>
 
-      <div className="rounded-xl border bg-white p-3 shadow-sm">
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="mb-1 text-sm font-semibold">
           Top {topN} Mismatches — Week {selWeek} — {selStat.replace(/_/g, " ")}
         </div>
         <div ref={barRef} className="h-80" />
       </div>
 
-      <div className="rounded-xl border bg-white p-3 shadow-sm">
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="mb-1 text-sm font-semibold">Rank Comparison (Y: Rank 1 best) — line colored by advantaged team</div>
         <div ref={rankRef} className="h-96" />
       </div>
 
       {pivot && (
-        <div className="overflow-x-auto rounded-xl border bg-white shadow-sm">
+        <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
           <table className="w-full text-xs">
-            <thead className="bg-slate-100 uppercase tracking-wide text-slate-500">
+            <thead className="bg-slate-50 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
               <tr>
                 <th className="px-2 py-2" />
                 <th className="px-2 py-2 text-left">Team</th>
@@ -383,7 +383,7 @@ export default function ValueBets() {
         </div>
       )}
 
-      <div className="rounded-xl border bg-white p-3 shadow-sm">
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="mb-1 text-sm font-semibold">Matchup Helper — Team Avg vs Opp Allowed (to date)</div>
         <div ref={helperRef} className="h-[340px]" />
       </div>

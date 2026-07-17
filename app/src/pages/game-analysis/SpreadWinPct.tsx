@@ -111,8 +111,8 @@ interface BinRow {
 
 function Kpi({ title, value }: { title: string; value: string }) {
   return (
-    <div className="min-w-36 rounded-xl border-2 border-slate-800 bg-white px-3 py-2">
-      <div className="text-[11px] text-slate-600">{title}</div>
+    <div className="min-w-36 flex-1 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm" style={{ borderTop: "3px solid #002f6c" }}>
+      <div className="text-[11px] font-medium uppercase tracking-wider text-slate-400">{title}</div>
       <div className="text-[22px] font-bold text-slate-900">{value}</div>
     </div>
   );
@@ -120,7 +120,7 @@ function Kpi({ title, value }: { title: string; value: string }) {
 
 function Box({ title, children }: { title?: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-xl border border-slate-300 bg-white p-3 shadow-sm">
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       {title && <div className="mb-2 text-sm font-semibold text-slate-700">{title}</div>}
       {children}
     </div>
@@ -444,17 +444,17 @@ export default function SpreadWinPct() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-bold text-[#002f6c]">Win % by Win Type &amp; Spread</h1>
+      <h1 className="flex items-center gap-2.5 text-2xl font-extrabold tracking-tight text-[#002f6c]"><span className="h-6 w-1.5 rounded-full bg-gradient-to-b from-[#002f6c] to-[#164a9c]" />Win % by Win Type &amp; Spread</h1>
 
       {/* Controls */}
-      <div className="flex flex-wrap items-end gap-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
+      <div className="flex flex-wrap items-end gap-4 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
         <MultiSelect label="Season" values={seasonsSel} options={allSeasons.map((s) => ({ value: String(s), label: String(s) }))} onChange={setSeasonsSel} />
         <MultiSelect label="Week" values={weeksSel} options={allWeeks.map((w) => ({ value: String(w), label: String(w) }))} onChange={setWeeksSel} />
-        <div className="flex flex-col gap-1 text-xs font-medium text-slate-600">
+        <div className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
           Win Types
           <div className="flex flex-wrap gap-3 rounded-lg border border-slate-300 bg-white px-3 py-2">
             {WIN_TYPE_CATS.map((wt) => (
-              <label key={wt} className="flex items-center gap-1 text-sm font-normal text-slate-800">
+              <label key={wt} className="flex items-center gap-1 text-sm font-normal normal-case tracking-normal text-slate-800">
                 <input
                   type="checkbox"
                   checked={winTypes.includes(wt)}
@@ -467,27 +467,27 @@ export default function SpreadWinPct() {
             ))}
           </div>
         </div>
-        <div className="flex flex-col gap-1 text-xs font-medium text-slate-600">
+        <div className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
           Bin size
           <div className="flex gap-2">
             {[0.5, 1, 2].map((b) => (
-              <button key={b} onClick={() => setBinSize(b)} className={`rounded-full px-3 py-1.5 text-sm ${binSize === b ? "bg-[#002f6c] text-white" : "bg-white text-slate-600 border border-slate-300"}`}>
+              <button key={b} onClick={() => setBinSize(b)} className={`rounded-full px-3 py-1.5 text-sm normal-case tracking-normal ${binSize === b ? "bg-[#002f6c] text-white shadow-sm" : "bg-white text-slate-600 border border-slate-300"}`}>
                 {b}
               </button>
             ))}
           </div>
         </div>
-        <div className="flex flex-col gap-1 text-xs font-medium text-slate-600">
+        <div className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
           Spread mode
           <div className="flex gap-2">
             {(["Signed", "Absolute"] as const).map((m) => (
-              <button key={m} onClick={() => setSigned(m === "Signed")} className={`rounded-full px-3 py-1.5 text-sm ${(m === "Signed") === signed ? "bg-[#002f6c] text-white" : "bg-white text-slate-600 border border-slate-300"}`}>
+              <button key={m} onClick={() => setSigned(m === "Signed")} className={`rounded-full px-3 py-1.5 text-sm normal-case tracking-normal ${(m === "Signed") === signed ? "bg-[#002f6c] text-white shadow-sm" : "bg-white text-slate-600 border border-slate-300"}`}>
                 {m}
               </button>
             ))}
           </div>
         </div>
-        <label className="flex flex-col gap-1 text-xs font-medium text-slate-600">
+        <label className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
           Min N per bin
           <input type="number" min={1} step={1} value={minN} onChange={(e) => setMinN(Math.max(1, Number(e.target.value) || 1))} className="w-24 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
         </label>
@@ -527,7 +527,7 @@ export default function SpreadWinPct() {
       <Box title="Bucket details (all bins — greyed rows below Min N)">
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
-            <thead className="bg-slate-100 text-left uppercase tracking-wide text-slate-500">
+            <thead className="bg-slate-50 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">
               <tr>
                 {["Bucket", "N", "Fav wins", "Fav win %", "Underdog wins", "CI low", "CI high", "Season span"].map((h) => (
                   <th key={h} className="px-3 py-2">{h}</th>
@@ -562,7 +562,7 @@ export default function SpreadWinPct() {
           {reco?.chips && (
             <div className="flex flex-wrap gap-2">
               {reco.chips.map((c) => (
-                <div key={c.label} className="min-w-32 rounded-xl px-3 py-2 text-white" style={{ background: WIN_TYPE_COLORS[c.label as WinType] }}>
+                <div key={c.label} className="min-w-32 rounded-2xl px-3 py-2 text-white shadow-sm" style={{ background: WIN_TYPE_COLORS[c.label as WinType] }}>
                   <div className="text-[11px] opacity-90">{c.label}</div>
                   <div className="text-lg font-bold leading-none">{c.count}</div>
                   <div className="text-[11px] opacity-90">{c.pct.toFixed(0)}%</div>
@@ -574,7 +574,7 @@ export default function SpreadWinPct() {
         {reco?.summary && <div className="mb-2 text-xs text-slate-600">{reco.summary}</div>}
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
-            <thead className="bg-slate-100 text-left uppercase tracking-wide text-slate-500">
+            <thead className="bg-slate-50 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">
               <tr>
                 {["Game", "Spread", "Fav side", "Bucket", "N", "Hist Fav %", "Recommended Pick", "Winner", "Confidence %", "Note"].map((h) => (
                   <th key={h} className="px-3 py-2">{h}</th>

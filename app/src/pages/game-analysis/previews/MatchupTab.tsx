@@ -293,7 +293,7 @@ export default function MatchupTab({
   const gradeBox = (team: string) => {
     const [ovr, off, def] = gradesIdx.triple(team, s, w);
     return (
-      <div className="relative mt-2 rounded-xl border border-slate-800 bg-white p-3">
+      <div className="relative mt-2 rounded-2xl border border-slate-200 bg-white shadow-sm p-3">
         <div className="absolute -top-2.5 left-3 bg-white px-1.5 text-xs font-semibold">Grades</div>
         <div className="flex gap-2">
           {[["Ovr", ovr], ["Off", off], ["Def", def]].map(([l, v]) => (
@@ -334,13 +334,13 @@ export default function MatchupTab({
               ["Kickoff", dateTxt],
               ["Points line (Total)", totalLine],
             ].map(([l, v]) => (
-              <div key={String(l)} className="rounded-xl border border-slate-200 px-2 py-1.5 text-center">
+              <div key={String(l)} className="rounded-2xl border border-slate-200 bg-white px-2 py-1.5 text-center shadow-sm">
                 <div className="text-[0.7rem] text-slate-500">{l}</div>
                 <div className="text-sm font-bold">{v}</div>
               </div>
             ))}
           </div>
-          <div className="mt-2 grid grid-cols-3 gap-2 rounded-xl border border-slate-800 bg-white p-3">
+          <div className="mt-2 grid grid-cols-3 gap-2 rounded-2xl border border-slate-200 bg-white shadow-sm p-3">
             {[
               [`${away} ML`, fmtMl(mlAway), `Implied: ${pct1(impliedProb(mlAway))} | Fair: ${pct1(awayFair)}`],
               ["Market Overround", overround == null ? "—" : `${(100 * overround).toFixed(1)}%`, "(vig)"],
@@ -358,7 +358,7 @@ export default function MatchupTab({
 
       {/* Spread Pick Engine */}
       {engine && (
-        <div className="rounded-xl border border-slate-800 bg-white p-3">
+        <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-3">
           <div className="mb-1 text-sm font-bold">Spread Pick Engine</div>
           <div className="mb-2 text-sm">
             {engine.pHome == null ? (
@@ -420,7 +420,7 @@ export default function MatchupTab({
 
       {/* Trend Edge Predictor */}
       {trendEdge && (
-        <div className="rounded-xl border border-slate-800 bg-white p-3">
+        <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-3">
           <div className="mb-1 text-sm font-bold">Trend Edge Predictor</div>
           <div className="mb-1 text-sm">
             <b>Trend Pick: {trendEdge.pick}</b>

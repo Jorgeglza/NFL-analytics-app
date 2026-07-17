@@ -88,8 +88,8 @@ const pct = (v: number | null) => (v == null ? "N/A" : `${Math.round(v)}%`);
 
 function Kpi({ label, value, border }: { label: string; value: string; border: string }) {
   return (
-    <div className="w-full rounded-xl border-2 bg-white px-3 py-2" style={{ borderColor: border }}>
-      <div className="text-[11px] text-slate-600">{label}</div>
+    <div className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm" style={{ borderTop: `3px solid ${border}` }}>
+      <div className="text-[11px] font-medium uppercase tracking-wider text-slate-400">{label}</div>
       <div className="text-[22px] font-bold text-slate-900">{value}</div>
     </div>
   );
@@ -228,7 +228,7 @@ function Block({ title, rows, xKey }: { title: string; rows: Row[]; xKey: "week"
   const scatterRef = useECharts(scatterOption);
 
   return (
-    <div className="relative rounded-xl border border-slate-300 bg-white p-4 pt-5 shadow-sm">
+    <div className="relative rounded-2xl border border-slate-200 bg-white shadow-sm p-4 pt-5 shadow-sm">
       <div className="absolute -top-3 left-4 bg-white px-2 text-lg font-semibold text-slate-900">{title}</div>
       <div className="flex flex-col gap-5 lg:flex-row">
         <div className="flex shrink-0 flex-row gap-3 lg:w-40 lg:flex-col">
@@ -261,15 +261,15 @@ export default function WinTypes() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-4">
-        <h1 className="mr-auto text-2xl font-bold text-[#002f6c]">Win Types</h1>
+        <h1 className="mr-auto flex items-center gap-2.5 text-2xl font-extrabold tracking-tight text-[#002f6c]"><span className="h-6 w-1.5 rounded-full bg-gradient-to-b from-[#002f6c] to-[#164a9c]" />Win Types</h1>
         <div className="flex items-center gap-2 text-sm">
-          <span className="font-semibold text-slate-700">Group by:</span>
+          <span className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Group by</span>
           {(["season", "week"] as const).map((m) => (
             <button
               key={m}
               onClick={() => setMode(m)}
-              className={`rounded-full px-3 py-1 text-sm font-medium ${
-                mode === m ? "bg-[#002f6c] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              className={`rounded-full px-3 py-1 text-sm normal-case tracking-normal font-medium ${
+                mode === m ? "bg-[#002f6c] text-white shadow-sm" : "bg-slate-100 text-slate-600 hover:text-slate-900"
               }`}
             >
               {m === "season" ? "Season" : "Week"}

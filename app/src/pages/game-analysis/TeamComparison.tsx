@@ -190,7 +190,7 @@ export default function TeamComparison() {
 
   function Section({ name, stats, bg }: { name: string; stats: string[]; bg?: string }) {
     return (
-      <div className="relative mb-6 rounded-xl border border-slate-300 p-3 pt-4" style={{ background: bg }}>
+      <div className="relative mb-6 rounded-2xl border border-slate-200 p-4 pt-5 shadow-sm" style={{ background: bg }}>
         <div className="absolute -top-2.5 left-4 bg-white px-2 text-xs font-bold text-slate-500">{name}</div>
         {stats.map((st) => (
           <div key={st}>
@@ -305,7 +305,7 @@ export default function TeamComparison() {
   function GradesBox({ team }: { team: string }) {
     const [ovr, off, def] = gradesOf(team);
     return (
-      <div className="relative mb-3 rounded-xl border border-slate-800 bg-white p-3">
+      <div className="relative mb-3 rounded-2xl border border-slate-200 bg-white shadow-sm p-3">
         <div className="absolute -top-2.5 left-3 bg-white px-1.5 text-xs font-semibold">Grades</div>
         <div className="flex gap-2">
           {[["Ovr", ovr], ["Off", off], ["Def", def]].map(([l, v]) => (
@@ -334,11 +334,11 @@ export default function TeamComparison() {
         <div className="mt-3">
           <GradesBox team={team} />
         </div>
-        <div className="rounded-xl border bg-white p-2 shadow-sm">
+        <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
           <div className="mb-1 text-xs font-semibold text-slate-500">{title(selectedStat)} by week</div>
           <div ref={trendRef} className="h-44" />
         </div>
-        <div className="mt-3 rounded-xl border bg-white p-2 shadow-sm">
+        <div className="mt-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
           <div className="mb-1 text-xs font-semibold text-slate-500">
             {title(selectedStat.endsWith("_allowed") ? `${selectedStat.slice(0, -8)} allowed vs opp off` : `${selectedStat} vs opp allowed`)} — Wk{wk}
           </div>
@@ -354,7 +354,7 @@ export default function TeamComparison() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-4">
-        <h1 className="text-2xl font-bold text-[#002f6c]">Team Comparison</h1>
+        <h1 className="flex items-center gap-2.5 text-2xl font-extrabold tracking-tight text-[#002f6c]"><span className="h-6 w-1.5 rounded-full bg-gradient-to-b from-[#002f6c] to-[#164a9c]" />Team Comparison</h1>
         <div className="flex gap-4">
           <Select label="Season" value={season} onChange={setSeason} options={seasons.map((s) => ({ value: String(s), label: String(s) }))} />
           <Select label="Week" value={week} onChange={setWeek} options={weeks.map((w) => ({ value: String(w), label: `Week ${w}` }))} />

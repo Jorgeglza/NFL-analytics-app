@@ -46,7 +46,8 @@ Per page: run old app side-by-side (`pda-ie` env), match tables/KPIs/chart serie
 - ✅ Route-level code splitting (React.lazy + Suspense) and vendor chunking (echarts/react) — initial JS ~15 kB + 164 kB react chunk; ECharts loads per page (was one 1.2 MB bundle).
 - ✅ Shared `components/Loading` spinner applied to every page (replaces blank screens / ad-hoc text).
 - ✅ `app/tsconfig.tsbuildinfo` untracked + gitignored.
-- ☐ Deeper responsive/label-overlap pass per page (visual review with the browser open).
+- ✅ Design-system pass across all pages (zero data changes): shared UI kit in `components/ui.tsx` (Card, Kpi, Segmented, Chip, FilterBar, inputs) matching the navbar/home language — rounded-2xl white cards on slate-200 borders, navy #002f6c accents (h1 accent bars, KPI top-borders), uppercase micro-labels, unified pill segments/tab bars, consistent table headers (slate-50, tracking-wider). Verified per route via DOM audit (no legacy `rounded-xl`/old theads remain) and KPI spot checks (Weekly tab stats + Game Picks wk18 counts unchanged).
+- ☐ Optional: screenshot-based visual QA (browser pane screenshot capture currently times out on this app).
 
 ### M5 — Deploy + automation
 - ☐ `.github/workflows/weekly-refresh.yml` (cron Tue 12:00 UTC + dispatch → pipeline → validate → auto-commit)

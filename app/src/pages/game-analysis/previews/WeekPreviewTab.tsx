@@ -88,21 +88,21 @@ export default function WeekPreviewTab({
       <div className="flex flex-wrap items-end gap-4">
         <Select label="Season" value={sel} onChange={setSeason} options={seasons.map((s) => ({ value: String(s), label: String(s) }))} />
         <Select label="Week" value={selWeek} onChange={setWeek} options={weeks.map((w) => ({ value: String(w), label: `Week ${w}` }))} />
-        <div className="flex flex-col gap-1 text-xs font-medium text-slate-600">
+        <div className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
           Primary metric
           <div className="flex gap-2">
             {MODEL_KEYS.map(([k, lbl]) => (
-              <button key={k} onClick={() => setPrimary(k)} className={`rounded-full px-3 py-1.5 text-sm ${primary === k ? "bg-[#002f6c] text-white" : "border border-slate-300 bg-white text-slate-600"}`}>
+              <button key={k} onClick={() => setPrimary(k)} className={`rounded-full px-3 py-1.5 text-sm normal-case tracking-normal ${primary === k ? "bg-[#002f6c] text-white shadow-sm" : "bg-slate-100 text-slate-600 hover:text-slate-900"}`}>
                 {lbl}
               </button>
             ))}
           </div>
         </div>
-        <div className="flex flex-col gap-1 text-xs font-medium text-slate-600">
+        <div className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
           Sort
           <div className="flex gap-2">
             {(["time", "confidence"] as const).map((m) => (
-              <button key={m} onClick={() => setSortMode(m)} className={`rounded-full px-3 py-1.5 text-sm ${sortMode === m ? "bg-[#002f6c] text-white" : "border border-slate-300 bg-white text-slate-600"}`}>
+              <button key={m} onClick={() => setSortMode(m)} className={`rounded-full px-3 py-1.5 text-sm normal-case tracking-normal ${sortMode === m ? "bg-[#002f6c] text-white shadow-sm" : "bg-slate-100 text-slate-600 hover:text-slate-900"}`}>
                 {m === "time" ? "Time" : "Highest prob"}
               </button>
             ))}
@@ -110,7 +110,7 @@ export default function WeekPreviewTab({
         </div>
 
         <div className="ml-auto flex flex-wrap items-center gap-2">
-          <div className="min-w-40 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2" style={{ borderTop: "3px solid #2CA25F" }} title="Accuracy (completed games only)">
+          <div className="min-w-40 rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-sm" style={{ borderTop: "3px solid #2CA25F" }} title="Accuracy (completed games only)">
             <div className="text-[10px] text-slate-500">Accuracy</div>
             <div className="text-sm">
               <span className="mr-2 font-bold">✓ {correct}</span>
@@ -119,7 +119,7 @@ export default function WeekPreviewTab({
             </div>
           </div>
           {(["FH", "UA", "FA", "UH"] as const).map((code) => (
-            <div key={code} className="min-w-28 rounded-xl border px-2 py-1.5" style={{ borderColor: `${WIN_TYPE_CODE_COLORS[code]}55`, borderTop: `3px solid ${WIN_TYPE_CODE_COLORS[code]}`, color: WIN_TYPE_CODE_COLORS[code] }} title={WIN_TYPE_CODE_LONG[code]}>
+            <div key={code} className="min-w-28 rounded-2xl border bg-white px-2.5 py-1.5 shadow-sm" style={{ borderColor: `${WIN_TYPE_CODE_COLORS[code]}55`, borderTop: `3px solid ${WIN_TYPE_CODE_COLORS[code]}`, color: WIN_TYPE_CODE_COLORS[code] }} title={WIN_TYPE_CODE_LONG[code]}>
               <div className="truncate text-[10px]">{WIN_TYPE_CODE_LONG[code]}</div>
               <div className="text-base font-bold leading-none">{winCounts[code]}</div>
               <div className="text-[10px]">{total ? Math.round((100 * winCounts[code]) / total) : 0}%</div>
@@ -143,7 +143,7 @@ export default function WeekPreviewTab({
             ? new Date(`${g.gameday}T12:00`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "2-digit" })
             : "";
           return (
-            <div key={String(g.game_id)} className="relative rounded-xl bg-white p-3" style={{ border: `2px solid ${borderCol ?? "#ddd"}` }}>
+            <div key={String(g.game_id)} className="relative rounded-2xl bg-white p-3.5 shadow-sm transition-shadow hover:shadow-md" style={{ border: `2px solid ${borderCol ?? "#ddd"}` }}>
               {code && (
                 <div className="absolute right-7 top-1.5 rounded border px-1.5 py-0.5 text-xs font-extrabold" style={{ borderColor: WIN_TYPE_CODE_COLORS[code], color: WIN_TYPE_CODE_COLORS[code], background: `${WIN_TYPE_CODE_COLORS[code]}0d` }} title={WIN_TYPE_CODE_LONG[code]}>
                   {code}
@@ -151,7 +151,7 @@ export default function WeekPreviewTab({
               )}
               <div className="mb-1.5">
                 <div className="text-sm font-bold">{dateStr}</div>
-                <div className="text-xs text-slate-500">{away} @ {home}</div>
+                <div className="text-[11px] font-medium uppercase tracking-wider text-slate-400">{away} @ {home}</div>
               </div>
               <div className="flex items-center gap-2">
                 <div className="flex-1 text-center">

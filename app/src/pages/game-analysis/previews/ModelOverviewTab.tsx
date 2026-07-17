@@ -119,7 +119,7 @@ export default function ModelOverviewTab({
   function Matrix({ title, rows, rowLabel }: { title: string; rows: [number, Rec[]][]; rowLabel: string }) {
     const maxCols = Math.max(0, ...rows.map(([, rs]) => rs.length));
     return (
-      <div className="rounded-xl border border-slate-200 bg-white p-3">
+      <div className="rounded-2xl border border-slate-200 bg-white p-3">
         <div className="mb-1.5 text-base font-extrabold">{title}</div>
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-xs">
@@ -180,47 +180,47 @@ export default function ModelOverviewTab({
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end gap-4">
-        <div className="flex flex-col gap-1 text-xs font-medium text-slate-600">
+        <div className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
           Group by
           <div className="flex gap-2">
             {(["season", "week"] as const).map((g) => (
-              <button key={g} onClick={() => setGrouping(g)} className={`rounded-full px-3 py-1.5 text-sm ${grouping === g ? "bg-[#002f6c] text-white" : "border border-slate-300 bg-white text-slate-600"}`}>
+              <button key={g} onClick={() => setGrouping(g)} className={`rounded-full px-3 py-1.5 text-sm normal-case tracking-normal ${grouping === g ? "bg-[#002f6c] text-white shadow-sm" : "bg-slate-100 text-slate-600 hover:text-slate-900"}`}>
                 {g === "season" ? "Season" : "Week #"}
               </button>
             ))}
           </div>
         </div>
-        <div className="flex flex-col gap-1 text-xs font-medium text-slate-600">
+        <div className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
           Primary metric
           <div className="flex gap-2">
             {MODEL_KEYS.map(([k, lbl]) => (
-              <button key={k} onClick={() => setPrimary(k)} className={`rounded-full px-3 py-1.5 text-sm ${primary === k ? "bg-[#002f6c] text-white" : "border border-slate-300 bg-white text-slate-600"}`}>
+              <button key={k} onClick={() => setPrimary(k)} className={`rounded-full px-3 py-1.5 text-sm normal-case tracking-normal ${primary === k ? "bg-[#002f6c] text-white shadow-sm" : "bg-slate-100 text-slate-600 hover:text-slate-900"}`}>
                 {lbl}
               </button>
             ))}
           </div>
         </div>
-        <div className="flex flex-col gap-1 text-xs font-medium text-slate-600">
+        <div className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
           Order columns by
           <div className="flex gap-2">
             {([["time", "Kickoff time"], ["rank", "Confidence"]] as const).map(([v, lbl]) => (
-              <button key={v} onClick={() => setOrder(v)} className={`rounded-full px-3 py-1.5 text-sm ${order === v ? "bg-[#002f6c] text-white" : "border border-slate-300 bg-white text-slate-600"}`}>
+              <button key={v} onClick={() => setOrder(v)} className={`rounded-full px-3 py-1.5 text-sm normal-case tracking-normal ${order === v ? "bg-[#002f6c] text-white shadow-sm" : "bg-slate-100 text-slate-600 hover:text-slate-900"}`}>
                 {lbl}
               </button>
             ))}
           </div>
         </div>
-        <div className="flex flex-col gap-1 text-xs font-medium text-slate-600">
+        <div className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
           Filters
           <div className="flex gap-2">
             {([["", "All"], ["upcoming", "Upcoming only"], ["completed", "Completed only"]] as const).map(([v, lbl]) => (
-              <button key={v} onClick={() => setFilterMode(v)} className={`rounded-full px-3 py-1.5 text-sm ${filterMode === v ? "bg-[#002f6c] text-white" : "border border-slate-300 bg-white text-slate-600"}`}>
+              <button key={v} onClick={() => setFilterMode(v)} className={`rounded-full px-3 py-1.5 text-sm normal-case tracking-normal ${filterMode === v ? "bg-[#002f6c] text-white shadow-sm" : "bg-slate-100 text-slate-600 hover:text-slate-900"}`}>
                 {lbl}
               </button>
             ))}
           </div>
         </div>
-        <label className="flex flex-col gap-1 text-xs font-medium text-slate-600">
+        <label className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
           Min confidence: {Math.round(minConf * 100)}%
           <input type="range" min={0.5} max={1} step={0.01} value={minConf} onChange={(e) => setMinConf(Number(e.target.value))} className="w-56" />
         </label>
@@ -232,8 +232,8 @@ export default function ModelOverviewTab({
           ["Games shown", String(filtered.length), "#2459A7"],
           ["Avg confidence", `${Math.round(100 * kpi.avgConf)}%`, "#C8102E"],
         ].map(([t, v, c]) => (
-          <div key={t} className="min-w-36 rounded-xl border border-slate-200 bg-white px-3 py-2" style={{ borderTop: `3px solid ${c}` }}>
-            <div className="text-[11px] text-slate-500">{t}</div>
+          <div key={t} className="min-w-36 rounded-2xl border border-slate-200 bg-white px-3 py-2" style={{ borderTop: `3px solid ${c}` }}>
+            <div className="text-[11px] font-medium uppercase tracking-wider text-slate-400">{t}</div>
             <div className="text-lg font-extrabold">{v}</div>
           </div>
         ))}

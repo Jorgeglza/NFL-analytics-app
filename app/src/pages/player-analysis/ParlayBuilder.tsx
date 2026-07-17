@@ -164,18 +164,18 @@ function LegCard({
   const set = (patch: Partial<Leg>) => onChange({ ...leg, ...patch, team, stat, player, ...patch });
 
   return (
-    <div className="mb-3 flex flex-wrap items-center gap-4 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+    <div className="mb-3 flex flex-wrap items-center gap-4 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
       <div className="min-w-[340px] flex-1">
         <div className="flex flex-wrap items-end gap-2">
           <Select label="Season" value={leg.season} onChange={(v) => set({ season: v })} options={seasons.map((s) => ({ value: String(s), label: String(s) }))} />
           <Select label="Season Type" value={leg.seasonType} onChange={(v) => set({ seasonType: v })} options={(seasonTypes.length ? seasonTypes : ["REG"]).map((t) => ({ value: t, label: t }))} />
           <Select label="Week" value={leg.week} onChange={(v) => set({ week: v })} options={weeks.map((w) => ({ value: String(w), label: `W${w}` }))} />
           <Select label="Team" value={team} onChange={(v) => set({ team: v })} options={teams.map((t) => ({ value: t, label: t }))} />
-          <div className="flex flex-col gap-1 text-xs font-medium text-slate-600">
+          <div className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
             Stat Type
             <div className="flex gap-1">
               {(["offense", "defense"] as const).map((sd) => (
-                <button key={sd} onClick={() => set({ side: sd })} className={`rounded-full px-2.5 py-1 text-xs capitalize ${leg.side === sd ? "bg-[#002f6c] text-white" : "border border-slate-300 bg-white text-slate-600"}`}>
+                <button key={sd} onClick={() => set({ side: sd })} className={`rounded-full px-2.5 py-1 text-xs normal-case tracking-normal capitalize ${leg.side === sd ? "bg-[#002f6c] text-white shadow-sm" : "bg-slate-100 text-slate-600 hover:text-slate-900"}`}>
                   {sd}
                 </button>
               ))}
@@ -185,7 +185,7 @@ function LegCard({
         <div className="mt-2 flex flex-wrap items-end gap-2">
           <Select label="Stat" value={stat} onChange={(v) => set({ stat: v })} options={sideCols.map((c) => ({ value: c, label: c }))} />
           <Select label="Player" value={player} onChange={(v) => set({ player: v })} options={players.map((p) => ({ value: p, label: p }))} />
-          <label className="flex flex-col gap-1 text-xs font-medium text-slate-600">
+          <label className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
             Line
             <input type="number" value={leg.line} onChange={(e) => set({ line: e.target.value })} placeholder="Set line" className="w-28 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
           </label>
@@ -236,14 +236,14 @@ export default function ParlayBuilder() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold text-[#002f6c]">Parlay Builder</h1>
+        <h1 className="flex items-center gap-2.5 text-2xl font-extrabold tracking-tight text-[#002f6c]"><span className="h-6 w-1.5 rounded-full bg-gradient-to-b from-[#002f6c] to-[#164a9c]" />Parlay Builder</h1>
         <div className="flex gap-3">
           {[
             ["Expected Probability", expectedProb == null ? "—" : `${(expectedProb * 100).toFixed(2)}%`],
             ["Expected Odds", expectedOdds == null ? "—" : expectedOdds.toFixed(2)],
           ].map(([l, v]) => (
-            <div key={l} className="min-w-36 rounded-lg border border-slate-300 bg-slate-50 px-3 py-1.5 text-center">
-              <div className="text-sm font-bold">{l}</div>
+            <div key={l} className="min-w-40 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-center shadow-sm" style={{ borderTop: "3px solid #002f6c" }}>
+              <div className="text-[11px] font-medium uppercase tracking-wider text-slate-400">{l}</div>
               <div className="mt-0.5 text-2xl font-bold">{v}</div>
             </div>
           ))}
