@@ -72,7 +72,7 @@ export const NAV_GROUPS: NavGroup[] = [
         label: "Player Team Stats",
         path: "/player_analysis/player_team_stats",
         description: "Top players per team across all divisions for any stat",
-        implemented: false,
+        implemented: true,
       },
       {
         label: "Matchup Bets",
