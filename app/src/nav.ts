@@ -78,7 +78,7 @@ export const NAV_GROUPS: NavGroup[] = [
         label: "Matchup Bets",
         path: "/player_analysis/matchup_bets",
         description: "Single-game player pivots, stat mismatches and opponent-allowed trends",
-        implemented: false,
+        implemented: true,
       },
       {
         label: "Value Bets",
