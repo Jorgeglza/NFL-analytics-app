@@ -95,7 +95,7 @@ export const NAV_GROUPS: NavGroup[] = [
         label: "Grading Model",
         path: "/data/grading_model",
         description: "Random Forest team grades — season, team, weekly and feature views",
-        implemented: false,
+        implemented: true,
       },
     ],
   },

@@ -6,14 +6,14 @@
 | game_analysis/win_types_page_2.py | /game_analysis/win_types | same | pages/game-analysis/WinTypes | ✅ |
 | game_analysis/team_comparison_page_3.py | /game_analysis/team_comparison | same | pages/game-analysis/TeamComparison | ☐ |
 | game_analysis/scorecards_teams_page_4.py | /game_analysis/scorecards_teams | same | pages/game-analysis/Scorecards | ☐ |
-| game_analysis/spread_win_percentage_page_6.py | /game_analysis/spread_win_percentage | same | pages/game-analysis/SpreadWinPct | ☐ |
+| game_analysis/spread_win_percentage_page_6.py | /game_analysis/spread_win_percentage | same | pages/game-analysis/SpreadWinPct | ✅ |
 | game_analysis/matchup_previews/* (3 tabs) | /game_analysis/game_previews | /game_analysis/matchup_previews | pages/game-analysis/previews/* | ☐ |
 | player_analysis/prop_bets_players_page_1.py | /player_analysis/prop_bets_players | same | pages/player-analysis/PropBets | ☐ |
 | player_analysis/build_parlay_page_2.py | /player_analysis/build_parlay | same | pages/player-analysis/ParlayBuilder | ☐ |
 | player_analysis/player_team_stats_page_3.py | /player_analysis/player_team_stats | same | pages/player-analysis/PlayerTeamStats | ☐ |
 | player_analysis/matchup_bets_page_4.py | /player_analysis/matchup_bets | same | pages/player-analysis/MatchupBets | ☐ |
 | player_analysis/value_bets_page_5.py | /player_analysis/value_bets | same | pages/player-analysis/ValueBets | ☐ |
-| data/grading_model/* (4 tabs) | /data/grading_model | same | pages/grading-model/* | ☐ |
+| data/grading_model/* (4 tabs) | /data/grading_model | same | pages/grading-model/* | ✅ |
 | data/data_settings_page_2.py | /data/data_settings | — dropped | replaced by pipeline | n/a |
 | data/upload_page_3.py | /data/upload | — dropped | replaced by pipeline | n/a |
 | home.py | / | / | pages/Home | ☐ |

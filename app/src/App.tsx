@@ -4,12 +4,14 @@ import Home from "./pages/Home";
 import GamePicks from "./pages/game-analysis/GamePicks";
 import WinTypes from "./pages/game-analysis/WinTypes";
 import SpreadWinPct from "./pages/game-analysis/SpreadWinPct";
+import GradingModel from "./pages/grading-model/GradingModel";
 import { NAV_GROUPS } from "./nav";
 
 const IMPLEMENTED: Record<string, () => JSX.Element> = {
   "/game_analysis/game_picks": GamePicks,
   "/game_analysis/win_types": WinTypes,
   "/game_analysis/spread_win_percentage": SpreadWinPct,
+  "/data/grading_model": GradingModel,
 };
 
 function Placeholder({ name, description }: { name: string; description: string }) {

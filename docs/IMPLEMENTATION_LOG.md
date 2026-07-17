@@ -28,8 +28,8 @@ Status legend: ☐ not started · ◐ in progress · ✅ done · ⛔ blocked
 - ◐ Home (functional; final design in M4)
 - ◐ /game_analysis/game_picks — table + win-type stacked bar + spread scatter working with filters. TODO: manual-winner checkboxes for unplayed games (localStorage), collision ×N badges on scatter, side-by-side number check vs old app.
 - ✅ /game_analysis/win_types — Season/Week toggle, per-block KPIs + stacked win-type bar (count|% labels, dashed Home-Favorite line) + spread scatter with ×N collision markers. Numbers verified vs pandas replica of old logic: KPIs exact on 4 seasons + 3 weeks; category counts exact for 2024 (season & week 1). Old-page quirks preserved (played pick'em → Underdog; played ties → "(No Score)" buckets; tie games count in win-% denominators).
-- ☐ /game_analysis/spread_win_percentage
-- ☐ /data/grading_model (Season, Teams, Weekly, Features tabs)
+- ✅ /game_analysis/spread_win_percentage — filters (multi season/week, win types, bin size, signed/abs, min-N, CI), 6 KPIs, calibration/stacked/heatmap/lift charts, bucket table, Weekly Picks panel. KPIs + bin aggregates + Wilson p̂ verified exact vs pandas replica. Grid-aligned buckets replace pd.cut edges (deviation: pandas silently dropped a game whose |spread| hit the exact top edge; we keep it).
+- ✅ /data/grading_model (Season, Teams, Weekly, Features tabs) — contributions via contrib_params.json (weekContributions in lib/logic/contributions.ts). Weekly tab KPIs/rank/Z/percentile and Teams-tab avg scaled contributions (DAL 2025) verified exact vs pandas replica; season averages match.
 - ☐ /game_analysis/team_comparison
 - ☐ /game_analysis/scorecards_teams
 - ☐ /game_analysis/matchup_previews (Week Preview, Matchup, Model Overview tabs)
