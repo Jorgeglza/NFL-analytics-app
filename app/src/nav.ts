@@ -66,7 +66,7 @@ export const NAV_GROUPS: NavGroup[] = [
         label: "Build Parlay",
         path: "/player_analysis/build_parlay",
         description: "Multi-leg parlay builder with combined probability and expected odds",
-        implemented: false,
+        implemented: true,
       },
       {
         label: "Player Team Stats",

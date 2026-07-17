@@ -9,6 +9,7 @@ import TeamComparison from "./pages/game-analysis/TeamComparison";
 import Scorecards from "./pages/game-analysis/Scorecards";
 import MatchupPreviews from "./pages/game-analysis/previews/MatchupPreviews";
 import PropBets from "./pages/player-analysis/PropBets";
+import ParlayBuilder from "./pages/player-analysis/ParlayBuilder";
 import { NAV_GROUPS } from "./nav";
 
 const IMPLEMENTED: Record<string, () => JSX.Element> = {
@@ -20,6 +21,7 @@ const IMPLEMENTED: Record<string, () => JSX.Element> = {
   "/game_analysis/scorecards_teams": Scorecards,
   "/game_analysis/matchup_previews": MatchupPreviews,
   "/player_analysis/prop_bets_players": PropBets,
+  "/player_analysis/build_parlay": ParlayBuilder,
 };
 
 function Placeholder({ name, description }: { name: string; description: string }) {
