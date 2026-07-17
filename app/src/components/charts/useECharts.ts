@@ -14,7 +14,16 @@ export function useECharts(option: echarts.EChartsOption | null) {
   optionRef.current = option;
 
   useEffect(() => {
-    if (chartRef.current && option) chartRef.current.setOption(option, true);
+    if (chartRef.current && option) {
+      chartRef.current.setOption(option, true);
+      // The container's height may depend on the same state as the option
+      // (e.g. one bar per game). Re-measure after the style change lands, since
+      // some environments never deliver the ResizeObserver tick.
+      const chart = chartRef.current;
+      requestAnimationFrame(() => {
+        if (chartRef.current === chart) chart.resize();
+      });
+    }
   }, [option]);
 
   const ref = useCallback((node: HTMLDivElement | null) => {
