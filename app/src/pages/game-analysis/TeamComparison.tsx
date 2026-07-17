@@ -127,34 +127,33 @@ export default function TeamComparison() {
       w1 = 0.5 + (r2 / (r1 + r2) - 0.5) * 0.5; // squash 0.5, like the old page
     }
     return (
-      <div className="flex h-6 w-full overflow-hidden rounded">
-        <div className="flex items-center justify-center text-[11px] font-semibold text-white" style={{ width: `${w1 * 100}%`, background: color(team1) }} title={`${team1} Rank: ${r1 ?? "--"}`}>
-          {r1 == null ? "--" : Math.round(r1)}
+      <div className="flex h-6 w-full overflow-hidden rounded-full ring-1 ring-inset ring-black/5" title="League rank — bigger side of the bar = better rank">
+        <div className="flex items-center justify-center text-[11px] font-semibold text-white" style={{ width: `${w1 * 100}%`, background: color(team1) }} title={`${team1} league rank: ${r1 == null ? "--" : `#${Math.round(r1)}`}`}>
+          {r1 == null ? "--" : `#${Math.round(r1)}`}
         </div>
-        <div className="flex items-center justify-center text-[11px] font-semibold text-white" style={{ width: `${(1 - w1) * 100}%`, background: color(team2) }} title={`${team2} Rank: ${r2 ?? "--"}`}>
-          {r2 == null ? "--" : Math.round(r2)}
+        <div className="flex items-center justify-center text-[11px] font-semibold text-white" style={{ width: `${(1 - w1) * 100}%`, background: color(team2) }} title={`${team2} league rank: ${r2 == null ? "--" : `#${Math.round(r2)}`}`}>
+          {r2 == null ? "--" : `#${Math.round(r2)}`}
         </div>
       </div>
     );
   }
 
-  function StatCells({ s, order }: { s: StatSummary; order: ("prev" | "total" | "avg")[] }) {
+  function StatCells({ s, order, team, sub }: { s: StatSummary; order: ("prev" | "total" | "avg")[]; team: string; sub?: boolean }) {
+    const pill = (key: string, label: string, value: string, hint?: string) => (
+      <div
+        key={key}
+        className={`rounded-xl border border-slate-200 bg-slate-50/80 text-center ${sub ? "w-14 px-1 py-0.5" : "w-[72px] px-1.5 py-1"}`}
+        title={hint}
+        style={{ boxShadow: `inset 0 2px 0 0 ${color(team)}33` }}
+      >
+        <div className={`font-semibold uppercase tracking-wider text-slate-400 ${sub ? "text-[8px]" : "text-[9px]"}`}>{label}</div>
+        <div className={`font-semibold tabular-nums text-slate-800 ${sub ? "text-[11px]" : "text-sm"}`}>{value || "--"}</div>
+      </div>
+    );
     const cell: Record<string, JSX.Element> = {
-      prev: (
-        <div key="prev" className="w-16 border border-[#a94442] bg-[#f9d6d5] px-1 py-1 text-center" title={s.prevOpp}>
-          {fmtPrev(s.prev)}
-        </div>
-      ),
-      avg: (
-        <div key="avg" className="w-16 border border-[#31708f] bg-[#dceeff] px-1 py-1 text-center">
-          {s.average == null ? "" : (Math.round(s.average * 10) / 10).toFixed(1)}
-        </div>
-      ),
-      total: (
-        <div key="total" className="w-[70px] border border-[#3c763d] bg-[#e2f4d6] px-1 py-1 text-center">
-          {Math.trunc(s.total).toLocaleString()}
-        </div>
-      ),
+      prev: pill("prev", "Last", fmtPrev(s.prev), s.prevOpp ? `Week ${week} vs ${s.prevOpp}` : undefined),
+      avg: pill("avg", "Avg", s.average == null ? "" : (Math.round(s.average * 10) / 10).toFixed(1), "Per-game average this season"),
+      total: pill("total", "Total", Math.trunc(s.total).toLocaleString(), "Season total"),
     };
     return <div className="flex gap-1.5">{order.map((k) => cell[k])}</div>;
   }
@@ -164,17 +163,25 @@ export default function TeamComparison() {
     const s2 = summaryOf(team2, stat);
     const subs = STAT_HIERARCHY[stat];
     return (
-      <div className={`mb-3 flex items-center justify-center gap-4 ${sub ? "pl-4 text-[0.7rem] italic opacity-80" : "text-sm"}`}>
+      <div className={`flex items-center justify-center gap-4 ${sub ? "py-1 pl-4 opacity-90" : "py-1.5 text-sm"}`}>
         <div className="flex flex-1 justify-end">
-          <StatCells s={s1} order={["prev", "total", "avg"]} />
+          <StatCells s={s1} order={["prev", "total", "avg"]} team={team1} sub={sub} />
         </div>
         <div className="w-44 text-center">
-          <div className="mb-0.5 flex items-center justify-center gap-1">
-            <button className="cursor-pointer select-none font-bold hover:text-[#002f6c]" onClick={() => setSelectedStat(stat)} title="Click to chart this stat">
+          <div className="mb-1 flex items-center justify-center gap-1">
+            <button
+              className={`cursor-pointer select-none font-semibold text-slate-700 transition-colors hover:text-[#002f6c] ${sub ? "text-[0.7rem]" : ""} ${selectedStat === stat ? "text-[#002f6c] underline decoration-2 underline-offset-4" : ""}`}
+              onClick={() => setSelectedStat(stat)}
+              title="Click to chart this stat"
+            >
               {title(stat)}
             </button>
             {subs && !sub && (
-              <button className="px-1 text-slate-500" onClick={() => setExpanded((e) => ({ ...e, [stat]: !e[stat] }))}>
+              <button
+                className="grid h-5 w-5 place-items-center rounded-full border border-slate-200 bg-white text-xs leading-none text-slate-500 hover:border-[#002f6c] hover:text-[#002f6c]"
+                onClick={() => setExpanded((e) => ({ ...e, [stat]: !e[stat] }))}
+                title={expanded[stat] ? "Hide breakdown" : "Show breakdown"}
+              >
                 {expanded[stat] ? "–" : "+"}
               </button>
             )}
@@ -182,7 +189,7 @@ export default function TeamComparison() {
           <RankBar stat={stat} />
         </div>
         <div className="flex flex-1 justify-start">
-          <StatCells s={s2} order={["avg", "total", "prev"]} />
+          <StatCells s={s2} order={["avg", "total", "prev"]} team={team2} sub={sub} />
         </div>
       </div>
     );
@@ -190,14 +197,16 @@ export default function TeamComparison() {
 
   function Section({ name, stats, bg }: { name: string; stats: string[]; bg?: string }) {
     return (
-      <div className="relative mb-6 rounded-2xl border border-slate-200 p-4 pt-5 shadow-sm" style={{ background: bg }}>
-        <div className="absolute -top-2.5 left-4 bg-white px-2 text-xs font-bold text-slate-500">{name}</div>
-        {stats.map((st) => (
-          <div key={st}>
-            <StatRow stat={st} />
-            {expanded[st] && (STAT_HIERARCHY[st] ?? []).map((sub) => <StatRow key={sub} stat={sub} sub />)}
-          </div>
-        ))}
+      <div className="relative mb-6 rounded-2xl border border-slate-200 bg-white p-4 pt-5 shadow-sm" style={{ background: bg }}>
+        <div className="absolute -top-2.5 left-4 rounded-full border border-slate-200 bg-white px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#002f6c]">{name}</div>
+        <div className="divide-y divide-slate-100">
+          {stats.map((st) => (
+            <div key={st}>
+              <StatRow stat={st} />
+              {expanded[st] && (STAT_HIERARCHY[st] ?? []).map((sub) => <StatRow key={sub} stat={sub} sub />)}
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
@@ -322,9 +331,9 @@ export default function TeamComparison() {
   function TeamColumn({ team, setTeam, trendRef, mainRef, rankRef, label }: {
     team: string;
     setTeam: (t: string) => void;
-    trendRef: React.RefObject<HTMLDivElement>;
-    mainRef: React.RefObject<HTMLDivElement>;
-    rankRef: React.RefObject<HTMLDivElement>;
+    trendRef: React.Ref<HTMLDivElement>;
+    mainRef: React.Ref<HTMLDivElement>;
+    rankRef: React.Ref<HTMLDivElement>;
     label: string;
   }) {
     return (
@@ -362,7 +371,7 @@ export default function TeamComparison() {
       </div>
 
       <div className="flex flex-col gap-6 lg:flex-row">
-        <TeamColumn team={team1} setTeam={setTeam1} trendRef={trend1Ref} mainRef={m1MainRef} rankRef={m1RankRef} label="Team 1" />
+        {TeamColumn({ team: team1, setTeam: setTeam1, trendRef: trend1Ref, mainRef: m1MainRef, rankRef: m1RankRef, label: "Team 1" })}
 
         <div className="min-w-0 flex-1">
           <div className="mb-3 flex items-center justify-center gap-10">
@@ -379,17 +388,15 @@ export default function TeamComparison() {
           <hr className="mb-4" />
           <div className="overflow-x-auto">
           <div className="min-w-[560px]">
-          <div className="mb-3 flex items-center justify-center gap-4 text-xs font-bold text-slate-600">
-            <div className="flex flex-1 justify-end gap-1.5">
-              <div className="w-16 text-center">Prev</div>
-              <div className="w-[70px] text-center">Total</div>
-              <div className="w-16 text-center">Avg</div>
+          <div className="mb-3 flex items-center justify-center gap-4 text-xs text-slate-500">
+            <div className="flex flex-1 items-center justify-end gap-1.5">
+              <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: color(team1) }} />
+              <span className="font-semibold">{team1}</span>
             </div>
-            <div className="w-44" />
-            <div className="flex flex-1 justify-start gap-1.5">
-              <div className="w-16 text-center">Avg</div>
-              <div className="w-[70px] text-center">Total</div>
-              <div className="w-16 text-center">Prev</div>
+            <div className="w-44 text-center text-[10px] uppercase tracking-wider text-slate-400">Last · Total · Avg — bar = league rank</div>
+            <div className="flex flex-1 items-center justify-start gap-1.5">
+              <span className="font-semibold">{team2}</span>
+              <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: color(team2) }} />
             </div>
           </div>
           <Section name="Overall" stats={["points_margin", "turnover_margin", "epa_diff"]} />
@@ -399,7 +406,7 @@ export default function TeamComparison() {
           </div>
         </div>
 
-        <TeamColumn team={team2} setTeam={setTeam2} trendRef={trend2Ref} mainRef={m2MainRef} rankRef={m2RankRef} label="Team 2" />
+        {TeamColumn({ team: team2, setTeam: setTeam2, trendRef: trend2Ref, mainRef: m2MainRef, rankRef: m2RankRef, label: "Team 2" })}
       </div>
     </div>
   );
