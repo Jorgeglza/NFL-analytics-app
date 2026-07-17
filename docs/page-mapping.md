@@ -3,7 +3,7 @@
 | Old file (modules/…) | Old route | New route | New component | Status |
 |---|---|---|---|---|
 | game_analysis/game_picks_page_1.py | /game_analysis/game_picks | same | pages/game-analysis/GamePicks | ☐ |
-| game_analysis/win_types_page_2.py | /game_analysis/win_types | same | pages/game-analysis/WinTypes | ☐ |
+| game_analysis/win_types_page_2.py | /game_analysis/win_types | same | pages/game-analysis/WinTypes | ✅ |
 | game_analysis/team_comparison_page_3.py | /game_analysis/team_comparison | same | pages/game-analysis/TeamComparison | ☐ |
 | game_analysis/scorecards_teams_page_4.py | /game_analysis/scorecards_teams | same | pages/game-analysis/Scorecards | ☐ |
 | game_analysis/spread_win_percentage_page_6.py | /game_analysis/spread_win_percentage | same | pages/game-analysis/SpreadWinPct | ☐ |

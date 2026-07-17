@@ -2,10 +2,12 @@ import { Route, Routes } from "react-router-dom";
 import Navbar from "./components/Navbar";
 import Home from "./pages/Home";
 import GamePicks from "./pages/game-analysis/GamePicks";
+import WinTypes from "./pages/game-analysis/WinTypes";
 import { NAV_GROUPS } from "./nav";
 
 const IMPLEMENTED: Record<string, () => JSX.Element> = {
   "/game_analysis/game_picks": GamePicks,
+  "/game_analysis/win_types": WinTypes,
 };
 
 function Placeholder({ name, description }: { name: string; description: string }) {

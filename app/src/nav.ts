@@ -25,7 +25,7 @@ export const NAV_GROUPS: NavGroup[] = [
         label: "Win Types",
         path: "/game_analysis/win_types",
         description: "Win-type distribution across seasons and weeks with favorite/home KPIs",
-        implemented: false,
+        implemented: true,
       },
       {
         label: "Team Comparison",

@@ -27,7 +27,7 @@ Status legend: ☐ not started · ◐ in progress · ✅ done · ⛔ blocked
 ### M3 — Page-by-page parity (order = simplest data first)
 - ◐ Home (functional; final design in M4)
 - ◐ /game_analysis/game_picks — table + win-type stacked bar + spread scatter working with filters. TODO: manual-winner checkboxes for unplayed games (localStorage), collision ×N badges on scatter, side-by-side number check vs old app.
-- ☐ /game_analysis/win_types
+- ✅ /game_analysis/win_types — Season/Week toggle, per-block KPIs + stacked win-type bar (count|% labels, dashed Home-Favorite line) + spread scatter with ×N collision markers. Numbers verified vs pandas replica of old logic: KPIs exact on 4 seasons + 3 weeks; category counts exact for 2024 (season & week 1). Old-page quirks preserved (played pick'em → Underdog; played ties → "(No Score)" buckets; tie games count in win-% denominators).
 - ☐ /game_analysis/spread_win_percentage
 - ☐ /data/grading_model (Season, Teams, Weekly, Features tabs)
 - ☐ /game_analysis/team_comparison
@@ -49,6 +49,12 @@ Per page: run old app side-by-side (`pda-ie` env), match tables/KPIs/chart serie
 - ☐ Push to GitHub, first workflow run verified
 
 ## Session notes (newest first)
+
+### 2026-07-16 — Session 2: Win Types page
+- New `app/src/pages/game-analysis/WinTypes.tsx`; route registered in App.tsx, nav.ts marked implemented; `npm run build` green.
+- Parity: schedule.json extract already carries Winner/Favorite/Win Type but the page recomputes locally like the old one (7-category "Win Type Full"). Verified KPIs (Favorite-is-Home/Favorite-Win/Home-Win %) exact vs pandas on seasons 2025/2024/2018/2015 and weeks 1/2/18; bar category counts exact for season 2024 total and week 1.
+- Gotcha: browser-pane `screenshot` times out on this page (many ECharts canvases); use get_page_text / javascript_tool (canvas.toDataURL) instead.
+- **Next:** /game_analysis/spread_win_percentage (then grading model per M3 order); Game Picks TODOs (manual-winner checkboxes, ×N badges) still open.
 
 ### 2026-07-15 — Session 1 (cont.): deploy + nav/home UI
 - Repo pushed to github.com/Jorgeglza/NFL-analytics-app (public); Pages enabled (Source = GitHub Actions); live at https://jorgeglza.github.io/NFL-analytics-app/
