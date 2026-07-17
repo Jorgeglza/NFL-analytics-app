@@ -43,7 +43,7 @@ export const NAV_GROUPS: NavGroup[] = [
         label: "Spread Win Percentage",
         path: "/game_analysis/spread_win_percentage",
         description: "Favorite win rates by spread bucket, calibration curves and weekly picks",
-        implemented: false,
+        implemented: true,
       },
       {
         label: "Matchup Previews",
