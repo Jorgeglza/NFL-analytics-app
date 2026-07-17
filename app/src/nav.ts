@@ -37,7 +37,7 @@ export const NAV_GROUPS: NavGroup[] = [
         label: "Scorecards Teams",
         path: "/game_analysis/scorecards_teams",
         description: "Team playstyle dashboard — pass/rush splits and stat sparklines",
-        implemented: false,
+        implemented: true,
       },
       {
         label: "Spread Win Percentage",

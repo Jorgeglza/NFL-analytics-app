@@ -6,6 +6,7 @@ import WinTypes from "./pages/game-analysis/WinTypes";
 import SpreadWinPct from "./pages/game-analysis/SpreadWinPct";
 import GradingModel from "./pages/grading-model/GradingModel";
 import TeamComparison from "./pages/game-analysis/TeamComparison";
+import Scorecards from "./pages/game-analysis/Scorecards";
 import { NAV_GROUPS } from "./nav";
 
 const IMPLEMENTED: Record<string, () => JSX.Element> = {
@@ -14,6 +15,7 @@ const IMPLEMENTED: Record<string, () => JSX.Element> = {
   "/game_analysis/spread_win_percentage": SpreadWinPct,
   "/data/grading_model": GradingModel,
   "/game_analysis/team_comparison": TeamComparison,
+  "/game_analysis/scorecards_teams": Scorecards,
 };
 
 function Placeholder({ name, description }: { name: string; description: string }) {
