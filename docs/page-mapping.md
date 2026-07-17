@@ -4,10 +4,10 @@
 |---|---|---|---|---|
 | game_analysis/game_picks_page_1.py | /game_analysis/game_picks | same | pages/game-analysis/GamePicks | ☐ |
 | game_analysis/win_types_page_2.py | /game_analysis/win_types | same | pages/game-analysis/WinTypes | ✅ |
-| game_analysis/team_comparison_page_3.py | /game_analysis/team_comparison | same | pages/game-analysis/TeamComparison | ☐ |
-| game_analysis/scorecards_teams_page_4.py | /game_analysis/scorecards_teams | same | pages/game-analysis/Scorecards | ☐ |
+| game_analysis/team_comparison_page_3.py | /game_analysis/team_comparison | same | pages/game-analysis/TeamComparison | ✅ |
+| game_analysis/scorecards_teams_page_4.py | /game_analysis/scorecards_teams | same | pages/game-analysis/Scorecards | ✅ |
 | game_analysis/spread_win_percentage_page_6.py | /game_analysis/spread_win_percentage | same | pages/game-analysis/SpreadWinPct | ✅ |
-| game_analysis/matchup_previews/* (3 tabs) | /game_analysis/game_previews | /game_analysis/matchup_previews | pages/game-analysis/previews/* | ☐ |
+| game_analysis/matchup_previews/* (3 tabs) | /game_analysis/game_previews | /game_analysis/matchup_previews | pages/game-analysis/previews/* | ✅ |
 | player_analysis/prop_bets_players_page_1.py | /player_analysis/prop_bets_players | same | pages/player-analysis/PropBets | ☐ |
 | player_analysis/build_parlay_page_2.py | /player_analysis/build_parlay | same | pages/player-analysis/ParlayBuilder | ☐ |
 | player_analysis/player_team_stats_page_3.py | /player_analysis/player_team_stats | same | pages/player-analysis/PlayerTeamStats | ☐ |

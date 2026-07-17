@@ -49,7 +49,7 @@ export const NAV_GROUPS: NavGroup[] = [
         label: "Matchup Previews",
         path: "/game_analysis/matchup_previews",
         description: "Game previews with spread pick engine, trend edges and model accuracy",
-        implemented: false,
+        implemented: true,
       },
     ],
   },
