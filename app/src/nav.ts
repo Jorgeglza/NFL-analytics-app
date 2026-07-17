@@ -60,7 +60,7 @@ export const NAV_GROUPS: NavGroup[] = [
         label: "Prop Bets Players",
         path: "/player_analysis/prop_bets_players",
         description: "Player weekly stats vs a prop line — hit rates and week-by-week detail",
-        implemented: false,
+        implemented: true,
       },
       {
         label: "Build Parlay",
