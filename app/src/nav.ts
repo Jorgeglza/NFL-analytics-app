@@ -31,7 +31,7 @@ export const NAV_GROUPS: NavGroup[] = [
         label: "Team Comparison",
         path: "/game_analysis/team_comparison",
         description: "Head-to-head stat comparison with ranks, grades and trend charts",
-        implemented: false,
+        implemented: true,
       },
       {
         label: "Scorecards Teams",
