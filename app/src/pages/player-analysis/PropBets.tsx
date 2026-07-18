@@ -32,6 +32,40 @@ const DEFENSE_KW = [
   "hurries", "stops", "mtkl",
 ];
 
+// Stats actually offered at sportsbooks, listed first in the picker (UX audit §8).
+const PROP_MARKET_STATS: Record<"offense" | "defense", string[]> = {
+  offense: [
+    "passing_yards", "passing_tds", "completions", "attempts", "interceptions",
+    "rushing_yards", "rushing_tds", "carries",
+    "receiving_yards", "receptions", "targets", "receiving_tds",
+    "fantasy_points", "fantasy_points_ppr",
+  ],
+  defense: [
+    "def_sacks", "def_tackles_solo", "def_tackle_assists", "def_tackles_for_loss",
+    "def_interceptions", "def_pass_defended", "def_qb_hits", "def_fumbles_forced",
+  ],
+};
+
+const ACRONYMS = new Set(["epa", "pacr", "racr", "wopr", "cpoe", "ppr", "fg", "pat", "qb", "gwfg"]);
+const WORD_OVERRIDES: Record<string, string> = { tds: "TDs", td: "TD", "2pt": "2-pt" };
+function statLabel(c: string): string {
+  return c
+    .split("_")
+    .filter(Boolean)
+    .map((w) => WORD_OVERRIDES[w] ?? (ACRONYMS.has(w) ? w.toUpperCase() : /^\d/.test(w) ? w : w[0].toUpperCase() + w.slice(1)))
+    .join(" ");
+}
+
+const HIT_COLOR = "#059669";
+const MISS_COLOR = "#dc2626";
+const NEUTRAL_COLOR = "#002f6c";
+
+// American fair odds for probability p (null at 0/1 where odds are undefined).
+function americanOdds(p: number): string | null {
+  if (p <= 0 || p >= 1) return null;
+  return p >= 0.5 ? `−${Math.round((p / (1 - p)) * 100)}` : `+${Math.round(((1 - p) / p) * 100)}`;
+}
+
 export default function PropBets() {
   const [seasons, setSeasons] = useState<number[]>([]);
   const [season, setSeason] = useState("");
@@ -69,10 +103,25 @@ export default function PropBets() {
   }, [rows]);
   const sideCols = useMemo(() => {
     const kws = side === "offense" ? OFFENSE_KW : DEFENSE_KW;
-    const f = numericCols.filter((c) => kws.some((k) => c.toLowerCase().includes(k)));
+    const f = numericCols.filter((c) => {
+      const lc = c.toLowerCase();
+      // Keyword matching alone leaks def_* columns into offense ("sacks", "interceptions").
+      if (side === "offense" && lc.startsWith("def_")) return false;
+      return kws.some((k) => lc.includes(k));
+    });
     return f.length ? f : numericCols;
   }, [numericCols, side]);
   const selStat = sideCols.includes(stat) ? stat : sideCols.includes("passing_yards") ? "passing_yards" : sideCols[0] ?? "";
+
+  const statGroups = useMemo(() => {
+    const market = PROP_MARKET_STATS[side].filter((c) => sideCols.includes(c));
+    const marketSet = new Set(market);
+    const advanced = sideCols.filter((c) => !marketSet.has(c)).sort();
+    return [
+      { label: "Prop markets", options: market.map((c) => ({ value: c, label: statLabel(c) })) },
+      { label: "Advanced / other", options: advanced.map((c) => ({ value: c, label: statLabel(c) })) },
+    ];
+  }, [sideCols, side]);
 
   const line = setLine === "" ? null : Number(setLine);
 
@@ -84,11 +133,16 @@ export default function PropBets() {
     const weekTotals = new Map<number, number>();
     const byPlayer = new Map<string, Map<number, number>>();
     const oppMap = new Map<string, string>(); // `${player}|${week}`
+    const weekOpp = new Map<number, string>(); // team-level: who the game was against
     for (const r of subset) {
       const w = Number(r.week);
       const v = r[selStat] == null ? null : Number(r[selStat]);
       const p = String(r.player_display_name ?? r.player_name ?? r.player_id);
-      if (r.game_id != null) oppMap.set(`${p}|${w}`, opponentLabel(String(r.game_id), selTeam));
+      if (r.game_id != null) {
+        const opp = opponentLabel(String(r.game_id), selTeam);
+        oppMap.set(`${p}|${w}`, opp);
+        if (opp && !weekOpp.has(w)) weekOpp.set(w, opp);
+      }
       if (v == null || !Number.isFinite(v)) continue;
       weekTotals.set(w, (weekTotals.get(w) ?? 0) + v);
       if (!byPlayer.has(p)) byPlayer.set(p, new Map());
@@ -99,7 +153,7 @@ export default function PropBets() {
       .map(([p, m]) => ({ player: p, cells: m, total: [...m.values()].reduce((a, b) => a + b, 0) }))
       .filter((p) => p.total !== 0)
       .sort((a, b) => b.total - a.total);
-    return { weeks, players, weekTotals, oppMap };
+    return { weeks, players, weekTotals, oppMap, weekOpp };
   }, [filteredType, selTeam, selStat]);
 
   const selPlayer = useMemo(() => {
@@ -116,6 +170,12 @@ export default function PropBets() {
     );
     return r ? String(r.headshot_url) : null;
   }, [filteredType, selPlayer]);
+  // Ask the NFL CDN for a face-cropped 160px square (rendered at 56–64px → 2.5x
+  // pixel density, crisp on retina) instead of downscaling the full-size photo.
+  const headshotCrisp = useMemo(
+    () => (headshot ? headshot.replace("/f_auto,q_auto/", "/f_auto,q_auto,w_160,h_160,c_fill,g_face/") : null),
+    [headshot],
+  );
 
   const barOption = useMemo<EChartsOption | null>(() => {
     if (!pivot || !playerRow) return null;
@@ -130,34 +190,48 @@ export default function PropBets() {
           const w = weeks[q.dataIndex];
           const v = vals[q.dataIndex];
           const total = pivot.weekTotals.get(w);
-          const pctT = v != null && total ? `${Math.round((v / total) * 100)}% of ${selStat}` : "";
-          return `Week ${w} | Opp: ${pivot.oppMap.get(`${playerRow.player}|${w}`) ?? ""}<br/>${selStat}: ${v ?? "—"}<br/>${pctT}`;
+          const pctT = v != null && total ? `${Math.round((v / total) * 100)}% of team ${statLabel(selStat)}` : "";
+          return `Week ${w} vs ${pivot.oppMap.get(`${playerRow.player}|${w}`) ?? "?"}<br/>${statLabel(selStat)}: ${v ?? "—"}<br/>${pctT}`;
         },
       },
-      xAxis: { type: "category", data: weeks.map((w) => `W${w}`), name: "Week", nameLocation: "middle", nameGap: 26 },
-      yAxis: { type: "value", name: selStat },
+      xAxis: {
+        type: "category",
+        // Two-line label: week number + opponent (@ = away game).
+        data: weeks.map((w) => `W${w}\n${pivot.weekOpp.get(w) ?? ""}`),
+        axisLabel: { interval: 0, fontSize: 10, lineHeight: 13 },
+      },
+      yAxis: { type: "value", name: statLabel(selStat) },
       series: [
         {
           type: "bar",
           data: vals.map((v) => ({
             value: v,
-            itemStyle: { color: line != null && v != null && v >= line ? "green" : "red" },
+            // No line set → neutral navy; with a line → green over / red under.
+            itemStyle: { color: line == null ? NEUTRAL_COLOR : v != null && v >= line ? HIT_COLOR : MISS_COLOR },
           })),
           ...(line != null
-            ? { markLine: { symbol: "none", lineStyle: { type: "dashed", color: "green", width: 2 }, label: { formatter: String(line) }, data: [{ yAxis: line }] } }
+            ? { markLine: { symbol: "none", lineStyle: { type: "dashed", color: HIT_COLOR, width: 2 }, label: { formatter: String(line) }, data: [{ yAxis: line }] } }
             : {}),
         },
       ],
     } as EChartsOption;
   }, [pivot, playerRow, selStat, line]);
 
-  const donutOption = useMemo<EChartsOption | null>(() => {
-    if (!pivot || !playerRow) return null;
+  // Hit-rate vs the set line, over games the player actually has a value for.
+  const verdict = useMemo(() => {
+    if (!pivot || !playerRow || line == null || !Number.isFinite(line)) return null;
     const vals = pivot.weeks.map((w) => playerRow.cells.get(w)).filter((v): v is number => v != null);
     const total = vals.length;
-    const made = line != null ? vals.filter((v) => v >= line).length : 0;
-    const below = Math.max(total - made, 0);
-    const pct = total ? Math.round((made / total) * 100) : 0;
+    if (!total) return null;
+    const made = vals.filter((v) => v >= line).length;
+    const p = made / total;
+    return { made, total, pct: Math.round(p * 100), odds: americanOdds(p) };
+  }, [pivot, playerRow, line]);
+
+  const donutOption = useMemo<EChartsOption | null>(() => {
+    if (!verdict) return null;
+    const { made, total, pct } = verdict;
+    const below = total - made;
     return {
       legend: { bottom: 0 },
       graphic: [{ type: "text", left: "center", top: "middle", style: { text: `${pct}%`, fontSize: 24, fontWeight: "bold" } }],
@@ -167,13 +241,13 @@ export default function PropBets() {
           radius: ["55%", "80%"],
           label: { show: false },
           data: [
-            { value: made, name: "Made Line", itemStyle: { color: "green" } },
-            { value: below, name: "Below Line", itemStyle: { color: "red" } },
+            { value: made, name: "Made Line", itemStyle: { color: HIT_COLOR } },
+            { value: below, name: "Below Line", itemStyle: { color: MISS_COLOR } },
           ],
         },
       ],
     } as EChartsOption;
-  }, [pivot, playerRow, line]);
+  }, [verdict]);
 
   const barRef = useECharts(barOption);
   const donutRef = useECharts(donutOption);
@@ -200,10 +274,17 @@ export default function PropBets() {
             ))}
           </div>
         </div>
-        <Select label="Stat" value={selStat} onChange={setStat} options={sideCols.map((c) => ({ value: c, label: c }))} />
-        <label className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
+        <Select label="Stat" value={selStat} onChange={setStat} groups={statGroups} />
+        <label className="flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wider text-[#002f6c]">
           Set line
-          <input type="number" value={setLine} onChange={(e) => setSetLine(e.target.value)} placeholder="set_line" className="w-28 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
+          <input
+            type="number"
+            step="0.5"
+            value={setLine}
+            onChange={(e) => setSetLine(e.target.value)}
+            placeholder="e.g. 250.5"
+            className="w-28 rounded-lg border-2 border-[#002f6c]/40 bg-white px-3 py-2 text-sm font-semibold shadow-sm focus:border-[#002f6c] focus:outline-none focus:ring-2 focus:ring-[#002f6c]/15"
+          />
         </label>
       </div>
 
@@ -214,7 +295,12 @@ export default function PropBets() {
               <tr>
                 <th className="px-3 py-2 text-left">Player</th>
                 {pivot.weeks.map((w) => (
-                  <th key={w} className="px-2 py-2 text-center">W{w}</th>
+                  <th key={w} className="px-2 py-2 text-center">
+                    W{w}
+                    <span className="block text-[9px] font-medium normal-case tracking-normal text-slate-400">
+                      {pivot.weekOpp.get(w) ?? ""}
+                    </span>
+                  </th>
                 ))}
                 <th className="px-3 py-2 text-center">Total</th>
               </tr>
@@ -239,6 +325,29 @@ export default function PropBets() {
               ))}
             </tbody>
           </table>
+          <div className="border-t border-slate-100 px-3 py-1.5 text-[10px] text-slate-400">
+            Opponent shown under each week — @ = away game. A missing week is the team's bye.
+          </div>
+        </div>
+      )}
+
+      {playerRow && (
+        <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm">
+          {verdict ? (
+            <span>
+              <span className="font-semibold">{playerRow.player}</span> cleared{" "}
+              <span className="font-semibold">{line}</span> {statLabel(selStat).toLowerCase()} in{" "}
+              <span className="font-semibold">{verdict.made} of {verdict.total}</span> games (
+              <span className={`font-bold ${verdict.pct >= 50 ? "text-emerald-700" : "text-red-700"}`}>{verdict.pct}%</span>)
+              {verdict.odds && (
+                <span className="text-slate-500"> — implied fair odds {verdict.odds}</span>
+              )}
+            </span>
+          ) : (
+            <span className="text-slate-500">
+              Set a line above to see how often <span className="font-medium text-slate-700">{playerRow.player}</span> cleared it and the implied fair odds.
+            </span>
+          )}
         </div>
       )}
 
@@ -246,14 +355,33 @@ export default function PropBets() {
         <div className="flex flex-wrap gap-4">
           <div className="min-w-80 flex-1 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="mb-2 flex min-h-14 items-center gap-3">
-              {headshot && <img src={headshot} alt={playerRow.player} className="h-14 w-14 rounded-full object-cover" />}
-              <span className="text-lg font-semibold">{playerRow.player} — {selStat}</span>
+              {headshotCrisp && (
+                <img
+                  src={headshotCrisp}
+                  alt={playerRow.player}
+                  width={56}
+                  height={56}
+                  loading="lazy"
+                  className="h-14 w-14 rounded-full bg-slate-100 object-cover ring-1 ring-slate-200"
+                  onError={(e) => {
+                    // Fall back to the untransformed CDN URL if the crop variant 404s.
+                    if (headshot && e.currentTarget.src !== headshot) e.currentTarget.src = headshot;
+                  }}
+                />
+              )}
+              <span className="text-lg font-semibold">{playerRow.player} — {statLabel(selStat)}</span>
             </div>
             <div ref={barRef} className="h-[360px]" />
           </div>
           <div className="min-w-80 flex-1 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="mb-2 min-h-14 text-lg font-semibold">Made vs Below line</div>
-            <div ref={donutRef} className="h-[360px]" />
+            {verdict ? (
+              <div ref={donutRef} className="h-[360px]" />
+            ) : (
+              <div className="flex h-[360px] items-center justify-center text-sm text-slate-400">
+                Set a line to see the hit-rate split.
+              </div>
+            )}
           </div>
         </div>
       )}

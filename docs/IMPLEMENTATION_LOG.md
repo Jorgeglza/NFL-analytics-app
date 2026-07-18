@@ -57,6 +57,14 @@ Per page: run old app side-by-side (`pda-ie` env), match tables/KPIs/chart serie
 
 ## Session notes (newest first)
 
+### 2026-07-18 — Session 5 (cont.): Prop Bets audit §8 implementation
+- **Curated stat picker** (audit 🔴): `Select` gained optional `groups` (native optgroup, backward-compatible). Stats now grouped "Prop markets" (curated ~14 sportsbook stats, ordered) / "Advanced / other" (alphabetical), with Title-Case labels via `statLabel()` (acronym handling: EPA/PACR/WOPR/…, `tds→TDs`, `2pt→2-pt`). Bug fixed in passing: offense keyword filter leaked `def_sacks`/`def_interceptions`/`def_sack_yards` into the offense stat list (`includes("sacks")`) — def_* now excluded on offense.
+- **Opponent visibility** ("vs who"): team-level week→opponent map in the pivot; opponent shown under every week header in the pivot table and as a second line on the bar chart's x-axis labels (`W5` / `@DAL`), plus a footer note explaining @-notation and byes. Tooltips unchanged.
+- **Coloring fixes**: with no line set, bars were all red (condition fell through) → now neutral navy; donut showed a misleading "0% / all Below" → replaced by a "set a line" placeholder. Colors standardized (#059669/#dc2626) and donut/bars share them.
+- **Verdict sentence + implied odds** (audit 🟡): card between pivot and charts — "X cleared L <stat> in N of M games (P%) — implied fair odds ±A" (American odds from hit rate; hidden at 0/100%). Set-line input visually elevated (navy border, 0.5 step, real placeholder).
+- **Headshot resolution**: page loaded the full-size NFL CDN PNG (3400×2450, ~4.3 MB) into a 56px avatar. Now requests a Cloudinary face crop (`w_160,h_160,c_fill,g_face` → 160×160, ~11 KB, verified 200 + sharp) with onError fallback to the original URL.
+- Verified: Brissett/ARI 2025 passing_yards line 250.5 → 8/14, 57%, −133 — exact vs PowerShell replica over the raw JSON; pivot/table/labels/optgroups verified in pane DOM. Note: the embedded pane never paints ECharts *series* pixels (axes/text only — confirmed identical on untouched Game Picks), so bar/donut colors verified at option level + donut pixel colors. Tests 49/49, build green. Not committed/pushed.
+
 ### 2026-07-18 — Session 5 (cont.): branding + model-chip selection state
 - **Branding assets** (`app/public/branding/`, processed with Pillow from the user's two ChatGPT logo PNGs in Downloads):
   - `jga-icon{,-256,-64}.png` — circular JGA mark. Source had a baked-in transparency checkerboard; circle detected from the blue disc (blue-pixel bbox, min-side radius) and cut with a 4× supersampled antialiased alpha mask → clean 1024² circle.
