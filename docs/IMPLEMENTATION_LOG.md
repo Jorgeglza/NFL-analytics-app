@@ -50,11 +50,17 @@ Per page: run old app side-by-side (`pda-ie` env), match tables/KPIs/chart serie
 - ☐ Optional: screenshot-based visual QA (browser pane screenshot capture currently times out on this app).
 
 ### M5 — Deploy + automation
-- ☐ `.github/workflows/weekly-refresh.yml` (cron Tue 12:00 UTC + dispatch → pipeline → validate → auto-commit)
-- ☐ `.github/workflows/deploy.yml` (build → GitHub Pages, SPA fallback + Vite `base`)
-- ☐ Push to GitHub, first workflow run verified
+- ✅ `.github/workflows/weekly-refresh.yml` (cron Tue 12:00 UTC + dispatch → pipeline → validate → auto-commit → explicit `gh workflow run deploy.yml` — GITHUB_TOKEN commits don't fire push triggers)
+- ✅ `.github/workflows/deploy.yml` (build → GitHub Pages, SPA fallback + Vite `base`) — live since Session 1
+- ✅ Dynamic season range: `config.SEASONS = range(2015, current_season()+1)` (rolls to the new season each September); `fetch_weekly` skips the newest season with a warning if unpublished; `validate` asserts 2015→current (one-season grace)
+- ◐ First end-to-end weekly-refresh run verified via workflow_dispatch
 
 ## Session notes (newest first)
+
+### 2026-07-17 — Session 6: M5 backend automation (weekly refresh + rolling seasons)
+- `config.py`: `SEASONS` now `range(FIRST_SEASON=2015, current_season()+1)`; `current_season()` = calendar year from September, else previous year. `fetch_weekly` skips only the *newest* season (warning) if both loaders fail (early-September grace); other failures stay fatal. `validate` additionally asserts meta seasons start 2015 and newest ≥ current−1.
+- `weekly-refresh.yml`: added `actions: write` + explicit `gh workflow run deploy.yml` after the auto-commit (only if `changes_detected`) — commits pushed with the default `GITHUB_TOKEN` do **not** trigger `deploy.yml`'s push event, so the Pages site would never update otherwise. Pins already matched requirements.lock.txt. Runbook updated (season rule, CI flow, 60-day cron-pause note).
+- Verified locally: `--stage all --refresh` → export done, `--stage validate` OK (SEASONS resolves 2015–2025 in July 2026); app build + 42 tests green. Also merged the user's concurrent Win Types favorite-split edit (deduped `splitKpis`, restored `SPLIT_DEFS`) — build was broken by a duplicate definition.
 
 ### 2026-07-17 — Session 5 (cont.): Win Types — restore full block list per user feedback
 - User feedback: the single-block drill-down killed the "visually scan all seasons" workflow. Reworked to serve both:

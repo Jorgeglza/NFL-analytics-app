@@ -56,7 +56,15 @@ def fetch_weekly(years=None, refresh=False) -> pd.DataFrame:
         if path.exists() and not refresh:
             frames.append(pd.read_parquet(path))
             continue
-        df = _load_player_week_year_with_fallback(year)
+        try:
+            df = _load_player_week_year_with_fallback(year)
+        except Exception as e:
+            # Early September: the newest season may not be published yet.
+            # Skip it with a warning; any other season failing is fatal.
+            if year == max(years):
+                print(f"WARNING: no data for newest season {year} yet, skipping ({e})")
+                continue
+            raise
         df.to_parquet(path, index=False)
         frames.append(df)
     return pd.concat(frames, ignore_index=True)

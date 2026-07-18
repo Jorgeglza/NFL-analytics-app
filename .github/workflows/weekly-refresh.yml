@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  actions: write # to trigger deploy.yml after the data commit
 
 jobs:
   refresh:
@@ -31,7 +32,16 @@ jobs:
         run: python pipeline/run_pipeline.py --stage validate
 
       - name: Commit updated data
+        id: autocommit
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "data: weekly refresh"
           file_pattern: "data/nfl.sqlite app/public/data/**"
+
+      # Commits pushed with GITHUB_TOKEN do not fire push-triggered workflows,
+      # so the Pages deploy must be dispatched explicitly.
+      - name: Trigger deploy
+        if: steps.autocommit.outputs.changes_detected == 'true'
+        run: gh workflow run deploy.yml --ref main
+        env:
+          GH_TOKEN: ${{ github.token }}

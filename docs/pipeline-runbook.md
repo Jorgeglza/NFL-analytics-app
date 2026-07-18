@@ -25,10 +25,25 @@ git add data/nfl.sqlite app/public/data && git commit -m "data: weekly refresh"
 | model | 3 RF grading models (REG games only) + contribution scaler params |
 | export | `data/nfl.sqlite` + `app/public/data/*.json` (compact column format) |
 | parity | compare vs old app caches (local only; skips if old files absent) |
-| validate | CI invariants: counts > 0, grades in [0,100], sqlite exists |
+| validate | CI invariants: counts > 0, grades in [0,100], sqlite exists, seasons span 2015→current |
 
-## Adding a season
-Edit `SEASONS` in `pipeline/nfl_pipeline/config.py`, run `--stage all --refresh`.
+## Season range (automatic)
+`SEASONS` in `pipeline/nfl_pipeline/config.py` is `range(FIRST_SEASON, current_season()+1)`:
+`current_season()` = calendar year from September onward, else the previous year.
+No manual edit needed when a new season starts. If the newest season isn't published
+on nflverse yet (early September), `fetch_weekly` skips it with a warning instead of
+failing; `validate` tolerates being at most one season behind.
+
+## Automated weekly refresh (CI)
+`.github/workflows/weekly-refresh.yml` runs every Tuesday 12:00 UTC (and via
+manual dispatch): pipeline `--stage all --refresh` → `validate` → auto-commit
+`data/nfl.sqlite` + `app/public/data/**` → explicitly dispatches `deploy.yml`
+(`gh workflow run`), because commits pushed with the default `GITHUB_TOKEN` do
+**not** fire push-triggered workflows — without that step the Pages site would
+stay stale.
+Note: GitHub pauses cron schedules after ~60 days without repo activity; the
+weekly data commits keep it alive, but a long streak of failed runs could stall
+it — check the Actions tab if the site's data looks old.
 
 ## Data source notes
 - 2015–2024 load via nfl_data_py; 2025+ falls back to nflreadpy (nfl_data_py's

@@ -60,6 +60,13 @@ const KPI_DEFS = [
 ] as const;
 type KpiKey = (typeof KPI_DEFS)[number]["key"];
 
+// colors deliberately outside the win-type category palette (audit: color = category there)
+const SPLIT_DEFS = [
+  { key: "homeFavWinPct", label: "Home favorites Win %", color: "#002f6c" },
+  { key: "awayFavWinPct", label: "Away favorites Win %", color: "#7c3aed" },
+] as const;
+type SplitKey = (typeof SPLIT_DEFS)[number]["key"];
+
 interface Game {
   gameId: string;
   x: number; // week (season mode) or season (week mode)
@@ -119,6 +126,16 @@ function kpis(games: Game[]): Record<KpiKey, number | null> {
   };
 }
 
+/** Favorite Win % split by where the favorite played. Played games only; ties
+ *  stay in the denominators (same convention as kpis()); pick'ems excluded. */
+function splitKpis(games: Game[]): Record<SplitKey, number | null> {
+  const rate = (side: "home" | "away") => {
+    const pool = games.filter((g) => g.played && g.favorite === side);
+    return pool.length ? (pool.filter((g) => g.winner === g.favorite).length / pool.length) * 100 : null;
+  };
+  return { homeFavWinPct: rate("home"), awayFavWinPct: rate("away") };
+}
+
 const pct = (v: number | null) => (v == null ? "N/A" : `${Math.round(v)}%`);
 
 function Kpi({ label, value, border }: { label: string; value: string; border: string }) {
@@ -172,11 +189,13 @@ function TrendChart({
   averages,
   xLabel,
   onSelect,
+  defs = KPI_DEFS,
 }: {
-  groups: { x: number; k: Record<KpiKey, number | null> }[];
-  averages: Record<KpiKey, number | null>;
+  groups: { x: number; k: Record<string, number | null> }[];
+  averages: Record<string, number | null>;
   xLabel: string;
   onSelect: (x: number) => void;
+  defs?: readonly { key: string; label: string; color: string }[];
 }) {
   const option = useMemo(() => {
     if (!groups.length) return null;
@@ -202,7 +221,7 @@ function TrendChart({
         min: (v: { min: number }) => Math.max(0, Math.floor((v.min - 3) / 5) * 5),
         max: (v: { max: number }) => Math.min(100, Math.ceil((v.max + 3) / 5) * 5),
       },
-      series: KPI_DEFS.map((d) => ({
+      series: defs.map((d) => ({
         name: d.label,
         type: "line" as const,
         data: groups.map((g) => (g.k[d.key] == null ? null : Number(g.k[d.key]!.toFixed(1)))),
@@ -219,7 +238,7 @@ function TrendChart({
         },
       })),
     };
-  }, [groups, averages, xLabel]);
+  }, [groups, averages, xLabel, defs]);
 
   // the click handler is bound once at chart init — route through a ref so it
   // always sees the latest onSelect (mode changes swap the setter without remounting)
@@ -463,10 +482,13 @@ export default function WinTypes() {
       const games = reg.filter((r) => Number(r[key]) === x).map((r) => classify(r, mode === "season" ? "week" : "season"));
       const counts = new Map<Category, number>();
       for (const g of games) counts.set(g.category, (counts.get(g.category) ?? 0) + 1);
-      return { x, k: kpis(games), counts, total: games.length };
+      return { x, k: kpis(games), split: splitKpis(games), counts, total: games.length };
     });
   }, [reg, groupValues, mode]);
-  const averages = useMemo(() => kpis(reg.map((r) => classify(r, "week"))), [reg]);
+  const allGames = useMemo(() => reg.map((r) => classify(r, "week")), [reg]);
+  const averages = useMemo(() => kpis(allGames), [allGames]);
+  const splitAverages = useMemo(() => splitKpis(allGames), [allGames]);
+  const splitGroups = useMemo(() => trendGroups.map((g) => ({ x: g.x, k: g.split })), [trendGroups]);
 
   const seasonSpan = seasons.length ? `${Math.min(...seasons)}–${Math.max(...seasons)}` : "";
 
@@ -549,6 +571,19 @@ export default function WinTypes() {
               <MixChart groups={trendGroups} xLabel={mode === "season" ? "Season" : "Week"} onSelect={scrollToBlock} />
             </Card>
           </div>
+
+          <Card
+            title="Favorite Win % — home vs away favorites"
+            subtitle="Splits the Favorite Win % KPI by where the favorite played. Played games only; ties count in the denominators; pick'em games (no favorite) excluded. A shrinking gap between the lines means home-field advantage is eroding. Click a point to jump to its block."
+          >
+            <TrendChart
+              groups={splitGroups}
+              averages={splitAverages}
+              xLabel={mode === "season" ? "Season" : "Week"}
+              onSelect={scrollToBlock}
+              defs={SPLIT_DEFS}
+            />
+          </Card>
 
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="mr-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">Jump to</span>

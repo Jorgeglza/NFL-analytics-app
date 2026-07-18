@@ -1,7 +1,22 @@
+import datetime as _dt
 from pathlib import Path
 
-# Seasons included in the app (mirrors old settings.json season_range)
-SEASONS = list(range(2015, 2026))
+FIRST_SEASON = 2015
+
+
+def current_season(today: "_dt.date | None" = None) -> int:
+    """Latest NFL season expected to have data on nflverse.
+
+    A season starts in September of its calendar year; before September, the
+    previous calendar year's season is the newest one available.
+    """
+    today = today or _dt.date.today()
+    return today.year if today.month >= 9 else today.year - 1
+
+
+# Seasons included in the app (mirrors old settings.json season_range,
+# rolling forward automatically each September)
+SEASONS = list(range(FIRST_SEASON, current_season() + 1))
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR = REPO_ROOT / "data"

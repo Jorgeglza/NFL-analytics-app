@@ -127,6 +127,15 @@ def main():
             for k, v in meta.get("counts", {}).items():
                 if v <= 0:
                     problems.append(f"count {k} is {v}")
+            seasons = meta.get("seasons", [])
+            if not seasons or min(seasons) != config.FIRST_SEASON:
+                problems.append(f"seasons must start at {config.FIRST_SEASON}, got {seasons[:1]}")
+            # Grace: right after a new season starts its data may not be
+            # published yet, so require at most one season behind.
+            if not seasons or max(seasons) < config.current_season() - 1:
+                problems.append(
+                    f"newest season {max(seasons) if seasons else None} is stale "
+                    f"(expected >= {config.current_season() - 1})")
         grades_path = config.EXTRACTS_DIR / "grades.json"
         if grades_path.exists():
             g = json.loads(grades_path.read_text())
