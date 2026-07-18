@@ -139,21 +139,64 @@ function StatRow({
   );
 }
 
-/** Two-way share bar with a dashed league-average marker. Metric named in the label. */
-function SplitBar({ label, a, b, la, lb, aName, bName, accent }: { label: string; a: number; b: number; la: number; lb: number; aName: string; bName: string; accent: string }) {
+/** Two-way share bar with a dashed league-average marker, on-bar percentages,
+ *  and a league rank chip (#1 = highest first-side share — a style spectrum,
+ *  not good/bad). Metric named in the label. */
+function SplitBar({
+  label,
+  a,
+  b,
+  la,
+  lb,
+  aName,
+  bName,
+  accent,
+  rank,
+  nTeams,
+}: {
+  label: string;
+  a: number;
+  b: number;
+  la: number;
+  lb: number;
+  aName: string;
+  bName: string;
+  accent: string;
+  rank: number | null;
+  nTeams: number;
+}) {
   if (!(a + b) || !(la + lb)) return null;
   const pct = (a / (a + b)) * 100;
   const lgPct = (la / (la + lb)) * 100;
   return (
     <div>
-      <div className="mb-1 flex items-baseline justify-between text-xs">
+      <div className="mb-1 flex items-baseline justify-between gap-2 text-xs">
         <span className="font-semibold text-slate-600">{label}</span>
-        <span className="text-slate-400">
-          {aName} {pct.toFixed(0)}% · {bName} {(100 - pct).toFixed(0)}%
+        <span className="flex items-center gap-1.5 whitespace-nowrap text-slate-400">
+          {rank != null && (
+            <span
+              className="rounded-full bg-slate-600 px-1.5 py-px text-[10px] font-bold text-white"
+              title={`League rank by ${aName.toLowerCase()} share — #1 = most ${aName.toLowerCase()}-heavy of ${nTeams} teams`}
+            >
+              #{rank} {aName.toLowerCase()}-heavy
+            </span>
+          )}
+          <span title="Difference vs the league-average share">
+            {pct >= lgPct ? "+" : ""}
+            {(pct - lgPct).toFixed(1)} pts vs lg
+          </span>
         </span>
       </div>
-      <div className="relative h-4 overflow-hidden rounded-full bg-slate-200" title={`${aName}: ${Math.round(a)} (${pct.toFixed(1)}%) · ${bName}: ${Math.round(b)} — dashed marker = league-average ${aName.toLowerCase()} share (${lgPct.toFixed(1)}%)`}>
-        <div className="h-full rounded-l-full" style={{ width: `${pct}%`, background: accent }} />
+      <div
+        className="relative flex h-5 overflow-hidden rounded-full bg-slate-200"
+        title={`${aName}: ${Math.round(a)} (${pct.toFixed(1)}%) · ${bName}: ${Math.round(b)} (${(100 - pct).toFixed(1)}%) — dashed marker = league-average ${aName.toLowerCase()} share (${lgPct.toFixed(1)}%)`}
+      >
+        <div className="flex h-full items-center justify-center rounded-l-full text-[10px] font-bold text-white" style={{ width: `${pct}%`, background: accent }}>
+          {pct >= 14 && `${aName} ${pct.toFixed(0)}%`}
+        </div>
+        <div className="flex h-full flex-1 items-center justify-center text-[10px] font-bold text-slate-600">
+          {100 - pct >= 14 && `${bName} ${(100 - pct).toFixed(0)}%`}
+        </div>
         <div className="absolute top-0 h-full border-l-2 border-dashed border-slate-700/70" style={{ left: `${lgPct}%` }} />
       </div>
     </div>
@@ -302,6 +345,22 @@ export default function Scorecards() {
   }, [df, grades, season, team]);
   const journeyRef = useECharts(journeyOption);
 
+  // League rank of this team's a/(a+b) share for a metric pair (#1 = highest share).
+  const shareRank = useMemo(() => {
+    return (aCol: string, bCol: string): number | null => {
+      const shares: { t: string; v: number }[] = [];
+      for (const t of teams) {
+        const rows = teamWeek.filter((r) => String(r.team) === t);
+        const a = statOf(rows, aCol)?.total ?? 0;
+        const b = statOf(rows, bCol)?.total ?? 0;
+        if (a + b > 0) shares.push({ t, v: a / (a + b) });
+      }
+      shares.sort((x, y) => y.v - x.v);
+      const i = shares.findIndex((s) => s.t === team);
+      return i < 0 ? null : i + 1;
+    };
+  }, [teamWeek, teams, team]);
+
   // Sparkline points for a column (weeks in order, win flag + opponent for tooltips).
   const sparkPts = (col: string): SparkPoint[] =>
     df.map((r) => ({
@@ -379,7 +438,7 @@ export default function Scorecards() {
               ["First downs (passing vs rushing)", "passing_first_downs", "rushing_first_downs"],
               ["Yards (passing vs rushing)", "passing_yards", "rushing_yards"],
             ] as const).map(([label, aCol, bCol]) => (
-              <SplitBar key={aCol} label={label} a={statOf(df, aCol)?.total ?? 0} b={statOf(df, bCol)?.total ?? 0} la={statOf(teamWeek, aCol)?.total ?? 0} lb={statOf(teamWeek, bCol)?.total ?? 0} aName="Pass" bName="Rush" accent={OFF_ACCENT} />
+              <SplitBar key={aCol} label={label} a={statOf(df, aCol)?.total ?? 0} b={statOf(df, bCol)?.total ?? 0} la={statOf(teamWeek, aCol)?.total ?? 0} lb={statOf(teamWeek, bCol)?.total ?? 0} aName="Pass" bName="Rush" accent={OFF_ACCENT} rank={shareRank(aCol, bCol)} nTeams={nTeams} />
             ))}
           </div>
         </Card>
@@ -390,7 +449,7 @@ export default function Scorecards() {
               ["First downs allowed (pass vs rush)", "passing_first_downs_allowed", "rushing_first_downs_allowed"],
               ["Yards allowed (pass vs rush)", "passing_yards_allowed", "rushing_yards_allowed"],
             ] as const).map(([label, aCol, bCol]) => (
-              <SplitBar key={aCol} label={label} a={statOf(df, aCol)?.total ?? 0} b={statOf(df, bCol)?.total ?? 0} la={statOf(teamWeek, aCol)?.total ?? 0} lb={statOf(teamWeek, bCol)?.total ?? 0} aName="Pass" bName="Rush" accent={DEF_ACCENT} />
+              <SplitBar key={aCol} label={label} a={statOf(df, aCol)?.total ?? 0} b={statOf(df, bCol)?.total ?? 0} la={statOf(teamWeek, aCol)?.total ?? 0} lb={statOf(teamWeek, bCol)?.total ?? 0} aName="Pass" bName="Rush" accent={DEF_ACCENT} rank={shareRank(aCol, bCol)} nTeams={nTeams} />
             ))}
           </div>
         </Card>
