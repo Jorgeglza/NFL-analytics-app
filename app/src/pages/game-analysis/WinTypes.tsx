@@ -7,12 +7,13 @@
 //  - played pick'em games (spread 0 / null spread => Favorite "none") classify as Underdog
 //  - played ties (Winner null) fall into the "(No Score)" / "No Favorite" buckets
 //  - Favorite Win % / Home Win % denominators include played ties
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { EChartsOption } from "echarts";
 import { getSchedule, type Row } from "../../lib/data/loader";
 import { useECharts } from "../../components/charts/useECharts";
 import { Loading } from "../../components/Loading";
 import { Card, Segmented } from "../../components/ui";
+import { LazyMount } from "../../components/LazyMount";
 
 type Category =
   | "Favorite home"
@@ -145,42 +146,6 @@ function Kpi({ label, value, border }: { label: string; value: string; border: s
       <div className="text-[22px] font-bold text-slate-900">{value}</div>
     </div>
   );
-}
-
-/** Mounts children only once scrolled near the viewport — keeps the block list
- *  cheap (charts init on demand) without losing the scan-the-whole-page flow. */
-function LazyMount({ minHeight, children }: { minHeight: number; children: React.ReactNode }) {
-  const [visible, setVisible] = useState(false);
-  const holderRef = useCallback((node: HTMLDivElement | null) => {
-    if (!node) return;
-    let done = false;
-    const io = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((e) => e.isIntersecting)) fire();
-      },
-      { rootMargin: "400px 0px" },
-    );
-    // Fallback for environments where IntersectionObserver never ticks:
-    // measure directly on mount and on scroll/resize.
-    const check = () => {
-      if (done || !node.isConnected) return;
-      const r = node.getBoundingClientRect();
-      if (r.top < window.innerHeight + 400 && r.bottom > -400) fire();
-    };
-    const fire = () => {
-      if (done) return;
-      done = true;
-      io.disconnect();
-      window.removeEventListener("scroll", check, true);
-      window.removeEventListener("resize", check);
-      setVisible(true);
-    };
-    io.observe(node);
-    window.addEventListener("scroll", check, { capture: true, passive: true });
-    window.addEventListener("resize", check);
-    requestAnimationFrame(check);
-  }, []);
-  return visible ? <>{children}</> : <div ref={holderRef} style={{ minHeight }} />;
 }
 
 /** Cross-group KPI trend lines with dashed all-time average reference lines. */

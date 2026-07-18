@@ -1,5 +1,10 @@
 // Port of player_team_stats_page_3.py — top-5 players per team for a stat,
 // division-ordered team cards with a shared x-axis.
+// UX audit §10: league-wide top-N strip above the team grid (the page's most
+// common question — "who leads the league" — previously required scanning all
+// 32 cards), conference/division jump navigation, lazily-mounted team cards
+// (32 always-rendered canvases was the app's 2nd-heaviest page), and the
+// shared curated/grouped stat picker (audit's cross-page stat-selector fix).
 import { useEffect, useMemo, useState } from "react";
 import type { EChartsOption } from "echarts";
 import { getPlayerWeek, getMeta, type Row } from "../../lib/data/loader";
@@ -7,6 +12,8 @@ import { getTeamMetaMap, readableTextColor, type TeamMeta } from "../../lib/team
 import { Select } from "../../components/filters/Select";
 import { Loading } from "../../components/Loading";
 import { useECharts } from "../../components/charts/useECharts";
+import { LazyMount } from "../../components/LazyMount";
+import { buildStatGroups, statLabel } from "./statPicker";
 
 const EXCLUDE = new Set([
   "season", "week", "team", "opponent_team", "gameday", "game_id",
@@ -38,10 +45,48 @@ function niceCeiling(x: number): number {
 }
 
 const isPctStat = (s: string) => ["pct", "percentage", "rate", "%", "success_rate"].some((k) => s.toLowerCase().includes(k));
-const pretty = (s: string) => {
-  const parts = s.replace(/_/g, " ").trim().split(" ");
-  return parts[0].charAt(0).toUpperCase() + parts[0].slice(1) + (parts.length > 1 ? " " + parts.slice(1).join(" ") : "");
-};
+const fmtStat = (stat: string, v: number) =>
+  isPctStat(stat) ? `${(Math.abs(v) <= 1 ? v * 100 : v).toFixed(1)}%` : v < 0 ? v.toFixed(2) : Math.round(v).toLocaleString();
+
+/** League-wide top-N strip (audit §10 🟡): the page's most common question —
+ *  "who leads the league in this stat" — previously required scanning all 32
+ *  team cards; this answers it in one glance, ranked, with a shared bar scale. */
+function LeagueLeaders({ stat, leaders, meta }: {
+  stat: string;
+  leaders: { team: string; name: string; value: number }[];
+  meta: Map<string, TeamMeta>;
+}) {
+  if (!leaders.length) return null;
+  const max = leaders[0].value || 1;
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="mb-2 flex items-center justify-between">
+        <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">League leaders — {statLabel(stat)}</div>
+      </div>
+      <div className="space-y-1.5">
+        {leaders.map((p, i) => {
+          const tm = meta.get(p.team);
+          const pct = Math.max(4, (Math.abs(p.value) / Math.abs(max)) * 100);
+          return (
+            <div key={`${p.team}-${p.name}`} className="flex items-center gap-2">
+              <span className="w-5 shrink-0 text-right text-xs font-semibold text-slate-400">{i + 1}</span>
+              {tm?.logo && <img src={tm.logo} alt={p.team} className="h-5 w-5 shrink-0" />}
+              <span className="w-40 shrink-0 truncate text-sm font-medium text-slate-800">{p.name}</span>
+              <span className="w-10 shrink-0 text-xs text-slate-400">{p.team}</span>
+              <div className="relative h-5 flex-1 rounded bg-slate-100">
+                <div
+                  className="h-5 rounded"
+                  style={{ width: `${pct}%`, background: tm?.color2 ?? tm?.color ?? "#002f6c" }}
+                />
+              </div>
+              <span className="w-16 shrink-0 text-right text-sm font-semibold text-slate-900">{fmtStat(stat, p.value)}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 function TeamCard({ team, stat, players, xMax, meta }: {
   team: string;
@@ -72,10 +117,7 @@ function TeamCard({ team, stat, players, xMax, meta }: {
           show: true,
           position: "right",
           fontSize: 10,
-          formatter: (p: { value?: unknown }) => {
-            const v = Number(p.value);
-            return isPctStat(stat) ? `${(Math.abs(v) <= 1 ? v * 100 : v).toFixed(1)}%` : v < 0 ? v.toFixed(2) : Math.round(v).toLocaleString();
-          },
+          formatter: (p: { value?: unknown }) => fmtStat(stat, Number(p.value)),
         },
       },
     ],
@@ -86,7 +128,7 @@ function TeamCard({ team, stat, players, xMax, meta }: {
       <div className="mb-1 flex items-center justify-between">
         <div>
           <div className="text-base font-extrabold">{team}</div>
-          <div className="text-xs opacity-85">{pretty(stat)}</div>
+          <div className="text-xs opacity-85">{statLabel(stat)}</div>
         </div>
         {meta?.logo && <img src={meta.logo} alt={team} className="h-6" />}
       </div>
@@ -136,7 +178,11 @@ export default function PlayerTeamStats() {
   }, [rows]);
   const sideCols = useMemo(() => {
     const kws = side === "offense" ? OFFENSE_KW : DEFENSE_KW;
-    const f = numericCols.filter((c) => kws.some((k) => c.toLowerCase().includes(k)));
+    const f = numericCols.filter((c) => {
+      const lc = c.toLowerCase();
+      if (side === "offense" && lc.startsWith("def_")) return false;
+      return kws.some((k) => lc.includes(k));
+    });
     return f.length ? f : numericCols;
   }, [numericCols, side]);
   const selStat = sideCols.includes(stat) ? stat : sideCols.includes("passing_yards") ? "passing_yards" : sideCols[0] ?? "";
@@ -188,10 +234,22 @@ export default function PlayerTeamStats() {
     const used = new Set(blocks.flatMap((b) => b.teams.map((t) => t.team)));
     const leftovers = teamCards.filter((t) => !used.has(t.team)).sort((a, b) => a.team.localeCompare(b.team));
     if (leftovers.length) blocks.push({ conf: "Other", div: "Other", teams: leftovers });
-    return { blocks, xMax };
+
+    // League-wide leaders: each team's own leader is necessarily the league
+    // leader candidate pool (top5-per-team already covers it), flattened and re-ranked.
+    const leaders = teamCards
+      .flatMap((t) => t.players.map((p) => ({ team: t.team, name: p.name, value: p.value })))
+      .sort((a, b) => Math.abs(b.value) - Math.abs(a.value))
+      .slice(0, 10);
+
+    return { blocks, xMax, leaders };
   }, [typed, selStat, weekLo, weekHi, meta]);
 
   if (!meta) return <Loading />;
+
+  const jumpTo = (id: string) => {
+    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
   let prevConf = "";
   return (
@@ -210,7 +268,7 @@ export default function PlayerTeamStats() {
             ))}
           </div>
         </div>
-        <Select label="Stat" value={selStat} onChange={setStat} options={sideCols.map((c) => ({ value: c, label: c }))} />
+        <Select label="Stat" value={selStat} onChange={setStat} groups={buildStatGroups(sideCols, side)} />
         <label className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
           Weeks: {Math.min(weekLo, weekHi)}–{Math.max(weekLo, weekHi)}
           <div className="flex items-center gap-2">
@@ -221,32 +279,51 @@ export default function PlayerTeamStats() {
       </div>
 
       {grid ? (
-        <div className="space-y-3">
-          {grid.blocks.map((b) => {
-            const showConf = b.conf !== prevConf;
-            prevConf = b.conf;
-            return (
-              <div key={`${b.conf}-${b.div}`}>
-                {showConf && (
+        <div className="space-y-4">
+          <LeagueLeaders stat={selStat} leaders={grid.leaders} meta={meta} />
+
+          <div className="sticky top-[53px] z-20 -mx-1 flex flex-wrap items-center gap-1.5 rounded-xl bg-white/90 px-1 py-2 backdrop-blur">
+            <span className="mr-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Jump to</span>
+            {grid.blocks.map((b) => (
+              <button
+                key={`${b.conf}-${b.div}`}
+                onClick={() => jumpTo(`block-${b.conf}-${b.div}`)}
+                className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600 hover:border-[#002f6c] hover:text-[#002f6c]"
+              >
+                {b.conf === "Other" ? "Other" : `${b.conf} ${b.div}`}
+              </button>
+            ))}
+          </div>
+
+          <div className="space-y-3">
+            {grid.blocks.map((b) => {
+              const showConf = b.conf !== prevConf;
+              prevConf = b.conf;
+              return (
+                <div key={`${b.conf}-${b.div}`} id={`block-${b.conf}-${b.div}`} className="scroll-mt-24">
+                  {showConf && (
+                    <div className="mb-1.5 flex items-center gap-2">
+                      <div className="h-px flex-1 bg-slate-300" />
+                      <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-slate-600">{b.conf}</span>
+                      <div className="h-px flex-1 bg-slate-300" />
+                    </div>
+                  )}
                   <div className="mb-1.5 flex items-center gap-2">
-                    <div className="h-px flex-1 bg-slate-300" />
-                    <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-slate-600">{b.conf}</span>
-                    <div className="h-px flex-1 bg-slate-300" />
+                    <div className="h-px flex-1 bg-slate-200" />
+                    <span className="rounded-full border border-slate-100 bg-white px-2 py-0.5 text-[11px] uppercase tracking-wider text-slate-500">{b.conf} • {b.div}</span>
+                    <div className="h-px flex-1 bg-slate-200" />
                   </div>
-                )}
-                <div className="mb-1.5 flex items-center gap-2">
-                  <div className="h-px flex-1 bg-slate-200" />
-                  <span className="rounded-full border border-slate-100 bg-white px-2 py-0.5 text-[11px] uppercase tracking-wider text-slate-500">{b.conf} • {b.div}</span>
-                  <div className="h-px flex-1 bg-slate-200" />
+                  <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))" }}>
+                    {b.teams.map((t) => (
+                      <LazyMount key={t.team} minHeight={268}>
+                        <TeamCard team={t.team} stat={selStat} players={t.players} xMax={grid.xMax} meta={meta.get(t.team)} />
+                      </LazyMount>
+                    ))}
+                  </div>
                 </div>
-                <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))" }}>
-                  {b.teams.map((t) => (
-                    <TeamCard key={t.team} team={t.team} stat={selStat} players={t.players} xMax={grid.xMax} meta={meta.get(t.team)} />
-                  ))}
-                </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       ) : (
         <div className="py-8 text-center text-sm text-slate-400">No data for the selected filters.</div>
