@@ -57,6 +57,14 @@ Per page: run old app side-by-side (`pda-ie` env), match tables/KPIs/chart serie
 
 ## Session notes (newest first)
 
+### 2026-07-17 — Session 5 (cont.): Spread Win % — conclusion-first layout (audit §6)
+- **Verdict card** (new, top of page): plain-language takeaway generated from the current selection — favorite win % in three spread tiers (≤3 / 3.5–6.5 / 7+), sentences about whether reliability rises with spread and where underdog value lives, tier chips colored by strength (Wilson CI in tooltip), and an "Apply to a week" button that jumps to Weekly Picks. Computed from all played games in the season/week selection (ignores the win-type filter). Verified vs pandas (2025: 56%/63%/79%, N 97/92/82).
+- **Two-filter duality framed** (audit 🔴): explanatory paragraph at the top of Weekly Picks — top filters = historical population, panel selectors = target week (excluded from its own history).
+- **Picks graded** (audit 🟢): "Graded X✓ Y✗ (Z%)" chip + a Result column (✓ / ✗ with actual winner) for completed weeks (2025 wk18: 10✓ 6✗, 63%).
+- **Heatmap/stacked merged** (audit 🟡): one "Outcome mix by bucket" card with a Stacked|Heatmap toggle; calibration + lift side by side above it.
+- **Control literacy** (audit 🟡): tooltips (ⓘ) on Bin size / Spread mode / Min N / CI explaining each in plain language.
+- Tests 42/42, build green; verified in pane (verdict values, graded chip, toggle, scroll anchor).
+
 ### 2026-07-17 — Session 5 (cont.): Scorecards full rework (audit §5 + modernization)
 - Complete rewrite of `Scorecards.tsx` (old donuts/sparkline cards replaced; data sources unchanged: team_week + team_week_ranks + grades, REG only):
   - **Hero card**: logo/name/record + Points/Allowed per game with `#N of 32` ranks + the three model grades with league ranks (same season-average ranking as Team Comparison).

@@ -138,6 +138,7 @@ export default function SpreadWinPct() {
   const [showCi, setShowCi] = useState(true);
   const [recoSeason, setRecoSeason] = useState("");
   const [recoWeek, setRecoWeek] = useState("");
+  const [mixView, setMixView] = useState<"stacked" | "heatmap">("stacked");
 
   useEffect(() => {
     getSchedule().then((rows) => {
@@ -181,6 +182,39 @@ export default function SpreadWinPct() {
   }, [base, winTypes]);
 
   const k = useMemo(() => kpis(df.length ? df : base), [df, base]);
+
+  // ---------- verdict: tiered spread trend + plain-language recommendation ----------
+  // Uses all played games in the season/week selection (ignores the win-type
+  // filter so the verdict always reflects the full slate).
+  const verdict = useMemo(() => {
+    const played = base.filter((g) => g.played && g.winType != null);
+    if (played.length < 30) return null;
+    const mk = (label: string, short: string, games: Game[]) => {
+      const n = games.length;
+      const w = games.filter((g) => g.favWin).length;
+      return { label, short, n, p: n ? w / n : null, ci: n ? wilson(w / n, n) : null };
+    };
+    const tiers = [
+      mk("Small favorites — |spread| ≤ 3", "≤3", played.filter((g) => g.absSpread <= 3)),
+      mk("Mid favorites — 3.5 to 6.5", "3.5–6.5", played.filter((g) => g.absSpread > 3 && g.absSpread < 7)),
+      mk("Big favorites — 7+", "7+", played.filter((g) => g.absSpread >= 7)),
+    ];
+    const [small, mid, big] = tiers;
+    const lines: string[] = [];
+    if (big.p != null && small.p != null) {
+      const rising = big.p > (mid.p ?? big.p) - 0.02 && (mid.p ?? 0) > small.p - 0.02;
+      lines.push(
+        rising
+          ? `Favorite reliability rises with spread size: ${(100 * small.p).toFixed(0)}% at ≤3 points → ${(100 * (mid.p ?? 0)).toFixed(0)}% at 3.5–6.5 → ${(100 * big.p).toFixed(0)}% at 7+.`
+          : `Favorite reliability does NOT rise cleanly with spread size in this selection (${(100 * small.p).toFixed(0)}% / ${(100 * (mid.p ?? 0)).toFixed(0)}% / ${(100 * big.p).toFixed(0)}%).`,
+      );
+      if (small.p < 0.58) lines.push(`Small favorites are close to a coin flip (${(100 * small.p).toFixed(0)}%) — underdog value historically lives in the ≤3 range.`);
+      else lines.push(`Even small favorites have been solid here (${(100 * small.p).toFixed(0)}%).`);
+      if (big.p >= 0.66) lines.push(`Backing 7+ point favorites straight-up has been the safest play (${(100 * big.p).toFixed(0)}% over ${big.n.toLocaleString()} games).`);
+      else if (big.p < 0.6) lines.push(`Caution: big favorites underperform in this selection (${(100 * big.p).toFixed(0)}%).`);
+    }
+    return { tiers, lines, n: played.length };
+  }, [base]);
 
   const byBin = useMemo<BinRow[]>(() => {
     const m = new Map<string, { lo: number; games: Game[] }>();
@@ -388,7 +422,7 @@ export default function SpreadWinPct() {
         const p = pHatOf(bucket, g.favorite!) ?? 0.5;
         return { g, bucket, pHat: p, nTop: nTop.get(rateKey(bucket, g.favorite!)) ?? 0 };
       });
-    if (!assignable.length) return { summary: `Week ${rw}, ${rs}: No assignable games with a favorite.`, rows: [], chips: null };
+    if (!assignable.length) return { summary: `Week ${rw}, ${rs}: No assignable games with a favorite.`, rows: [], chips: null, record: null };
 
     let targetFav = Math.round(assignable.reduce((s, a) => s + a.pHat, 0));
     targetFav = Math.max(0, Math.min(targetFav, assignable.length));
@@ -405,6 +439,8 @@ export default function SpreadWinPct() {
             ? "Underdog away"
             : "Underdog home";
       const confidence = pick === "Favorite" ? a.pHat : 1 - a.pHat;
+      const pickTeam = label.endsWith("home") ? a.g.homeTeam : a.g.awayTeam;
+      const actualTeam = a.g.winner == null ? null : a.g.winner === "home" ? a.g.homeTeam : a.g.awayTeam;
       return {
         game: `${a.g.awayTeam} @ ${a.g.homeTeam}`,
         spread: a.g.spread,
@@ -413,12 +449,19 @@ export default function SpreadWinPct() {
         n: a.nTop,
         histFavPct: `${(100 * a.pHat).toFixed(1)}%`,
         reco: label,
-        winner: label.endsWith("home") ? a.g.homeTeam : a.g.awayTeam,
+        winner: pickTeam,
+        actualTeam,
+        result: actualTeam == null ? ("pending" as const) : actualTeam === pickTeam ? ("correct" as const) : ("wrong" as const),
         confidence: `${Math.round(100 * confidence)}%`,
         note: a.nTop < minN ? "Low N" : "",
         gameId: a.g.gameId,
       };
     });
+
+    // grade the recommendations against final results (audit: hit-rate tally)
+    const graded = rows.filter((r) => r.result !== "pending");
+    const correct = graded.filter((r) => r.result === "correct").length;
+    const record = graded.length ? { correct, total: graded.length, pct: Math.round((100 * correct) / graded.length) } : null;
 
     const counts: Record<string, number> = {};
     for (const r of rows) counts[r.reco] = (counts[r.reco] ?? 0) + 1;
@@ -432,7 +475,7 @@ export default function SpreadWinPct() {
     const expectedFav = assignable.reduce((s, a) => s + a.pHat, 0) / assignable.length;
     const favAssigned = Math.min(targetFav, rows.length);
     const summary = `Week ${rw}, ${rs}: Expected favorite share ≈ ${(expectedFav * 100).toFixed(1)}% (target favorites ≈ ${targetFav}/${assignable.length}); Assigned picks → Favorites ${favAssigned}, Underdogs ${assignable.length - favAssigned}.`;
-    return { summary, rows, chips };
+    return { summary, rows, chips, record };
   }, [reg, recoSeason, recoWeek, binSize, signed, df, minN]);
 
   const calRef = useECharts(calOption);
@@ -467,8 +510,8 @@ export default function SpreadWinPct() {
             ))}
           </div>
         </div>
-        <div className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
-          Bin size
+        <div className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400" title="Width of each spread bucket in points. Smaller bins = finer curve but fewer games per bin.">
+          Bin size ⓘ
           <div className="flex gap-2">
             {[0.5, 1, 2].map((b) => (
               <button key={b} onClick={() => setBinSize(b)} className={`rounded-full px-3 py-1.5 text-sm normal-case tracking-normal ${binSize === b ? "bg-[#002f6c] text-white shadow-sm" : "bg-white text-slate-600 border border-slate-300"}`}>
@@ -477,8 +520,8 @@ export default function SpreadWinPct() {
             ))}
           </div>
         </div>
-        <div className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
-          Spread mode
+        <div className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400" title="Signed keeps home favorites (negative) and away favorites (positive) in separate buckets; Absolute pools them by spread size only.">
+          Spread mode ⓘ
           <div className="flex gap-2">
             {(["Signed", "Absolute"] as const).map((m) => (
               <button key={m} onClick={() => setSigned(m === "Signed")} className={`rounded-full px-3 py-1.5 text-sm normal-case tracking-normal ${(m === "Signed") === signed ? "bg-[#002f6c] text-white shadow-sm" : "bg-white text-slate-600 border border-slate-300"}`}>
@@ -487,15 +530,51 @@ export default function SpreadWinPct() {
             ))}
           </div>
         </div>
-        <label className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
-          Min N per bin
+        <label className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400" title="Buckets with fewer games than this are hidden from charts and greyed in the table — tiny samples are noise, not signal.">
+          Min N per bin ⓘ
           <input type="number" min={1} step={1} value={minN} onChange={(e) => setMinN(Math.max(1, Number(e.target.value) || 1))} className="w-24 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
         </label>
-        <label className="flex items-center gap-2 pb-2 text-sm text-slate-700">
+        <label className="flex items-center gap-2 pb-2 text-sm text-slate-700" title="Shades a 95% Wilson confidence band around each bucket's favorite win % — wider band = less certain estimate.">
           <input type="checkbox" checked={showCi} onChange={(e) => setShowCi(e.target.checked)} />
-          Show CI (Calibration)
+          Show CI (Calibration) ⓘ
         </label>
       </div>
+
+      {/* Verdict — the takeaway, before the evidence */}
+      {verdict && (
+        <div className="rounded-2xl border border-slate-200 bg-white shadow-sm" style={{ borderTop: "4px solid #002f6c" }}>
+          <div className="flex flex-wrap items-start gap-x-8 gap-y-3 p-4">
+            <div className="min-w-64 flex-1">
+              <div className="text-[11px] font-medium uppercase tracking-wider text-slate-400">What the spread trend says ({verdict.n.toLocaleString()} games in selection)</div>
+              <ul className="mt-1.5 space-y-1 text-sm text-slate-700">
+                {verdict.lines.map((l, i) => (
+                  <li key={i} className="flex gap-1.5">
+                    <span className="text-[#002f6c]">▸</span>
+                    {l}
+                  </li>
+                ))}
+              </ul>
+              <button
+                className="mt-2 rounded-full border border-[#002f6c]/30 px-3 py-1 text-xs font-semibold text-[#002f6c] transition-colors hover:bg-[#002f6c]/5"
+                onClick={() => document.getElementById("weekly-picks")?.scrollIntoView({ block: "start" })}
+              >
+                Apply to a week — see recommended picks ↓
+              </button>
+            </div>
+            <div className="flex gap-3">
+              {verdict.tiers.map((t) => (
+                <div key={t.short} className="w-28 rounded-xl border border-slate-200 px-2 py-2 text-center" title={`${t.label}: ${t.n.toLocaleString()} games${t.ci ? ` — 95% CI ${(100 * t.ci.low).toFixed(0)}–${(100 * t.ci.high).toFixed(0)}%` : ""}`}>
+                  <div className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Fav {t.short}</div>
+                  <div className={`text-xl font-bold tabular-nums ${t.p != null && t.p >= 0.62 ? "text-[#3C9A5F]" : t.p != null && t.p < 0.55 ? "text-[#C8102E]" : "text-slate-800"}`}>
+                    {t.p == null ? "—" : `${(100 * t.p).toFixed(0)}%`}
+                  </div>
+                  <div className="text-[10px] text-slate-400">{t.n.toLocaleString()} gms</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* KPIs */}
       <div className="flex flex-wrap gap-3">
@@ -512,16 +591,29 @@ export default function SpreadWinPct() {
         <Box title="Calibration — favorite win % by spread bucket">
           {chartBins.length ? <div ref={calRef} className="h-[420px]" /> : <div className="grid h-[420px] place-items-center text-sm text-slate-400">No bins meet Min N</div>}
         </Box>
-        <Box title="Win-type share heatmap">
-          {heatOption ? <div ref={heatRef} className="h-[420px]" /> : <div className="grid h-[420px] place-items-center text-sm text-slate-400">No bins meet Min N</div>}
-        </Box>
-        <Box title="Win-type mix by bucket (100% stacked)">
-          {stackedOption ? <div ref={stackedRef} className="h-[420px]" /> : <div className="grid h-[420px] place-items-center text-sm text-slate-400">No bins meet Min N</div>}
-        </Box>
         <Box title="Lift — favorite hit rate vs |spread| threshold">
           {liftOption ? <div ref={liftRef} className="h-[420px]" /> : <div className="grid h-[420px] place-items-center text-sm text-slate-400">No data</div>}
         </Box>
       </div>
+      <Box>
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <div className="text-sm font-semibold text-slate-700">Outcome mix by bucket — which win types make up each spread range</div>
+          <div className="flex rounded-full border border-slate-200 bg-slate-100 p-0.5">
+            {([["stacked", "Stacked"], ["heatmap", "Heatmap"]] as const).map(([v, l]) => (
+              <button key={v} onClick={() => setMixView(v)} className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${mixView === v ? "bg-[#002f6c] text-white shadow-sm" : "text-slate-600 hover:text-slate-900"}`}>
+                {l}
+              </button>
+            ))}
+          </div>
+        </div>
+        {mixView === "stacked" ? (
+          stackedOption ? <div ref={stackedRef} className="h-[380px]" /> : <div className="grid h-[380px] place-items-center text-sm text-slate-400">No bins meet Min N</div>
+        ) : heatOption ? (
+          <div ref={heatRef} className="h-[380px]" />
+        ) : (
+          <div className="grid h-[380px] place-items-center text-sm text-slate-400">No bins meet Min N</div>
+        )}
+      </Box>
 
       {/* Details table */}
       <Box title="Bucket details (all bins — greyed rows below Min N)">
@@ -553,11 +645,25 @@ export default function SpreadWinPct() {
       </Box>
 
       {/* Weekly Picks */}
+      <div id="weekly-picks" className="scroll-mt-16">
       <Box title="Weekly Picks (full-week mix)">
+        <p className="mb-3 text-xs text-slate-500">
+          This panel <span className="font-semibold">applies</span> the historical bucket rates to one target week. The Season/Week here choose the week being
+          predicted — the filters at the top of the page choose the <span className="font-semibold">historical population</span> the rates are learned from
+          (the target week itself is always excluded from its own history).
+        </p>
         <div className="mb-3 flex flex-wrap items-end justify-between gap-4">
-          <div className="flex gap-4">
+          <div className="flex items-end gap-4">
             <Select label="Season" value={recoSeason} onChange={(v) => setRecoSeason(v)} options={allSeasons.map((s) => ({ value: String(s), label: String(s) }))} />
             <Select label="Week" value={recoWeek} onChange={setRecoWeek} options={recoWeeks.map((w) => ({ value: String(w), label: String(w) }))} />
+            {reco?.record && (
+              <div className="flex items-center gap-1.5 self-center rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold shadow-sm" title="How these recommendations scored against final results">
+                <span className="uppercase tracking-wider text-slate-400">Graded</span>
+                <span className="text-[#3C9A5F]">{reco.record.correct}✓</span>
+                <span className="text-[#C8102E]">{reco.record.total - reco.record.correct}✗</span>
+                <span className="text-slate-600">({reco.record.pct}%)</span>
+              </div>
+            )}
           </div>
           {reco?.chips && (
             <div className="flex flex-wrap gap-2">
@@ -576,7 +682,7 @@ export default function SpreadWinPct() {
           <table className="w-full text-xs">
             <thead className="bg-slate-50 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">
               <tr>
-                {["Game", "Spread", "Fav side", "Bucket", "N", "Hist Fav %", "Recommended Pick", "Winner", "Confidence %", "Note"].map((h) => (
+                {["Game", "Spread", "Fav side", "Bucket", "N", "Hist Fav %", "Recommended Pick", "Pick (team)", "Result", "Confidence %", "Note"].map((h) => (
                   <th key={h} className="px-3 py-2">{h}</th>
                 ))}
               </tr>
@@ -596,6 +702,15 @@ export default function SpreadWinPct() {
                     </span>
                   </td>
                   <td className="px-3 py-1.5">{r.winner}</td>
+                  <td className="px-3 py-1.5">
+                    {r.result === "pending" ? (
+                      <span className="text-slate-400">—</span>
+                    ) : r.result === "correct" ? (
+                      <span className="font-bold text-[#3C9A5F]" title={`Winner: ${r.actualTeam}`}>✓</span>
+                    ) : (
+                      <span className="font-bold text-[#C8102E]" title={`Winner: ${r.actualTeam}`}>✗ {r.actualTeam}</span>
+                    )}
+                  </td>
                   <td className="px-3 py-1.5">{r.confidence}</td>
                   <td className="px-3 py-1.5 text-amber-600">{r.note}</td>
                 </tr>
@@ -604,6 +719,7 @@ export default function SpreadWinPct() {
           </table>
         </div>
       </Box>
+      </div>
     </div>
   );
 }
