@@ -33,6 +33,7 @@ interface StatSummary {
   average: number | null;
   prev: number | null;
   prevOpp: string;
+  hasData: boolean;
 }
 
 export default function TeamComparison() {
@@ -100,6 +101,7 @@ export default function TeamComparison() {
       average: clean.length ? clean.reduce((a, b) => a + b, 0) / clean.length : null,
       prev: exact && exact[stat] != null ? Number(exact[stat]) : null,
       prevOpp: exact ? opponentLabel(String(exact.game_id ?? ""), team) : "",
+      hasData: clean.length > 0,
     };
   };
 
@@ -115,6 +117,27 @@ export default function TeamComparison() {
     const m = (c: string) => String(Math.round(rows.reduce((s, r) => s + Number(r[c] ?? 0), 0) / rows.length));
     return [m("Overall Grade"), m("Offensive Grade"), m("Defensive Grade")];
   };
+
+  // League rank of each team's season-to-date average grade (audit §4: grade
+  // numbers had no scale context). Same averaging as gradesOf().
+  const gradeRanks = useMemo(() => {
+    const metrics = ["Overall Grade", "Offensive Grade", "Defensive Grade"] as const;
+    const rows = grades.filter((r) => String(r.Season) === season && Number(r.Week) <= wk);
+    const byTeam = new Map<string, Row[]>();
+    for (const r of rows) {
+      const t = String(r.Team);
+      if (!byTeam.has(t)) byTeam.set(t, []);
+      byTeam.get(t)!.push(r);
+    }
+    const out: Record<string, Map<string, number>> = {};
+    for (const m of metrics) {
+      const avgs = [...byTeam.entries()]
+        .map(([t, tr]) => ({ t, v: tr.reduce((s, r) => s + Number(r[m] ?? 0), 0) / tr.length }))
+        .sort((a, b) => b.v - a.v);
+      out[m] = new Map(avgs.map((a, i) => [a.t, i + 1]));
+    }
+    return { ranks: out, nTeams: byTeam.size };
+  }, [grades, season, wk]);
 
   const color = (t: string) => meta?.get(t)?.color ?? "#888";
 
@@ -162,6 +185,21 @@ export default function TeamComparison() {
     const s1 = summaryOf(team1, stat);
     const s2 = summaryOf(team2, stat);
     const subs = STAT_HIERARCHY[stat];
+    // Audit §4: stats that are null in the pipeline (turnovers family) used to
+    // render dead "--"/0 pills for every team — show an explicit note instead.
+    if (!s1.hasData && !s2.hasData) {
+      return (
+        <div className={`flex items-center justify-center gap-2 py-1.5 ${sub ? "pl-4" : ""}`}>
+          <span className={`font-semibold text-slate-400 ${sub ? "text-[0.7rem]" : "text-sm"}`}>{title(stat)}</span>
+          <span
+            className="rounded-full border border-dashed border-slate-300 px-2 py-0.5 text-[10px] uppercase tracking-wider text-slate-400"
+            title="This stat is not yet provided by the data pipeline (known issue) — values will appear once the source is fixed."
+          >
+            Data unavailable
+          </span>
+        </div>
+      );
+    }
     return (
       <div className={`flex items-center justify-center gap-4 ${sub ? "py-1 pl-4 opacity-90" : "py-1.5 text-sm"}`}>
         <div className="flex flex-1 justify-end">
@@ -212,6 +250,22 @@ export default function TeamComparison() {
   }
 
   // ---------- side charts ----------
+  // Shared y-range across both teams' trend charts (audit §4: independent
+  // scales made visual comparison of margins misleading).
+  const trendYRange = useMemo(() => {
+    const vals: number[] = [];
+    for (const t of [team1, team2]) {
+      for (const r of teamRows.get(t) ?? []) {
+        if (Number(r.week) <= wk && r[selectedStat] != null) vals.push(Number(r[selectedStat]));
+      }
+    }
+    if (!vals.length) return null;
+    const lo = Math.min(...vals);
+    const hi = Math.max(...vals);
+    const pad = (hi - lo || 1) * 0.08;
+    return { min: Math.floor(lo - pad), max: Math.ceil(hi + pad) };
+  }, [teamRows, team1, team2, selectedStat, wk]);
+
   const trendOption = (team: string): EChartsOption | null => {
     const rows = (teamRows.get(team) ?? []).filter((r) => Number(r.week) <= wk && r[selectedStat] != null);
     if (!rows.length) return null;
@@ -229,7 +283,7 @@ export default function TeamComparison() {
         },
       },
       xAxis: { type: "category", data: xs, name: "Week", nameLocation: "middle", nameGap: 22, axisLabel: { fontSize: 9 } },
-      yAxis: { type: "value", axisLabel: { fontSize: 9 } },
+      yAxis: { type: "value", axisLabel: { fontSize: 9 }, min: trendYRange?.min, max: trendYRange?.max },
       series: [
         {
           type: "line",
@@ -297,8 +351,8 @@ export default function TeamComparison() {
     return { main, rank };
   };
 
-  const trend1 = useMemo(() => trendOption(team1), [teamRows, team1, selectedStat, wk]);
-  const trend2 = useMemo(() => trendOption(team2), [teamRows, team2, selectedStat, wk]);
+  const trend1 = useMemo(() => trendOption(team1), [teamRows, team1, selectedStat, wk, trendYRange]);
+  const trend2 = useMemo(() => trendOption(team2), [teamRows, team2, selectedStat, wk, trendYRange]);
   const m1 = useMemo(() => matchupOptions(team1, team2), [teamRows, ranks, team1, team2, selectedStat, wk]);
   const m2 = useMemo(() => matchupOptions(team2, team1), [teamRows, ranks, team1, team2, selectedStat, wk]);
 
@@ -313,16 +367,21 @@ export default function TeamComparison() {
 
   function GradesBox({ team }: { team: string }) {
     const [ovr, off, def] = gradesOf(team);
+    const metricOf = { Ovr: "Overall Grade", Off: "Offensive Grade", Def: "Defensive Grade" } as const;
     return (
       <div className="relative mb-3 rounded-2xl border border-slate-200 bg-white shadow-sm p-3">
         <div className="absolute -top-2.5 left-3 bg-white px-1.5 text-xs font-semibold">Grades</div>
         <div className="flex gap-2">
-          {[["Ovr", ovr], ["Off", off], ["Def", def]].map(([l, v]) => (
-            <div key={l} className="flex-1 rounded-lg border border-slate-200 px-2 py-1.5 text-center">
-              <div className="text-[0.7rem] text-slate-500">{l}</div>
-              <div className="text-lg font-bold">{v}</div>
-            </div>
-          ))}
+          {([["Ovr", ovr], ["Off", off], ["Def", def]] as const).map(([l, v]) => {
+            const rank = gradeRanks.ranks[metricOf[l]]?.get(team);
+            return (
+              <div key={l} className="flex-1 rounded-lg border border-slate-200 px-2 py-1.5 text-center" title={rank ? `League rank #${rank} of ${gradeRanks.nTeams} (season-to-date average)` : undefined}>
+                <div className="text-[0.7rem] text-slate-500">{l}</div>
+                <div className="text-lg font-bold">{v}</div>
+                {rank != null && <div className="text-[10px] font-semibold text-slate-400">#{rank}</div>}
+              </div>
+            );
+          })}
         </div>
       </div>
     );
@@ -337,7 +396,9 @@ export default function TeamComparison() {
     label: string;
   }) {
     return (
-      <div className="w-full lg:w-1/4">
+      // Sticky on desktop: the side charts stay in view while the (taller)
+      // center stat column scrolls. top = navbar + sticky filter bar.
+      <div className="w-full lg:sticky lg:top-[120px] lg:w-1/4 lg:self-start">
         <h2 className="mb-2 text-center text-sm font-semibold text-slate-600">{label}</h2>
         <Select label="" value={team} onChange={setTeam} options={teams.map((t) => ({ value: t, label: meta!.get(t)?.name ?? t }))} />
         <div className="mt-3">
@@ -362,7 +423,9 @@ export default function TeamComparison() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-end justify-between gap-4">
+      {/* Sticky under the navbar (~53px) so season/week stay reachable while
+          scrolling the long stat column. */}
+      <div className="sticky top-[53px] z-30 -mx-4 flex flex-wrap items-end justify-between gap-4 border-b border-slate-200/80 bg-slate-50/90 px-4 pb-2.5 pt-1.5 backdrop-blur">
         <h1 className="flex items-center gap-2.5 text-2xl font-extrabold tracking-tight text-[#002f6c]"><span className="h-6 w-1.5 rounded-full bg-gradient-to-b from-[#002f6c] to-[#164a9c]" />Team Comparison</h1>
         <div className="flex gap-4">
           <Select label="Season" value={season} onChange={setSeason} options={seasons.map((s) => ({ value: String(s), label: String(s) }))} />

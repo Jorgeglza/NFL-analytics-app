@@ -57,6 +57,15 @@ Per page: run old app side-by-side (`pda-ie` env), match tables/KPIs/chart serie
 
 ## Session notes (newest first)
 
+### 2026-07-17 — Session 5 (cont.): Team Comparison — audit §4 fixes + sticky layout
+- **Sticky on scroll** (user request): filter bar (title + Season/Week) sticks under the navbar (`top-[53px]`, z-30, blur backdrop); both side team columns stick at `lg:top-[120px]` so grades + trend/matchup charts stay visible while the long center stat column scrolls (they release at the container bottom, standard sticky).
+- **Dead turnover rows** (audit 🔴): stats with no data for either team (turnover family — all-null in pipeline, known issue) now render a "Data unavailable" dashed badge with an explanatory tooltip instead of `--`/0 pills and an empty rank bar. Generic check (`hasData` on both summaries), so it auto-heals when the pipeline is fixed.
+- **Grade context** (audit 🟡): each Ovr/Off/Def grade shows its league rank (`#N`, tooltip "of 32, season-to-date average"), computed with the same ≤week averaging as the displayed grade. Verified exact vs pandas (SF 2025 wk18: 55 #13 / 39.9 #6 / 62.7 #20).
+- **Shared trend scales** (audit 🟡): both teams' by-week charts now share one y-range (min/max across both series, 8% pad) so margins compare visually.
+- Deferred: cross-links to Matchup Preview/Scorecards — needs the app-wide param-carrying link infrastructure (audit's shared-context theme).
+- Gotcha: long-running Vite dev server failed to emit new Tailwind arbitrary-value utilities (`top-[53px]` etc.) via HMR — classes present in DOM but `top: auto`. Restarting the dev server fixed it; production build unaffected.
+- Tests 42/42, build green; sticky + badges + rank chips verified in the browser pane.
+
 ### 2026-07-17 — Session 6: M5 backend automation (weekly refresh + rolling seasons)
 - `config.py`: `SEASONS` now `range(FIRST_SEASON=2015, current_season()+1)`; `current_season()` = calendar year from September, else previous year. `fetch_weekly` skips only the *newest* season (warning) if both loaders fail (early-September grace); other failures stay fatal. `validate` additionally asserts meta seasons start 2015 and newest ≥ current−1.
 - `weekly-refresh.yml`: added `actions: write` + explicit `gh workflow run deploy.yml` after the auto-commit (only if `changes_detected`) — commits pushed with the default `GITHUB_TOKEN` do **not** trigger `deploy.yml`'s push event, so the Pages site would never update otherwise. Pins already matched requirements.lock.txt. Runbook updated (season rule, CI flow, 60-day cron-pause note).
