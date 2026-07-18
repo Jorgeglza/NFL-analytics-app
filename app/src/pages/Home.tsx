@@ -30,7 +30,8 @@ export default function Home() {
     <div className="-mx-4 -my-6">
       {/* Hero */}
       <section className="bg-gradient-to-br from-[#002f6c] via-[#0b3d85] to-[#164a9c] px-4 py-14 text-white">
-        <div className="mx-auto max-w-screen-xl">
+        <div className="mx-auto flex max-w-screen-xl flex-wrap items-center gap-x-10 gap-y-8">
+          <div className="min-w-72 flex-1">
           <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">NFL Analytics</h1>
           <p className="mt-3 max-w-2xl text-white/75">
             Game picks, matchup previews, player prop analysis and Random Forest team grades —
@@ -47,6 +48,12 @@ export default function Home() {
               Data updated {new Date(meta.generated_at).toLocaleDateString(undefined, { dateStyle: "medium" })} · refreshed automatically every week
             </p>
           )}
+          </div>
+          <img
+            src={`${import.meta.env.BASE_URL}branding/jga-badge.png`}
+            alt="JGA Fantasy Football"
+            className="mx-auto h-48 w-auto drop-shadow-[0_8px_24px_rgba(0,0,0,0.35)] sm:h-56 lg:h-64"
+          />
         </div>
       </section>
 

@@ -182,7 +182,7 @@ export default function WeekPreviewTab({
             <button
               key={m.key}
               onClick={() => setPrimary(m.key)}
-              className={`min-w-28 rounded-2xl border px-2.5 py-1.5 text-left shadow-sm transition-all ${primary === m.key ? "ring-2 ring-offset-1" : "hover:brightness-95"}`}
+              className={`min-w-28 rounded-2xl border px-2.5 py-1.5 text-left shadow-sm transition-all ${primary === m.key ? "scale-[1.03] ring-2 ring-offset-1" : "opacity-55 hover:opacity-90"}`}
               style={{
                 borderColor: `${MODEL_COLORS[m.key]}66`,
                 borderTop: `3px solid ${MODEL_COLORS[m.key]}`,

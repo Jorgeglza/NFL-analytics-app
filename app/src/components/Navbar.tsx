@@ -26,8 +26,13 @@ export default function Navbar() {
   return (
     <header className="sticky top-0 z-40 bg-[#002f6c] text-white shadow-lg">
       <div ref={ref} className="mx-auto flex max-w-screen-2xl items-center gap-4 px-4 py-2.5">
-        <NavLink to="/" className="flex items-center gap-2 text-lg font-bold tracking-tight">
-          <span className="grid h-8 w-8 place-items-center rounded-lg bg-white/15 text-sm">🏈</span>
+        <NavLink to="/" className="flex items-center gap-2.5 text-lg font-bold tracking-tight">
+          {/* 256px source rendered at 36px keeps it crisp on retina displays */}
+          <img
+            src={`${import.meta.env.BASE_URL}branding/jga-icon-256.png`}
+            alt="JGA"
+            className="h-9 w-9 rounded-full shadow-[0_0_0_2px_rgba(255,255,255,0.25)]"
+          />
           NFL Analytics
         </NavLink>
 

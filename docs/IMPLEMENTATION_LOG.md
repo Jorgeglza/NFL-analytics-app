@@ -57,6 +57,14 @@ Per page: run old app side-by-side (`pda-ie` env), match tables/KPIs/chart serie
 
 ## Session notes (newest first)
 
+### 2026-07-18 — Session 5 (cont.): branding + model-chip selection state
+- **Branding assets** (`app/public/branding/`, processed with Pillow from the user's two ChatGPT logo PNGs in Downloads):
+  - `jga-icon{,-256,-64}.png` — circular JGA mark. Source had a baked-in transparency checkerboard; circle detected from the blue disc (blue-pixel bbox, min-side radius) and cut with a 4× supersampled antialiased alpha mask → clean 1024² circle.
+  - `jga-badge.png` — "JGA Fantasy Football 2024" badge; solid-black background converted to graded alpha (max<16 → 0, 16–48 ramp) and trimmed.
+- **Integration**: favicon + apple-touch icon in index.html; navbar 🏈 emoji replaced with the 256px icon rendered at 36px (crisp on retina) with a subtle white ring; Home hero now a flex layout with the badge (h-48→64, drop shadow) beside the title.
+- **Week Preview**: selected model KPI chip highlighted (ring + slight scale, full color), unselected chips at 55% opacity (hover restores).
+- Tests 49/49, build green; verified images load (nav icon, hero badge, favicon) and chip opacity states in pane.
+
 ### 2026-07-17 — Session 5 (cont.): Matchup Previews polish round 2
 - **Week Preview one-row KPIs**: dropped the primary-accuracy card and both legends; the six per-model record chips are now color-coded KPI tiles (tinted background/border/shadow in each model's color — same colors as the card dot-strips, so no legend needed; active model gets a ring) + the 4 win-type chips on the same row.
 - **Matchup tab remade**: layout = verdict strip + snapshot → key stats → **Model breakdown** (6 cards, one per model: pick pill + "how it got there" visuals — market bucket/grade/blend prob bars with N, the trend-edge contribution chart, implied-vs-fair with vig, Elo rating bars + resulting p, Pythagorean expected-win% bars + log5, consensus mini-strip of all five) → **Additional stats** (modernized stat-comparison card with team-color headers + rounded rank pill, recent-form and head-to-head as styled cards with logos/W-L colors/score column). Gauges and the old Spread-Pick-Engine/Trend-Edge blocks removed (content absorbed into the breakdown).
