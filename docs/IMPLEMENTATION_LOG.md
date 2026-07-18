@@ -57,6 +57,11 @@ Per page: run old app side-by-side (`pda-ie` env), match tables/KPIs/chart serie
 
 ## Session notes (newest first)
 
+### 2026-07-18 — Session 5 (cont.): Parlay Builder — same Prop Bets treatment; shared statPicker module
+- New `pages/player-analysis/statPicker.ts`: PROP_MARKET_SECTIONS (Passing/Rushing/Receiving/Fantasy; Defense), `statLabel`, `buildStatGroups`, HIT/MISS/NEUTRAL colors, `americanOdds`, `headshotCrop`. PropBets refactored to import it (no behavior change).
+- **Parlay Builder** leg cards: sectioned stat picker (+ def_* offense-leak fix), opponent second line on bar x-axis + tooltip wording, no-line state fixed (bars neutral navy instead of all-red; ring shows grey "—"/"Set a line" instead of 0%), ring caption "N of M · fair ±A", elevated Line input, 160px face-crop headshot with fallback. Calc quirks preserved (Week dropdown display-only; player list ignores season type; null stat weeks count as 0 — old-page parity).
+- Verified in pane: optgroups (5/3/4/2/27), Brissett 250.5 → ring 57%, "8 of 14 · fair −133" (matches replica), 1 leg KPI 57.00%/1.75, 2 identical legs → 32.49%/3.08 (product ✓). Tests 49/49, build green.
+
 ### 2026-07-18 — Session 5 (cont.): Prop Bets audit §8 implementation
 - **Curated stat picker** (audit 🔴): `Select` gained optional `groups` (native optgroup, backward-compatible). Stats now grouped "Prop markets" (curated ~14 sportsbook stats, ordered) / "Advanced / other" (alphabetical), with Title-Case labels via `statLabel()` (acronym handling: EPA/PACR/WOPR/…, `tds→TDs`, `2pt→2-pt`). Bug fixed in passing: offense keyword filter leaked `def_sacks`/`def_interceptions`/`def_sack_yards` into the offense stat list (`includes("sacks")`) — def_* now excluded on offense.
 - **Opponent visibility** ("vs who"): team-level week→opponent map in the pivot; opponent shown under every week header in the pivot table and as a second line on the bar chart's x-axis labels (`W5` / `@DAL`), plus a footer note explaining @-notation and byes. Tooltips unchanged.

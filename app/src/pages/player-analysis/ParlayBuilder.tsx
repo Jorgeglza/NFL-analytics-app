@@ -8,6 +8,7 @@ import { Select } from "../../components/filters/Select";
 import { useECharts } from "../../components/charts/useECharts";
 import { opponentLabel } from "../grading-model/shared";
 import { Loading } from "../../components/Loading";
+import { buildStatGroups, statLabel, americanOdds, headshotCrop, HIT_COLOR, MISS_COLOR, NEUTRAL_COLOR } from "./statPicker";
 
 const EXCLUDE = new Set([
   "season", "week", "team", "opponent_team", "gameday", "game_id",
@@ -81,9 +82,15 @@ function LegCard({
   }, [rows]);
   const sideCols = useMemo(() => {
     const kws = leg.side === "offense" ? OFFENSE_KW : DEFENSE_KW;
-    const f = numericCols.filter((c) => kws.some((k) => c.toLowerCase().includes(k)));
+    const f = numericCols.filter((c) => {
+      const lc = c.toLowerCase();
+      // Keyword matching alone leaks def_* columns into offense ("sacks", "interceptions").
+      if (leg.side === "offense" && lc.startsWith("def_")) return false;
+      return kws.some((k) => lc.includes(k));
+    });
     return f.length ? f : numericCols;
   }, [numericCols, leg.side]);
+  const statGroups = useMemo(() => buildStatGroups(sideCols, leg.side), [sideCols, leg.side]);
   const stat = sideCols.includes(leg.stat) ? leg.stat : sideCols.includes("passing_yards") ? "passing_yards" : sideCols[0] ?? "";
 
   // players with positive totals (season+team only, like the old page)
@@ -124,7 +131,7 @@ function LegCard({
     const made = line != null ? vals.filter((v) => v >= line).length : 0;
     const pct = total ? Math.round((made / total) * 100) : 0;
     const headshot = q.find((r) => r.headshot_url != null)?.headshot_url;
-    return { wks, vals, oppByWeek, teamTotals, pct, headshot: headshot ? String(headshot) : null };
+    return { wks, vals, oppByWeek, teamTotals, made, total, pct, headshot: headshot ? String(headshot) : null };
   }, [typed, team, player, stat, line]);
 
   useEffect(() => {
@@ -136,7 +143,12 @@ function LegCard({
     if (!calc) return null;
     return {
       grid: { left: 4, right: 8, top: 15, bottom: 2, containLabel: true },
-      xAxis: { type: "category", data: calc.wks.map((w) => `W${w}`), axisLabel: { fontSize: 9 } },
+      xAxis: {
+        type: "category",
+        // Two-line label: week number + opponent (@ = away game).
+        data: calc.wks.map((w) => `W${w}\n${calc.oppByWeek.get(w) ?? ""}`),
+        axisLabel: { interval: 0, fontSize: 8, lineHeight: 10 },
+      },
       yAxis: { type: "value", show: false },
       tooltip: {
         formatter: (p: unknown) => {
@@ -144,16 +156,17 @@ function LegCard({
           const w = calc.wks[q.dataIndex];
           const v = calc.vals[q.dataIndex];
           const t = calc.teamTotals.get(w);
-          return `Week W${w} | Opp: ${calc.oppByWeek.get(w) ?? ""}<br/>${stat}: ${v}<br/>${t ? Math.round((v / t) * 100) : 0}% of ${stat}`;
+          return `Week ${w} vs ${calc.oppByWeek.get(w) ?? "?"}<br/>${statLabel(stat)}: ${v}<br/>${t ? Math.round((v / t) * 100) : 0}% of team ${statLabel(stat)}`;
         },
       },
       series: [
         {
           type: "bar",
-          data: calc.vals.map((v) => ({ value: v, itemStyle: { color: line != null && v >= line ? "green" : "red" } })),
+          // No line set → neutral navy; with a line → green over / red under.
+          data: calc.vals.map((v) => ({ value: v, itemStyle: { color: line == null ? NEUTRAL_COLOR : v >= line ? HIT_COLOR : MISS_COLOR } })),
           label: { show: true, position: "top", fontSize: 8, formatter: (p: { value?: unknown }) => `${Math.round(Number(p.value))}` },
           ...(line != null
-            ? { markLine: { symbol: "none", lineStyle: { type: "dashed", color: "green", width: 1 }, label: { show: false }, data: [{ yAxis: line }] } }
+            ? { markLine: { symbol: "none", lineStyle: { type: "dashed", color: HIT_COLOR, width: 1 }, label: { show: false }, data: [{ yAxis: line }] } }
             : {}),
         },
       ],
@@ -183,25 +196,57 @@ function LegCard({
           </div>
         </div>
         <div className="mt-2 flex flex-wrap items-end gap-2">
-          <Select label="Stat" value={stat} onChange={(v) => set({ stat: v })} options={sideCols.map((c) => ({ value: c, label: c }))} />
+          <Select label="Stat" value={stat} onChange={(v) => set({ stat: v })} groups={statGroups} />
           <Select label="Player" value={player} onChange={(v) => set({ player: v })} options={players.map((p) => ({ value: p, label: p }))} />
-          <label className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
+          <label className="flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wider text-[#002f6c]">
             Line
-            <input type="number" value={leg.line} onChange={(e) => set({ line: e.target.value })} placeholder="Set line" className="w-28 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
+            <input
+              type="number"
+              step="0.5"
+              value={leg.line}
+              onChange={(e) => set({ line: e.target.value })}
+              placeholder="e.g. 250.5"
+              className="w-28 rounded-lg border-2 border-[#002f6c]/40 bg-white px-3 py-2 text-sm font-semibold shadow-sm focus:border-[#002f6c] focus:outline-none focus:ring-2 focus:ring-[#002f6c]/15"
+            />
           </label>
         </div>
       </div>
 
-      {calc?.headshot && <img src={calc.headshot} alt={player} className="h-16 w-16 rounded-full object-cover" />}
+      {calc?.headshot && (
+        <img
+          src={headshotCrop(calc.headshot)}
+          alt={player}
+          width={64}
+          height={64}
+          loading="lazy"
+          className="h-16 w-16 rounded-full bg-slate-100 object-cover ring-1 ring-slate-200"
+          onError={(e) => {
+            // Fall back to the untransformed CDN URL if the crop variant 404s.
+            if (calc.headshot && e.currentTarget.src !== calc.headshot) e.currentTarget.src = calc.headshot;
+          }}
+        />
+      )}
       <div ref={barRef} className="h-40 w-[360px]" />
 
       <div className="flex flex-col items-center gap-2">
         <div
           className="grid h-20 w-20 place-items-center rounded-full"
-          style={{ background: `conic-gradient(#16a34a ${calc?.pct ?? 0}%, #e5e7eb 0)` }}
-          title={`${calc?.pct ?? 0}%`}
+          style={{ background: line != null && calc ? `conic-gradient(${HIT_COLOR} ${calc.pct}%, #e5e7eb 0)` : "#e5e7eb" }}
+          title={line != null && calc ? `Cleared ${line} in ${calc.made} of ${calc.total} games` : "Set a line"}
         >
-          <div className="grid h-16 w-16 place-items-center rounded-full bg-white text-xl font-extrabold">{calc ? `${calc.pct}%` : "—"}</div>
+          <div className="grid h-16 w-16 place-items-center rounded-full bg-white text-xl font-extrabold">
+            {line != null && calc ? `${calc.pct}%` : "—"}
+          </div>
+        </div>
+        <div className="text-center text-[10px] font-medium text-slate-500">
+          {line != null && calc && calc.total > 0 ? (
+            <>
+              {calc.made} of {calc.total}
+              {americanOdds(calc.made / calc.total) && <span className="text-slate-400"> · fair {americanOdds(calc.made / calc.total)}</span>}
+            </>
+          ) : (
+            "Set a line"
+          )}
         </div>
         <div className="flex flex-col items-center gap-1.5">
           <button onClick={onAdd} className="h-8 w-8 rounded-full border border-slate-300 font-bold hover:bg-slate-100">+</button>
