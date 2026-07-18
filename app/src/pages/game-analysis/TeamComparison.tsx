@@ -405,7 +405,7 @@ export default function TeamComparison() {
     const [ovr, off, def] = gradesOf(team);
     const metricOf = { Ovr: "Overall Grade", Off: "Offensive Grade", Def: "Defensive Grade" } as const;
     return (
-      <div className="relative mb-3 rounded-2xl border border-slate-200 bg-white shadow-sm p-3">
+      <div className="relative mb-2 rounded-2xl border border-slate-200 bg-white shadow-sm p-3">
         <div className="absolute -top-2.5 left-3 bg-white px-1.5 text-xs font-semibold">Grades</div>
         <div className="flex gap-2">
           {([["Ovr", ovr], ["Off", off], ["Def", def]] as const).map(([l, v]) => {
@@ -440,24 +440,24 @@ export default function TeamComparison() {
   }) {
     return (
       // Sticky on desktop: the side charts stay in view while the (taller)
-      // center stat column scrolls. top = navbar + sticky filter bar.
-      <div className="w-full lg:sticky lg:top-[120px] lg:w-1/4 lg:self-start">
-        <h2 className="mb-2 text-center text-sm font-semibold text-slate-600">{label}</h2>
+      // center stat column scrolls. top = navbar + sticky filter bar. No
+      // "Team N" heading — vertical budget goes to keeping both charts visible.
+      <div className="w-full lg:sticky lg:top-[128px] lg:w-1/4 lg:self-start" aria-label={label}>
         <Select label="" value={team} onChange={setTeam} options={teams.map((t) => ({ value: t, label: meta!.get(t)?.name ?? t }))} />
-        <div className="mt-3">{GradesBox({ team })}</div>
+        <div className="mt-2">{GradesBox({ team })}</div>
         <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
           <div className="mb-1 text-xs font-semibold text-slate-500">{title(selectedStat)} by week</div>
-          <div ref={trendRef} className="h-44" />
+          <div ref={trendRef} className="h-40 [@media(max-height:800px)]:h-32" />
         </div>
-        <div className="mt-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+        <div className="mt-2 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
           <div className="mb-1 text-xs font-semibold text-slate-500">
             {isGradeStat(selectedStat)
               ? `${selectedStat} vs opponent — Wk${wk}`
               : `${title(selectedStat.endsWith("_allowed") ? `${selectedStat.slice(0, -8)} allowed vs opp off` : `${selectedStat} vs opp allowed`)} — Wk${wk}`}
           </div>
           <div className="flex gap-2">
-            <div ref={mainRef} className="h-64 flex-[3]" />
-            <div ref={rankRef} className="h-64 flex-1" />
+            <div ref={mainRef} className="h-56 flex-[3] [@media(max-height:800px)]:h-40" />
+            <div ref={rankRef} className="h-56 flex-1 [@media(max-height:800px)]:h-40" />
           </div>
         </div>
       </div>
@@ -465,10 +465,11 @@ export default function TeamComparison() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="-mt-3 space-y-3">
       {/* Sticky under the navbar (~53px) so season/week stay reachable while
-          scrolling the long stat column. */}
-      <div className="sticky top-[53px] z-30 -mx-4 flex flex-wrap items-end justify-between gap-4 border-b border-slate-200/80 bg-slate-50/90 px-4 pb-2.5 pt-1.5 backdrop-blur">
+          scrolling the long stat column. Kept tight so the sticky side
+          columns fit fully in the viewport. */}
+      <div className="sticky top-[53px] z-30 -mx-4 flex flex-wrap items-end justify-between gap-4 border-b border-slate-200/80 bg-slate-50/90 px-4 pb-2 pt-1 backdrop-blur">
         <h1 className="flex items-center gap-2.5 text-2xl font-extrabold tracking-tight text-[#002f6c]"><span className="h-6 w-1.5 rounded-full bg-gradient-to-b from-[#002f6c] to-[#164a9c]" />Team Comparison</h1>
         <div className="flex gap-4">
           <Select label="Season" value={season} onChange={setSeason} options={seasons.map((s) => ({ value: String(s), label: String(s) }))} />
