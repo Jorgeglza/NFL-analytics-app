@@ -57,6 +57,17 @@ Per page: run old app side-by-side (`pda-ie` env), match tables/KPIs/chart serie
 
 ## Session notes (newest first)
 
+### 2026-07-17 — Session 5 (cont.): Matchup Previews — audit §7 + model fixes + Elo & Pythagorean
+- **New models** (user-approved; NOT ports — new analytics):
+  - `lib/logic/elo.ts`: 538-style Elo (init 1505, K=20, HFA +48, MOV multiplier, ⅓ season regression, SD/OAK/STL alias carry-over). Pre-game ratings per game_id — no leakage. Verified exactly vs an independent pandas replica (CAR@TB 2025 wk18 pHome 0.6688 = app's 67%; final top-5 sane, SEA #1 = the SB winner).
+  - `lib/logic/pythagorean.ts`: pyth win% (exp 2.37) through week−1 + log5 matchup prob. Verified (CAR@TB: pHome 0.569 = 57%).
+  - Both added to `MODEL_KEYS`/`ProbBundle` and to the **consensus Average (now 5 models)** — consensus numbers intentionally changed. 7 new unit tests (49 total).
+- **Bug fixes**: Matchup tab's Spread Pick Engine used grades through the game's own week (look-ahead — leaked the game's own grade into completed-game "predictions"); now week−1 like probBundle, grade boxes labeled "thru W{n-1}". Snapshot favorite now always shown as `TEAM −X.X` (away favorites displayed "+X.X").
+- **Week Preview (7a)**: 4 prose chips per card → **model dot-strip** (each model's home prob as a colored dot on a 0–100% track, consensus as a bar, 50% tick) — disagreement visible at a glance; new **"Disagreement" sort** (max−min home prob); model-color legend + FH/FA/UH/UA decoder line above the grid.
+- **Matchup (7b)**: **Model verdict strip** on top (each model's pick + confidence, consensus highlighted); Spread Pick Engine leads with a verdict pill, internals demoted to a `<details>` "Evidence" section; "All-Time Matchup" → "Head-to-Head (since 2015)"; Recent Form explains @-notation.
+- **Model Overview (7c 🔴)**: "Does confidence pay off?" card — accuracy by confidence band over all completed games (Average: 53/57/66/67/75/81% for 50–55→80+; monotone and self-consistent → well-calibrated). Grid cells: % moved to hover, wrong picks get red bg + ✗ (was color-only white), Correct % column colored vs coin flip.
+- Tests 49/49, build green; verified in pane (dot strips, sort reorder, verdict strip, bands, cell styling).
+
 ### 2026-07-17 — Session 5 (cont.): Spread Win % — conclusion-first layout (audit §6)
 - **Verdict card** (new, top of page): plain-language takeaway generated from the current selection — favorite win % in three spread tiers (≤3 / 3.5–6.5 / 7+), sentences about whether reliability rises with spread and where underdog value lives, tier chips colored by strength (Wilson CI in tooltip), and an "Apply to a week" button that jumps to Weekly Picks. Computed from all played games in the season/week selection (ignores the win-type filter). Verified vs pandas (2025: 56%/63%/79%, N 97/92/82).
 - **Two-filter duality framed** (audit 🔴): explanatory paragraph at the top of Weekly Picks — top filters = historical population, panel selectors = target week (excluded from its own history).

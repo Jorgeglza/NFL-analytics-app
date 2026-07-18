@@ -13,6 +13,7 @@ import {
   type HistAgg,
   type GradesIndex,
   type TeamWeekIndex,
+  type EloIndex,
 } from "./engine";
 
 interface Rec {
@@ -34,12 +35,14 @@ export default function ModelOverviewTab({
   hist,
   gradesIdx,
   twIdx,
+  eloIdx,
 }: {
   schedule: Row[];
   meta: Map<string, TeamMeta>;
   hist: HistAgg;
   gradesIdx: GradesIndex;
   twIdx: TeamWeekIndex;
+  eloIdx: EloIndex;
 }) {
   const [grouping, setGrouping] = useState<"season" | "week">("season");
   const [primary, setPrimary] = useState<MetricKey>("consensus");
@@ -52,7 +55,7 @@ export default function ModelOverviewTab({
     return reg.map((g) => {
       const s = Number(g.season);
       const w = Number(g.week);
-      const b = probBundle(g, s, w, hist, gradesIdx, twIdx);
+      const b = probBundle(g, s, w, hist, gradesIdx, twIdx, eloIdx);
       const actual = resultWinner(g);
       const picks = {} as Rec["picks"];
       for (const [key] of MODEL_KEYS) {
@@ -80,7 +83,7 @@ export default function ModelOverviewTab({
         picks,
       };
     });
-  }, [schedule, hist, gradesIdx, twIdx]);
+  }, [schedule, hist, gradesIdx, twIdx, eloIdx]);
 
   const filtered = useMemo(() => {
     let df = records;
@@ -88,6 +91,27 @@ export default function ModelOverviewTab({
     if (filterMode === "completed") df = df.filter((r) => r.actual != null);
     return df.filter((r) => (r.picks[primary].conf ?? 0) >= minConf);
   }, [records, filterMode, primary, minConf]);
+
+  // Audit 7c: the tab's core question — does accuracy rise with confidence? —
+  // answered directly, over ALL completed games (independent of the slider).
+  const confBands = useMemo(() => {
+    const bands = [
+      { label: "50–55%", lo: 0.5, hi: 0.55 },
+      { label: "55–60%", lo: 0.55, hi: 0.6 },
+      { label: "60–65%", lo: 0.6, hi: 0.65 },
+      { label: "65–70%", lo: 0.65, hi: 0.7 },
+      { label: "70–80%", lo: 0.7, hi: 0.8 },
+      { label: "80%+", lo: 0.8, hi: 1.01 },
+    ];
+    return bands.map((b) => {
+      const rows = records.filter((r) => {
+        const p = r.picks[primary];
+        return p.correct != null && p.conf != null && p.conf >= b.lo && p.conf < b.hi;
+      });
+      const corr = rows.filter((r) => r.picks[primary].correct).length;
+      return { ...b, n: rows.length, pct: rows.length ? (100 * corr) / rows.length : null };
+    });
+  }, [records, primary]);
 
   const kpi = useMemo(() => {
     const evald = filtered.filter((r) => r.picks[primary].correct != null);
@@ -106,11 +130,16 @@ export default function ModelOverviewTab({
     const logo = p.team ? meta.get(p.team)?.logo : null;
     const pctTxt = p.conf == null ? "—" : `${Math.round(100 * p.conf)}%`;
     const title = `${rec.away} @ ${rec.home}\nPick: ${p.team ?? "—"} — ${pctTxt}\nSpread: ${rec.spread ?? "—"}\nResult: ${rec.actual ?? "—"} — ${p.correct === true ? "Correct ✓" : p.correct === false ? "Wrong ✗" : "Upcoming"}`;
+    // color + glyph carry correctness; the per-cell % lives in the hover title
+    // (2,300 tiny numbers were noise — audit 7c)
+    const bg = p.correct === true ? "#DFF5E1" : p.correct === false ? "#FBE4E4" : "#fff";
+    const bc = p.correct === true ? "#cfeacd" : p.correct === false ? "#f2cccc" : "#eee";
     return (
-      <td className="border p-1.5 text-center align-middle" style={{ minWidth: 60, background: p.correct ? "#DFF5E1" : "#fff", borderColor: p.correct ? "#cfeacd" : "#eee" }} title={title}>
-        <div className="flex flex-col items-center">
+      <td className="border p-1.5 text-center align-middle" style={{ minWidth: 48, background: bg, borderColor: bc }} title={title}>
+        <div className="relative flex flex-col items-center">
           {logo ? <img src={logo} alt={p.team ?? ""} className="h-6" /> : <div className="text-xs font-bold">{p.team ?? "—"}</div>}
-          <div className="mt-0.5 text-[11px] font-bold">{pctTxt}</div>
+          {p.correct === true && <span className="absolute -right-0.5 -top-1 text-[9px] font-black text-[#2CA25F]">✓</span>}
+          {p.correct === false && <span className="absolute -right-0.5 -top-1 text-[9px] font-black text-[#C8102E]">✗</span>}
         </div>
       </td>
     );
@@ -142,8 +171,12 @@ export default function ModelOverviewTab({
                 return (
                   <tr key={key}>
                     <td className="whitespace-nowrap border px-2 py-1 font-bold">{rowLabel} {key}</td>
-                    <td className="border px-2 py-1 text-center font-bold" title={`Correct–Wrong: ${corr}-${evald.length - corr}`}>
-                      {evald.length ? Math.round((100 * corr) / evald.length) : 0}%
+                    <td
+                      className="border px-2 py-1 text-center font-bold"
+                      style={{ color: !evald.length ? "#94a3b8" : corr / evald.length >= 0.5 ? "#2CA25F" : "#C8102E" }}
+                      title={`Correct–Wrong: ${corr}-${evald.length - corr} (green = beats a coin flip)`}
+                    >
+                      {evald.length ? `${Math.round((100 * corr) / evald.length)}%` : "—"}
                     </td>
                     {Array.from({ length: maxCols }, (_, i) => (
                       <Cell key={i} rec={sorted[i] ?? null} />
@@ -224,6 +257,28 @@ export default function ModelOverviewTab({
           Min confidence: {Math.round(minConf * 100)}%
           <input type="range" min={0.5} max={1} step={0.01} value={minConf} onChange={(e) => setMinConf(Number(e.target.value))} className="w-56" />
         </label>
+      </div>
+
+      {/* Accuracy by confidence — the tab's core answer */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" style={{ borderTop: "4px solid #002f6c" }}>
+        <div className="mb-2 text-sm font-semibold text-slate-700">
+          Does confidence pay off? — accuracy by confidence band ({MODEL_KEYS.find(([k]) => k === primary)?.[1]}, all completed games)
+        </div>
+        <div className="flex flex-wrap gap-3">
+          {confBands.map((b) => (
+            <div key={b.label} className="min-w-28 flex-1 rounded-xl border border-slate-200 px-3 py-2 text-center" title={`${b.n.toLocaleString()} completed games with pick confidence in ${b.label}`}>
+              <div className="text-[10px] font-medium uppercase tracking-wider text-slate-400">{b.label}</div>
+              <div className={`text-xl font-bold tabular-nums ${b.pct == null ? "text-slate-300" : b.pct >= 60 ? "text-[#2CA25F]" : b.pct < 50 ? "text-[#C8102E]" : "text-slate-800"}`}>
+                {b.pct == null ? "—" : `${Math.round(b.pct)}%`}
+              </div>
+              <div className="mx-auto mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+                <div className="h-full rounded-full" style={{ width: `${b.pct ?? 0}%`, background: b.pct != null && b.pct >= 50 ? "#2CA25F" : "#C8102E" }} />
+              </div>
+              <div className="mt-1 text-[10px] text-slate-400">{b.n.toLocaleString()} games</div>
+            </div>
+          ))}
+        </div>
+        <div className="mt-2 text-[11px] text-slate-400">If the model is well-calibrated, accuracy should rise from left to right and each band should at least match its own confidence range.</div>
       </div>
 
       <div className="flex flex-wrap gap-2">

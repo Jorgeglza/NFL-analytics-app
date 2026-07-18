@@ -126,3 +126,61 @@ describe("ranks helpers", () => {
     });
   }
 });
+
+// ---- Session-5 models: Elo + Pythagorean (hand-computed cases, not golden fixtures) ----
+import { buildEloIndex, eloPHome, eloMovMultiplier, ELO_INIT, ELO_K, ELO_HFA } from "./elo";
+import { pythWinPct, log5 } from "./pythagorean";
+
+describe("elo", () => {
+  it("equal ratings favor home by HFA", () => {
+    // 1/(1+10^(-48/400)) = 0.5686...
+    close(eloPHome(1505, 1505), 1 / (1 + Math.pow(10, -48 / 400)));
+  });
+  it("mov multiplier at margin 7, even matchup", () => {
+    close(eloMovMultiplier(7, 0), Math.log(8) * (2.2 / 2.2));
+  });
+  it("single game updates ratings symmetrically and pre-game entry is unshifted", () => {
+    const idx = buildEloIndex([
+      { gameId: "g1", season: 2020, awayTeam: "A", homeTeam: "B", awayScore: 10, homeScore: 24, order: 1 },
+      { gameId: "g2", season: 2020, awayTeam: "B", homeTeam: "A", awayScore: null, homeScore: null, order: 2 },
+    ]);
+    const e1 = idx.get("g1")!;
+    close(e1.eloAway, ELO_INIT);
+    close(e1.eloHome, ELO_INIT);
+    const pHome = eloPHome(ELO_INIT, ELO_INIT);
+    close(e1.pHome, pHome);
+    // home won by 14: delta = K * mov * (1 - pHome)
+    const mov = eloMovMultiplier(14, ELO_HFA); // winner diff = eh + HFA - ea = 48
+    const delta = ELO_K * mov * (1 - pHome);
+    const e2 = idx.get("g2")!;
+    // g2: B (winner) is away, A is home
+    close(e2.eloAway, ELO_INIT + delta);
+    close(e2.eloHome, ELO_INIT - delta);
+  });
+  it("season change regresses toward the mean", () => {
+    const idx = buildEloIndex([
+      { gameId: "g1", season: 2020, awayTeam: "A", homeTeam: "B", awayScore: 0, homeScore: 30, order: 1 },
+      { gameId: "g2", season: 2021, awayTeam: "A", homeTeam: "B", awayScore: null, homeScore: null, order: 2 },
+    ]);
+    const pHome = eloPHome(ELO_INIT, ELO_INIT);
+    const delta = ELO_K * eloMovMultiplier(30, ELO_HFA) * (1 - pHome);
+    const e2 = idx.get("g2")!;
+    close(e2.eloHome, (ELO_INIT + delta) * (2 / 3) + ELO_INIT * (1 / 3));
+    close(e2.eloAway, (ELO_INIT - delta) * (2 / 3) + ELO_INIT * (1 / 3));
+  });
+});
+
+describe("pythagorean", () => {
+  it("equal points = 50%", () => close(pythWinPct(300, 300)!, 0.5));
+  it("DAL-like 471/512", () => {
+    const p = pythWinPct(471, 512)!;
+    close(p, Math.pow(471, 2.37) / (Math.pow(471, 2.37) + Math.pow(512, 2.37)));
+    expect(p).toBeLessThan(0.5);
+  });
+  it("log5 symmetry and identity", () => {
+    close(log5(0.5, 0.5)!, 0.5);
+    close(log5(0.7, 0.3)!, 1 - log5(0.3, 0.7)!);
+    // log5(0.7, 0.3) = (0.7*0.7)/(0.7*0.7 + 0.3*0.3)
+    close(log5(0.7, 0.3)!, 0.49 / (0.49 + 0.09));
+  });
+});

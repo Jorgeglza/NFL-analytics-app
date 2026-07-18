@@ -16,9 +16,13 @@ import {
   marketRate,
   defaultWeekNearToday,
   kickoffMs,
+  probBundle,
+  MODEL_KEYS,
+  MODEL_COLORS,
   type HistAgg,
   type GradesIndex,
   type TeamWeekIndex,
+  type EloIndex,
 } from "./engine";
 
 const fmtMl = (ml: number | null) => (ml == null ? "—" : ml > 0 ? `+${Math.round(ml)}` : String(Math.round(ml)));
@@ -31,6 +35,7 @@ export default function MatchupTab({
   hist,
   gradesIdx,
   twIdx,
+  eloIdx,
 }: {
   schedule: Row[];
   ranks: Map<number, Row[]>; // season -> rank rows
@@ -38,6 +43,7 @@ export default function MatchupTab({
   hist: HistAgg;
   gradesIdx: GradesIndex;
   twIdx: TeamWeekIndex;
+  eloIdx: EloIndex;
 }) {
   const reg = useMemo(() => schedule.filter((r) => r.game_type === "REG"), [schedule]);
   const seasons = useMemo(() => [...new Set(reg.map((r) => Number(r.season)))].sort((a, b) => b - a), [reg]);
@@ -89,8 +95,10 @@ export default function MatchupTab({
         nBucket = m.n;
       }
     }
-    const [lOvr] = gradesIdx.triple(away, s, w);
-    const [rOvr] = gradesIdx.triple(home, s, w);
+    // grades through week-1 only — using week w leaked the game's own grade
+    // into "predictions" for completed games (fixed Session 5)
+    const [lOvr] = gradesIdx.triple(away, s, wkPlayed);
+    const [rOvr] = gradesIdx.triple(home, s, wkPlayed);
     const pModelAway = gradeModelProb(lOvr, rOvr);
     const pModelHome = pModelAway == null ? null : 1 - pModelAway;
     const pMarketHome = pMarket == null ? null : fav === "home" ? pMarket : 1 - pMarket;
@@ -116,6 +124,12 @@ export default function MatchupTab({
     if (lOvr == null || rOvr == null) risks.push("Missing grades for one or both teams.");
     return { spread, fav, bucket, nBucket, pHome, pAway, pickTeam, conf, lOvr, rOvr, bucketRows, risks };
   }, [selGame, hist, gradesIdx, away, home, s, w]);
+
+  // ---- all-model bundle for the verdict strip ----
+  const bundle = useMemo(
+    () => (selGame ? probBundle(selGame, s, w, hist, gradesIdx, twIdx, eloIdx) : null),
+    [selGame, s, w, hist, gradesIdx, twIdx, eloIdx],
+  );
 
   // ---- trend edge ----
   const trendEdge = useMemo(() => {
@@ -291,10 +305,10 @@ export default function MatchupTab({
     : "—";
 
   const gradeBox = (team: string) => {
-    const [ovr, off, def] = gradesIdx.triple(team, s, w);
+    const [ovr, off, def] = gradesIdx.triple(team, s, wkPlayed);
     return (
       <div className="relative mt-2 rounded-2xl border border-slate-200 bg-white shadow-sm p-3">
-        <div className="absolute -top-2.5 left-3 bg-white px-1.5 text-xs font-semibold">Grades</div>
+        <div className="absolute -top-2.5 left-3 bg-white px-1.5 text-xs font-semibold" title={`Season-average model grades through week ${wkPlayed} (pre-game information only)`}>Grades (thru W{wkPlayed})</div>
         <div className="flex gap-2">
           {[["Ovr", ovr], ["Off", off], ["Def", def]].map(([l, v]) => (
             <div key={String(l)} className="flex-1 rounded-lg border border-slate-200 px-2 py-1 text-center">
@@ -315,6 +329,35 @@ export default function MatchupTab({
         <Select label="Game" value={String(selGame.game_id)} onChange={setGameId} options={games.map((g) => ({ value: String(g.game_id), label: `${g.away_team} @ ${g.home_team}` }))} />
       </div>
 
+      {/* Model verdict — every model's call for this game, conclusion first */}
+      {bundle && (
+        <div className="rounded-2xl border border-slate-200 bg-white shadow-sm" style={{ borderTop: "4px solid #002f6c" }}>
+          <div className="flex flex-wrap items-stretch gap-2 p-3">
+            {MODEL_KEYS.map(([k, lbl]) => {
+              const [pA, pH] = bundle[k];
+              const hasP = pA != null && pH != null;
+              const pickT = hasP ? (pA! >= pH! ? away : home) : null;
+              const conf = hasP ? Math.max(pA!, pH!) : null;
+              const isCons = k === "consensus";
+              return (
+                <div
+                  key={k}
+                  className={`min-w-32 flex-1 rounded-xl border px-2.5 py-2 text-center ${isCons ? "border-[#002f6c] bg-[#002f6c]/5" : "border-slate-200"}`}
+                  title={hasP ? `${lbl}: ${away} ${Math.round(100 * pA!)}% | ${home} ${Math.round(100 * pH!)}%` : `${lbl}: not available for this game`}
+                >
+                  <div className="flex items-center justify-center gap-1.5 text-[10px] font-medium uppercase tracking-wider text-slate-400">
+                    <span className="inline-block h-2 w-2 rounded-full" style={{ background: MODEL_COLORS[k] }} />
+                    {lbl}
+                  </div>
+                  <div className={`text-base font-bold ${isCons ? "text-[#002f6c]" : "text-slate-800"}`}>{pickT ?? "—"}</div>
+                  <div className="text-[11px] text-slate-500">{conf == null ? "" : `${Math.round(100 * conf)}%`}</div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* headers + snapshot */}
       <div className="flex flex-col gap-4 lg:flex-row">
         {[away, home].map((t, i) => (
@@ -330,7 +373,8 @@ export default function MatchupTab({
           <h3 className="mb-1.5 text-center text-sm font-semibold">Matchup Snapshot</h3>
           <div className="grid grid-cols-3 gap-2">
             {[
-              ["Favorite (spread)", fav ? `${fav === "home" ? home : away} ${spread! > 0 ? "+" : "−"}${Math.abs(spread!).toFixed(1)}` : "—"],
+              // favorite is always laying points — show it as −X.X regardless of side
+              ["Favorite (spread)", fav ? `${fav === "home" ? home : away} −${Math.abs(spread!).toFixed(1)}` : "—"],
               ["Kickoff", dateTxt],
               ["Points line (Total)", totalLine],
             ].map(([l, v]) => (
@@ -360,22 +404,24 @@ export default function MatchupTab({
       {engine && (
         <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-3">
           <div className="mb-1 text-sm font-bold">Spread Pick Engine</div>
-          <div className="mb-2 text-sm">
+          <div className="mb-2">
             {engine.pHome == null ? (
-              "Pick Engine: insufficient data (no spread bucket or grades)."
+              <span className="text-sm">Pick Engine: insufficient data (no spread bucket or grades).</span>
             ) : (
-              <>
-                <b>Pick: {engine.pickTeam ?? "—"}</b>
-                {" · "}Home win prob {Math.round(100 * engine.pHome)}% vs Away {100 - Math.round(100 * engine.pHome)}%{" · "}
-                Confidence {engine.conf}%
-                {engine.spread != null && ` · Spread ${engine.spread > 0 ? "+" : ""}${engine.spread.toFixed(1)} (${engine.fav === "home" ? "Home" : "Away"} favored)`}
-              </>
+              <span className="inline-flex flex-wrap items-center gap-2 text-sm">
+                <span className="rounded-full bg-[#002f6c] px-3 py-1 font-bold text-white">Pick: {engine.pickTeam ?? "—"} · {engine.conf}% conf</span>
+                <span className="text-slate-600">
+                  Home {Math.round(100 * engine.pHome)}% vs Away {100 - Math.round(100 * engine.pHome)}%
+                  {engine.spread != null && ` · ${engine.fav === "home" ? home : away} favored by ${Math.abs(engine.spread).toFixed(1)}`}
+                </span>
+              </span>
             )}
           </div>
           <div className="flex flex-col gap-3 lg:flex-row">
             <div ref={gaugeLeftRef} className="h-44 flex-1" />
-            <div className="flex-1">
-              <div className="mb-2 flex flex-wrap gap-1.5 text-[11px]">
+            <details className="flex-1">
+              <summary className="cursor-pointer select-none text-xs font-semibold text-slate-500 hover:text-slate-800">Evidence — bucket history, grades, caveats</summary>
+              <div className="mb-2 mt-2 flex flex-wrap gap-1.5 text-[11px]">
                 {engine.fav && (
                   <>
                     <span className="rounded-full bg-blue-600 px-2 py-0.5 text-white">{engine.fav === "home" ? "Favorite home" : "Favorite away"}</span>
@@ -412,7 +458,7 @@ export default function MatchupTab({
                   </tbody>
                 </table>
               )}
-            </div>
+            </details>
             <div ref={gaugeRightRef} className="h-44 flex-1" />
           </div>
         </div>
@@ -466,7 +512,9 @@ export default function MatchupTab({
       {/* Recent + H2H */}
       <div className="flex flex-col gap-4 lg:flex-row">
         <div className="flex-1">
-          <h4 className="mb-2 text-sm font-semibold">Recent Form (Last 3 Games)</h4>
+          <h4 className="mb-2 text-sm font-semibold">
+            Recent Form (Last 3 Games) <span className="font-normal text-slate-400">— @ before the opponent = away game</span>
+          </h4>
           {[away, home].map((t) => (
             <table key={t} className="mb-3 w-full border text-xs">
               <thead className="bg-slate-50">
@@ -487,12 +535,12 @@ export default function MatchupTab({
           ))}
         </div>
         <div className="flex-[1.2]">
-          <h4 className="mb-2 text-sm font-semibold">All-Time Matchup</h4>
+          <h4 className="mb-2 text-sm font-semibold">Head-to-Head <span className="font-normal text-slate-400">(since 2015 — dataset start)</span></h4>
           {h2h && (
             <>
               <div className="mb-2 text-xs text-slate-700">
                 <div className="font-bold">{away} vs {home}</div>
-                <div>All-time: {away} {h2h.winsA} – {h2h.winsB} {home}{h2h.ties ? ` (Ties: ${h2h.ties})` : ""}</div>
+                <div>Since 2015: {away} {h2h.winsA} – {h2h.winsB} {home}{h2h.ties ? ` (Ties: ${h2h.ties})` : ""}</div>
                 <div>First meeting: {h2h.first} | Most recent: {h2h.last}</div>
               </div>
               <table className="w-full border text-xs">

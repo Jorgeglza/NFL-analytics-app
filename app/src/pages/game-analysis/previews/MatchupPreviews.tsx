@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { getSchedule, getGrades, getTeamWeek, getTeamWeekRanks, getMeta, type Row } from "../../../lib/data/loader";
 import { getTeamMetaMap, type TeamMeta } from "../../../lib/team/meta";
-import { buildHist, buildGradesIndex, buildTeamWeekIndex } from "./engine";
+import { buildHist, buildGradesIndex, buildTeamWeekIndex, buildScheduleEloIndex } from "./engine";
 import { Loading } from "../../../components/Loading";
 import WeekPreviewTab from "./WeekPreviewTab";
 import MatchupTab from "./MatchupTab";
@@ -44,8 +44,9 @@ export default function MatchupPreviews() {
   const hist = useMemo(() => (schedule.length ? buildHist(schedule) : null), [schedule]);
   const gradesIdx = useMemo(() => (grades.length ? buildGradesIndex(grades) : null), [grades]);
   const twIdx = useMemo(() => (teamWeekBySeason ? buildTeamWeekIndex(teamWeekBySeason) : null), [teamWeekBySeason]);
+  const eloIdx = useMemo(() => (schedule.length ? buildScheduleEloIndex(schedule) : null), [schedule]);
 
-  const loading = !schedule.length || !meta || !hist || !gradesIdx || !twIdx;
+  const loading = !schedule.length || !meta || !hist || !gradesIdx || !twIdx || !eloIdx;
 
   return (
     <div className="space-y-4">
@@ -64,9 +65,9 @@ export default function MatchupPreviews() {
         <Loading label="Loading all seasons…" />
       ) : (
         <>
-          {tab === "Week Preview" && <WeekPreviewTab schedule={schedule} meta={meta} hist={hist} gradesIdx={gradesIdx} twIdx={twIdx} />}
-          {tab === "Matchup" && <MatchupTab schedule={schedule} ranks={ranksBySeason} meta={meta} hist={hist} gradesIdx={gradesIdx} twIdx={twIdx} />}
-          {tab === "Model Overview" && <ModelOverviewTab schedule={schedule} meta={meta} hist={hist} gradesIdx={gradesIdx} twIdx={twIdx} />}
+          {tab === "Week Preview" && <WeekPreviewTab schedule={schedule} meta={meta} hist={hist} gradesIdx={gradesIdx} twIdx={twIdx} eloIdx={eloIdx} />}
+          {tab === "Matchup" && <MatchupTab schedule={schedule} ranks={ranksBySeason} meta={meta} hist={hist} gradesIdx={gradesIdx} twIdx={twIdx} eloIdx={eloIdx} />}
+          {tab === "Model Overview" && <ModelOverviewTab schedule={schedule} meta={meta} hist={hist} gradesIdx={gradesIdx} twIdx={twIdx} eloIdx={eloIdx} />}
         </>
       )}
     </div>

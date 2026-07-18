@@ -6,14 +6,26 @@ import { gradeModelProb, blendProbs, BIN_SIZE_DEFAULT } from "../../../lib/logic
 import { edgeComposite, meanLastN, slopeLastN, EDGE_SCALE, type TrendFeatures } from "../../../lib/logic/edgeComposite";
 import { impliedProb, fairProbs } from "../../../lib/logic/moneyline";
 import { wilson } from "../../../lib/logic/wilson";
+import { buildEloIndex, type EloEntry, type EloGame } from "../../../lib/logic/elo";
+import { pythWinPct, log5 } from "../../../lib/logic/pythagorean";
 
-export type MetricKey = "consensus" | "blend" | "trend" | "ml";
+export type MetricKey = "consensus" | "blend" | "trend" | "ml" | "elo" | "pyth";
 export const MODEL_KEYS: [MetricKey, string][] = [
   ["consensus", "Average"],
   ["blend", "Market-calibrated"],
   ["trend", "Trend Edge"],
   ["ml", "ML Fair"],
+  ["elo", "Elo"],
+  ["pyth", "Pythagorean"],
 ];
+export const MODEL_COLORS: Record<MetricKey, string> = {
+  consensus: "#002f6c",
+  blend: "#2459A7",
+  trend: "#E87722",
+  ml: "#3C9A5F",
+  elo: "#7c3aed",
+  pyth: "#C8102E",
+};
 
 export const favoriteSide = (spread: number | null): "home" | "away" | null =>
   spread == null || Number.isNaN(spread) ? null : spread < 0 ? "home" : spread > 0 ? "away" : null;
@@ -144,11 +156,32 @@ export function buildTeamWeekIndex(teamWeekBySeason: Map<number, Row[]>): TeamWe
   };
 }
 
+// ---------- Elo index over the full schedule ----------
+export type EloIndex = Map<string, EloEntry>;
+
+export function buildScheduleEloIndex(schedule: Row[]): EloIndex {
+  const games: EloGame[] = schedule
+    .filter((g) => g.game_id != null)
+    .map((g) => ({
+      gameId: String(g.game_id),
+      season: Number(g.season),
+      awayTeam: String(g.away_team),
+      homeTeam: String(g.home_team),
+      awayScore: g.away_score == null ? null : Number(g.away_score),
+      homeScore: g.home_score == null ? null : Number(g.home_score),
+      // order by date, then week as a tiebreaker for missing dates
+      order: (g.gameday ? Date.parse(String(g.gameday)) : 0) + Number(g.week) / 1000,
+    }));
+  return buildEloIndex(games);
+}
+
 // ---------- probability bundle ----------
 export interface ProbBundle {
   blend: [number | null, number | null]; // (away, home)
   trend: [number | null, number | null];
   ml: [number | null, number | null];
+  elo: [number | null, number | null];
+  pyth: [number | null, number | null];
   consensus: [number | null, number | null];
 }
 
@@ -159,6 +192,7 @@ export function probBundle(
   hist: HistAgg,
   gradesIdx: GradesIndex,
   twIdx: TeamWeekIndex,
+  eloIdx?: EloIndex,
 ): ProbBundle {
   const away = String(game.away_team);
   const home = String(game.home_team);
@@ -194,12 +228,30 @@ export function probBundle(
   const pAwayMl = awayFair != null && homeFair != null ? awayFair : null;
   const pHomeMl = awayFair != null && homeFair != null ? homeFair : null;
 
+  // Elo (pre-game ratings; prediction exists even for unplayed games)
+  const eloEntry = eloIdx?.get(String(game.game_id));
+  const pHomeElo = eloEntry ? eloEntry.pHome : null;
+  const pAwayElo = pHomeElo == null ? null : 1 - pHomeElo;
+
+  // Pythagorean expectation through week-1 points for/against, matched via log5
+  const pythOf = (team: string): number | null => {
+    const rows = twIdx.rowsFor(team, season).filter((r) => Number(r.week) <= wkPlayed && r.points != null && r.points_allowed != null);
+    if (!rows.length) return null;
+    const pf = rows.reduce((s, r) => s + Number(r.points), 0);
+    const pa = rows.reduce((s, r) => s + Number(r.points_allowed), 0);
+    return pythWinPct(pf, pa);
+  };
+  const pythAwayExp = pythOf(away);
+  const pythHomeExp = pythOf(home);
+  const pAwayPyth = pythAwayExp != null && pythHomeExp != null ? log5(pythAwayExp, pythHomeExp) : null;
+  const pHomePyth = pAwayPyth == null ? null : 1 - pAwayPyth;
+
   const nanmean = (vals: (number | null)[]): number | null => {
     const v = vals.filter((x): x is number => x != null);
     return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null;
   };
-  const lm = nanmean([pAwayBlend, pAwayTrend, pAwayMl]);
-  const rm = nanmean([pHomeBlend, pHomeTrend, pHomeMl]);
+  const lm = nanmean([pAwayBlend, pAwayTrend, pAwayMl, pAwayElo, pAwayPyth]);
+  const rm = nanmean([pHomeBlend, pHomeTrend, pHomeMl, pHomeElo, pHomePyth]);
   let cons: [number | null, number | null] = [null, null];
   if (lm != null && rm != null && lm + rm > 0) cons = [lm / (lm + rm), rm / (lm + rm)];
 
@@ -207,6 +259,8 @@ export function probBundle(
     blend: [pAwayBlend, pHomeBlend],
     trend: [pAwayTrend, pHomeTrend],
     ml: [pAwayMl, pHomeMl],
+    elo: [pAwayElo, pHomeElo],
+    pyth: [pAwayPyth, pHomePyth],
     consensus: cons,
   };
 }

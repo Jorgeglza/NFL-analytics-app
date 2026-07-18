@@ -5,6 +5,7 @@ import type { TeamMeta } from "../../../lib/team/meta";
 import { Select } from "../../../components/filters/Select";
 import {
   MODEL_KEYS,
+  MODEL_COLORS,
   type MetricKey,
   probBundle,
   favoriteSide,
@@ -18,7 +19,48 @@ import {
   type HistAgg,
   type GradesIndex,
   type TeamWeekIndex,
+  type EloIndex,
+  type ProbBundle,
 } from "./engine";
+
+/** Compact disagreement strip: each model's home-win prob as a dot on a 0–100% track. */
+function ModelDotStrip({ bundle, away, home }: { bundle: ProbBundle; away: string; home: string }) {
+  return (
+    <div className="relative mt-2 h-5 rounded-full bg-slate-100" title="Each dot = one model's home-win probability. Spread-out dots = the models disagree.">
+      <div className="absolute inset-y-0 left-1/2 w-px bg-slate-300" />
+      <span className="absolute -top-0.5 left-1/2 -translate-x-1/2 text-[8px] text-slate-400">50%</span>
+      {MODEL_KEYS.filter(([k]) => k !== "consensus").map(([k, lbl]) => {
+        const pH = bundle[k][1];
+        if (pH == null) return null;
+        return (
+          <span
+            key={k}
+            className="absolute top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white shadow-sm"
+            style={{ left: `${100 * pH}%`, background: MODEL_COLORS[k] }}
+            title={`${lbl}: ${away} ${Math.round(100 * (1 - pH))}% | ${home} ${Math.round(100 * pH)}%`}
+          />
+        );
+      })}
+      {bundle.consensus[1] != null && (
+        <span
+          className="absolute top-1/2 h-3.5 w-1 -translate-x-1/2 -translate-y-1/2 rounded-sm"
+          style={{ left: `${100 * bundle.consensus[1]}%`, background: MODEL_COLORS.consensus }}
+          title={`Average: ${away} ${Math.round(100 * (1 - bundle.consensus[1]))}% | ${home} ${Math.round(100 * bundle.consensus[1])}%`}
+        />
+      )}
+      <span className="absolute -bottom-3.5 left-0 text-[8px] text-slate-400">← {away}</span>
+      <span className="absolute -bottom-3.5 right-0 text-[8px] text-slate-400">{home} →</span>
+    </div>
+  );
+}
+
+/** max − min of model home probs (consensus excluded). */
+function disagreementOf(bundle: ProbBundle): number {
+  const ps = MODEL_KEYS.filter(([k]) => k !== "consensus")
+    .map(([k]) => bundle[k][1])
+    .filter((p): p is number => p != null);
+  return ps.length >= 2 ? Math.max(...ps) - Math.min(...ps) : 0;
+}
 
 export default function WeekPreviewTab({
   schedule,
@@ -26,12 +68,14 @@ export default function WeekPreviewTab({
   hist,
   gradesIdx,
   twIdx,
+  eloIdx,
 }: {
   schedule: Row[];
   meta: Map<string, TeamMeta>;
   hist: HistAgg;
   gradesIdx: GradesIndex;
   twIdx: TeamWeekIndex;
+  eloIdx: EloIndex;
 }) {
   const reg = useMemo(() => schedule.filter((r) => r.game_type === "REG"), [schedule]);
   const seasons = useMemo(() => [...new Set(reg.map((r) => Number(r.season)))].sort((a, b) => b - a), [reg]);
@@ -45,7 +89,7 @@ export default function WeekPreviewTab({
   const defWeek = useMemo(() => defaultWeekNearToday(reg, Number(sel)) ?? weeks[weeks.length - 1], [reg, sel, weeks]);
   const selWeek = weeks.map(String).includes(week) ? week : String(defWeek ?? "");
   const [primary, setPrimary] = useState<MetricKey>("consensus");
-  const [sortMode, setSortMode] = useState<"time" | "confidence">("time");
+  const [sortMode, setSortMode] = useState<"time" | "confidence" | "disagree">("time");
 
   const cards = useMemo(() => {
     const games = reg
@@ -54,15 +98,16 @@ export default function WeekPreviewTab({
     const s = Number(sel);
     const w = Number(selWeek);
     const rows = games.map((g) => {
-      const bundle = probBundle(g, s, w, hist, gradesIdx, twIdx);
+      const bundle = probBundle(g, s, w, hist, gradesIdx, twIdx, eloIdx);
       const [pL, pR] = bundle[primary];
       const conf = pL != null && pR != null ? Math.max(pL, pR) : -1;
       const leadSide = pL != null && pR != null ? (pL >= pR ? "away" : "home") : null;
-      return { g, bundle, conf, leadSide };
+      return { g, bundle, conf, leadSide, disagree: disagreementOf(bundle) };
     });
     if (sortMode === "confidence") rows.sort((a, b) => b.conf - a.conf || kickoffMs(a.g) - kickoffMs(b.g));
+    if (sortMode === "disagree") rows.sort((a, b) => b.disagree - a.disagree || kickoffMs(a.g) - kickoffMs(b.g));
     return rows;
-  }, [reg, sel, selWeek, primary, sortMode, hist, gradesIdx, twIdx]);
+  }, [reg, sel, selWeek, primary, sortMode, hist, gradesIdx, twIdx, eloIdx]);
 
   const { correct, missed, winCounts } = useMemo(() => {
     let correct = 0;
@@ -101,9 +146,9 @@ export default function WeekPreviewTab({
         <div className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
           Sort
           <div className="flex gap-2">
-            {(["time", "confidence"] as const).map((m) => (
-              <button key={m} onClick={() => setSortMode(m)} className={`rounded-full px-3 py-1.5 text-sm normal-case tracking-normal ${sortMode === m ? "bg-[#002f6c] text-white shadow-sm" : "bg-slate-100 text-slate-600 hover:text-slate-900"}`}>
-                {m === "time" ? "Time" : "Highest prob"}
+            {([["time", "Time"], ["confidence", "Highest prob"], ["disagree", "Disagreement"]] as const).map(([m, lbl]) => (
+              <button key={m} onClick={() => setSortMode(m)} title={m === "disagree" ? "Games where the models disagree the most first — the value-hunting view" : undefined} className={`rounded-full px-3 py-1.5 text-sm normal-case tracking-normal ${sortMode === m ? "bg-[#002f6c] text-white shadow-sm" : "bg-slate-100 text-slate-600 hover:text-slate-900"}`}>
+                {lbl}
               </button>
             ))}
           </div>
@@ -126,6 +171,25 @@ export default function WeekPreviewTab({
             </div>
           ))}
         </div>
+      </div>
+
+      {/* legends: model colors for the dot strips + win-type code decoder */}
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-[11px] text-slate-500">
+        <span className="font-medium uppercase tracking-wider text-slate-400">Models</span>
+        {MODEL_KEYS.map(([k, lbl]) => (
+          <span key={k} className="inline-flex items-center gap-1">
+            <span className={k === "consensus" ? "inline-block h-3 w-1 rounded-sm" : "inline-block h-2.5 w-2.5 rounded-full"} style={{ background: MODEL_COLORS[k] }} />
+            {lbl}
+          </span>
+        ))}
+        <span className="ml-auto flex flex-wrap items-center gap-x-3">
+          <span className="font-medium uppercase tracking-wider text-slate-400">Badges</span>
+          {(["FH", "FA", "UH", "UA"] as const).map((c) => (
+            <span key={c} style={{ color: WIN_TYPE_CODE_COLORS[c] }}>
+              <b>{c}</b> = {WIN_TYPE_CODE_LONG[c]}
+            </span>
+          ))}
+        </span>
       </div>
 
       <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))" }}>
@@ -177,12 +241,8 @@ export default function WeekPreviewTab({
                   </span>
                 )}
               </div>
-              <div className="mt-1.5 flex flex-wrap gap-1.5">
-                {MODEL_KEYS.map(([k, lbl]) => (
-                  <span key={k} className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-700">
-                    {lbl}: {away} {pct(bundle[k][0])} | {home} {pct(bundle[k][1])}
-                  </span>
-                ))}
+              <div className="pb-3">
+                <ModelDotStrip bundle={bundle} away={away} home={home} />
               </div>
             </div>
           );
