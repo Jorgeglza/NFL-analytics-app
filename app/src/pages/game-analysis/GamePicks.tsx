@@ -51,8 +51,13 @@ export default function GamePicks() {
       if (seasons.length) {
         const s = seasons[0];
         setSeason(String(s));
-        const played = rows.filter((r) => Number(r.season) === s && r.home_score != null);
-        setWeek(String(played.length ? Math.max(...played.map((r) => Number(r.week))) : 1));
+        // Default week (audit §2): the current in-progress week while the season
+        // is live; once it's over, the last completed regular-season week — not
+        // the Super Bowl's 1-row table.
+        const cur = rows.filter((r) => Number(r.season) === s);
+        const unplayed = cur.filter((r) => r.home_score == null).map((r) => Number(r.week));
+        const playedReg = cur.filter((r) => r.home_score != null && r.game_type === "REG").map((r) => Number(r.week));
+        setWeek(String(unplayed.length ? Math.min(...unplayed) : playedReg.length ? Math.max(...playedReg) : 1));
       }
     });
   }, []);
@@ -215,6 +220,17 @@ export default function GamePicks() {
           <button className={stepBtnCls} onClick={() => stepWeek(-1)} disabled={weekIdx <= 0} title="Previous week">‹</button>
           <button className={stepBtnCls} onClick={() => stepWeek(1)} disabled={weekIdx < 0 || weekIdx >= weeks.length - 1} title="Next week">›</button>
         </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-slate-500">
+        <span className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Win types</span>
+        {ORDER.filter((l) => l !== LABEL_FOR_NONE).map((l) => (
+          <span key={l} className="inline-flex items-center gap-1.5">
+            <span className="h-2.5 w-2.5 rounded-full" style={{ background: COLORS[l] }} />
+            {l}
+          </span>
+        ))}
+        <span className="ml-auto text-slate-400">Unplayed games show ✔ checkboxes — tick a team to record your pick (saved in this browser).</span>
       </div>
 
       <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">

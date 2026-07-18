@@ -7,11 +7,16 @@ import * as echarts from "echarts";
  * effect) is required because pages render a Loading state first — the chart
  * div only appears later, and may be remounted by parent re-renders.
  */
-export function useECharts(option: echarts.EChartsOption | null) {
+export function useECharts(
+  option: echarts.EChartsOption | null,
+  opts?: { onInit?: (chart: echarts.ECharts) => void },
+) {
   const chartRef = useRef<echarts.ECharts | null>(null);
   const roRef = useRef<ResizeObserver | null>(null);
   const optionRef = useRef(option);
   optionRef.current = option;
+  const onInitRef = useRef(opts?.onInit);
+  onInitRef.current = opts?.onInit;
 
   useEffect(() => {
     if (chartRef.current && option) {
@@ -31,6 +36,7 @@ export function useECharts(option: echarts.EChartsOption | null) {
       const chart = echarts.init(node);
       chartRef.current = chart;
       if (optionRef.current) chart.setOption(optionRef.current, true);
+      onInitRef.current?.(chart);
       // The node can attach before flex layout settles (width 0) and some
       // environments never deliver the initial ResizeObserver tick — re-measure
       // on the next frame so the chart always picks up its real size.

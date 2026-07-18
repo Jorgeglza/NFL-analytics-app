@@ -56,6 +56,20 @@ Per page: run old app side-by-side (`pda-ie` env), match tables/KPIs/chart serie
 
 ## Session notes (newest first)
 
+### 2026-07-17 — Session 5: audit implementation — Game Picks close-out + Win Types rework
+- **Game Picks** (remaining audit items; earlier Session-4 work already covered winner marking, picks record, stepper, spread bars):
+  - Default week rule per audit §2: current in-progress week (earliest week with an unplayed game) while the season is live; last completed **regular-season** week once it's over — no more 1-row Super Bowl landing (2025 now opens on Week 18, 16 games).
+  - Win-type color legend above the table + one-line hint explaining the manual-pick checkboxes.
+  - Still open (needs cross-page work, deferred): model's pick per game (Matchup Previews engine) — part of the audit's shared-context/cross-link theme.
+- **Win Types** (full audit §3 rework, "trends first, blocks second"):
+  - New top card: the 3 KPIs (Favorite-is-Home / Favorite-Win / Home-Win %) as trend lines across all seasons (or weeks), with dashed all-time-average markLines. Clicking a point (or its axis label) selects that group.
+  - Per-group block (KPIs + stacked bar + scatter, unchanged logic) is now an on-demand drill-down for **one** selected group via Select/chart-click — was ~22 always-rendered charts (the app's worst render weight), now 3.
+  - Collapsible win-type glossary (7 categories + inherited edge cases: played pick'em → Underdog, ties → "(No Score)" buckets, ties in win-% denominators).
+  - Week mode now states its population ("pools all seasons 2015–2025 per week number").
+  - Trend values reuse the exact `kpis()` used by the blocks (same rows, same denominators) — no new logic; block KPIs remain parity-verified.
+- `useECharts` gained an optional `{ onInit }` hook (used for trend-chart click-to-select; handler routed through a ref so mode switches don't leave a stale closure).
+- Tests 42/42 green; build green. Verified in browser pane: Win Types renders 3 painted canvases (season + week modes), Game Picks defaults to 2025 wk18. Note: browser-pane cold load can still leave canvases at width 0 (ResizeObserver never ticks there) — hash-navigate once to repaint; real browsers unaffected. Not committed/pushed.
+
 ### 2026-07-17 — Session 4: UX audit + Game Picks improvements
 - New `docs/UX_AUDIT.md`: full page-by-page UX/analytical audit of all 13 routes (objectives, content, hierarchy, visuals, prioritized opportunities) + cross-page consistency review. Guide for a later implementation phase; no logic prescriptions.
 - **Game Picks** (first page implemented from the audit + user direction):

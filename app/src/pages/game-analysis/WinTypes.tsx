@@ -1,12 +1,18 @@
 // Port of win_types_page_2.py — win-type distribution per season/week.
+// Session-4 UX rework (audit §3): comparative KPI trend chart on top with
+// all-time average reference lines; the per-group block (KPIs + stacked bar +
+// spread scatter) is now an on-demand drill-down for one selected group
+// instead of ~22 always-rendered charts; win-type glossary added.
 // Quirks preserved from the old page (do not "fix" before parity):
 //  - played pick'em games (spread 0 / null spread => Favorite "none") classify as Underdog
 //  - played ties (Winner null) fall into the "(No Score)" / "No Favorite" buckets
 //  - Favorite Win % / Home Win % denominators include played ties
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { getSchedule, type Row } from "../../lib/data/loader";
 import { useECharts } from "../../components/charts/useECharts";
 import { Loading } from "../../components/Loading";
+import { Card, Segmented } from "../../components/ui";
+import { Select } from "../../components/filters/Select";
 
 type Category =
   | "Favorite home"
@@ -36,6 +42,23 @@ const CATEGORY_ORDER: Category[] = [
   "Favorite Away (No Score)",
   "No Favorite",
 ];
+
+const GLOSSARY: { cat: Category; desc: string }[] = [
+  { cat: "Favorite home", desc: "The favorite won and was the home team." },
+  { cat: "Favorite away", desc: "The favorite won on the road." },
+  { cat: "Underdog home", desc: "The underdog won at home. Also covers pick'em games (no favorite) won by the home team." },
+  { cat: "Underdog away", desc: "The underdog won on the road. Also covers pick'em games won by the away team." },
+  { cat: "Favorite Home (No Score)", desc: "No winner yet (unplayed game or tie) and the favorite is the home team." },
+  { cat: "Favorite Away (No Score)", desc: "No winner yet (unplayed game or tie) and the favorite is the away team." },
+  { cat: "No Favorite", desc: "No winner yet and no favorite (pick'em or missing spread)." },
+];
+
+const KPI_DEFS = [
+  { key: "favHomePct", label: "Favorite is Home %", color: "#3C9A5F" },
+  { key: "favWinPct", label: "Favorite Win %", color: "#2459A7" },
+  { key: "homeWinPct", label: "Home Win %", color: "#C8102E" },
+] as const;
+type KpiKey = (typeof KPI_DEFS)[number]["key"];
 
 interface Game {
   gameId: string;
@@ -84,6 +107,18 @@ function classify(r: Row, xKey: "week" | "season"): Game {
   };
 }
 
+/** The three block KPIs, same denominators as the old page (ties included). */
+function kpis(games: Game[]): Record<KpiKey, number | null> {
+  const played = games.filter((g) => g.played);
+  return {
+    favHomePct: games.length ? (games.filter((g) => g.favorite === "home").length / games.length) * 100 : null,
+    favWinPct: played.length
+      ? (played.filter((g) => g.winner != null && g.winner === g.favorite).length / played.length) * 100
+      : null,
+    homeWinPct: played.length ? (played.filter((g) => g.winner === "home").length / played.length) * 100 : null,
+  };
+}
+
 const pct = (v: number | null) => (v == null ? "N/A" : `${Math.round(v)}%`);
 
 function Kpi({ label, value, border }: { label: string; value: string; border: string }) {
@@ -95,21 +130,79 @@ function Kpi({ label, value, border }: { label: string; value: string; border: s
   );
 }
 
+/** Cross-group KPI trend lines with dashed all-time average reference lines. */
+function TrendChart({
+  groups,
+  averages,
+  xLabel,
+  selected,
+  onSelect,
+}: {
+  groups: { x: number; k: Record<KpiKey, number | null> }[];
+  averages: Record<KpiKey, number | null>;
+  xLabel: string;
+  selected: number;
+  onSelect: (x: number) => void;
+}) {
+  const option = useMemo(() => {
+    if (!groups.length) return null;
+    return {
+      grid: { left: 10, right: 15, top: 34, bottom: 10, containLabel: true },
+      legend: { top: 0, itemWidth: 14, itemHeight: 10, textStyle: { fontSize: 11 } },
+      tooltip: {
+        trigger: "axis" as const,
+        valueFormatter: (v: unknown) => (v == null ? "N/A" : `${Number(v).toFixed(1)}%`),
+      },
+      xAxis: {
+        type: "category" as const,
+        data: groups.map((g) => String(g.x)),
+        name: xLabel,
+        nameLocation: "middle" as const,
+        nameGap: 26,
+        triggerEvent: true,
+      },
+      yAxis: { type: "value" as const, name: "%", min: 0, max: 100 },
+      series: KPI_DEFS.map((d) => ({
+        name: d.label,
+        type: "line" as const,
+        data: groups.map((g) => (g.k[d.key] == null ? null : Number(g.k[d.key]!.toFixed(1)))),
+        lineStyle: { color: d.color, width: 2 },
+        itemStyle: { color: d.color },
+        symbol: "circle",
+        symbolSize: (_: unknown, p: { dataIndex: number }) => (groups[p.dataIndex]?.x === selected ? 10 : 5),
+        markLine: {
+          silent: true,
+          symbol: "none",
+          data: averages[d.key] == null ? [] : [{ yAxis: Number(averages[d.key]!.toFixed(1)) }],
+          lineStyle: { color: d.color, type: "dashed" as const, width: 1, opacity: 0.45 },
+          label: { show: true, position: "insideEndTop" as const, fontSize: 9, color: d.color, formatter: "avg {c}%" },
+        },
+      })),
+    };
+  }, [groups, averages, xLabel, selected]);
+
+  // the click handler is bound once at chart init — route through a ref so it
+  // always sees the latest onSelect (mode changes swap the setter without remounting)
+  const onSelectRef = useRef(onSelect);
+  onSelectRef.current = onSelect;
+  const ref = useECharts(option, {
+    onInit: (chart) => {
+      chart.on("click", (p: { name?: string; value?: unknown }) => {
+        // series point clicks carry the category in `name`; axis-label clicks in `value`
+        const n = Number(p.name ?? p.value);
+        if (Number.isFinite(n)) onSelectRef.current(n);
+      });
+    },
+  });
+  return <div ref={ref} className="h-[320px]" />;
+}
+
 /** One bordered block (a season or a week): KPIs + stacked bar + spread scatter. */
 function Block({ title, rows, xKey }: { title: string; rows: Row[]; xKey: "week" | "season" }) {
   const games = useMemo(() => rows.map((r) => classify(r, xKey)), [rows, xKey]);
   const xLabel = xKey === "week" ? "Week" : "Season";
 
-  const { favHomePct, favWinPct, homeWinPct } = useMemo(() => {
-    const played = games.filter((g) => g.played);
-    return {
-      favHomePct: games.length ? (games.filter((g) => g.favorite === "home").length / games.length) * 100 : null,
-      favWinPct: played.length
-        ? (played.filter((g) => g.winner != null && g.winner === g.favorite).length / played.length) * 100
-        : null,
-      homeWinPct: played.length ? (played.filter((g) => g.winner === "home").length / played.length) * 100 : null,
-    };
-  }, [games]);
+  const { favHomePct, favWinPct, homeWinPct } = useMemo(() => kpis(games), [games]);
 
   const xs = useMemo(() => [...new Set(games.map((g) => g.x))].sort((a, b) => a - b), [games]);
 
@@ -228,7 +321,7 @@ function Block({ title, rows, xKey }: { title: string; rows: Row[]; xKey: "week"
   const scatterRef = useECharts(scatterOption);
 
   return (
-    <div className="relative rounded-2xl border border-slate-200 bg-white shadow-sm p-4 pt-5 shadow-sm">
+    <div className="relative rounded-2xl border border-slate-200 bg-white p-4 pt-5 shadow-sm">
       <div className="absolute -top-3 left-4 bg-white px-2 text-lg font-semibold text-slate-900">{title}</div>
       <div className="flex flex-col gap-5 lg:flex-row">
         <div className="flex shrink-0 flex-row gap-3 lg:w-40 lg:flex-col">
@@ -248,6 +341,9 @@ function Block({ title, rows, xKey }: { title: string; rows: Row[]; xKey: "week"
 export default function WinTypes() {
   const [schedule, setSchedule] = useState<Row[]>([]);
   const [mode, setMode] = useState<"season" | "week">("season");
+  const [selSeason, setSelSeason] = useState<number | null>(null);
+  const [selWeek, setSelWeek] = useState<number | null>(null);
+  const [glossaryOpen, setGlossaryOpen] = useState(false);
 
   useEffect(() => {
     getSchedule().then(setSchedule);
@@ -258,40 +354,103 @@ export default function WinTypes() {
   const seasons = useMemo(() => [...new Set(reg.map((r) => Number(r.season)))].sort((a, b) => b - a), [reg]);
   const weeks = useMemo(() => [...new Set(reg.map((r) => Number(r.week)))].sort((a, b) => a - b), [reg]);
 
+  const groupValues = mode === "season" ? seasons : weeks;
+  const selected = mode === "season" ? (selSeason ?? seasons[0] ?? null) : (selWeek ?? weeks[0] ?? null);
+  const setSelected = (x: number) => (mode === "season" ? setSelSeason(x) : setSelWeek(x));
+
+  // KPI per group (trend view) + pooled all-time averages for the reference lines
+  const trendGroups = useMemo(() => {
+    const key = mode === "season" ? "season" : "week";
+    const asc = [...groupValues].sort((a, b) => a - b);
+    return asc.map((x) => ({
+      x,
+      k: kpis(reg.filter((r) => Number(r[key]) === x).map((r) => classify(r, mode === "season" ? "week" : "season"))),
+    }));
+  }, [reg, groupValues, mode]);
+  const averages = useMemo(() => kpis(reg.map((r) => classify(r, "week"))), [reg]);
+
+  const seasonSpan = seasons.length ? `${Math.min(...seasons)}–${Math.max(...seasons)}` : "";
+  const detailRows = useMemo(() => {
+    if (selected == null) return [];
+    const key = mode === "season" ? "season" : "week";
+    return reg.filter((r) => Number(r[key]) === selected);
+  }, [reg, mode, selected]);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-4">
         <h1 className="mr-auto flex items-center gap-2.5 text-2xl font-extrabold tracking-tight text-[#002f6c]"><span className="h-6 w-1.5 rounded-full bg-gradient-to-b from-[#002f6c] to-[#164a9c]" />Win Types</h1>
-        <div className="flex items-center gap-2 text-sm">
-          <span className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Group by</span>
-          {(["season", "week"] as const).map((m) => (
-            <button
-              key={m}
-              onClick={() => setMode(m)}
-              className={`rounded-full px-3 py-1 text-sm normal-case tracking-normal font-medium ${
-                mode === m ? "bg-[#002f6c] text-white shadow-sm" : "bg-slate-100 text-slate-600 hover:text-slate-900"
-              }`}
-            >
-              {m === "season" ? "Season" : "Week"}
-            </button>
-          ))}
-        </div>
+        <button
+          onClick={() => setGlossaryOpen((o) => !o)}
+          className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm transition-colors hover:text-slate-900"
+        >
+          {glossaryOpen ? "Hide glossary" : "What are win types?"}
+        </button>
+        <Segmented
+          label="Group by"
+          value={mode}
+          onChange={setMode}
+          options={[
+            { value: "season", label: "Season" },
+            { value: "week", label: "Week" },
+          ]}
+        />
       </div>
+
+      {glossaryOpen && (
+        <Card title="Win-type glossary" subtitle="How each game is categorized (regular-season games only).">
+          <div className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
+            {GLOSSARY.map(({ cat, desc }) => (
+              <div key={cat} className="flex items-start gap-2 text-sm">
+                <span className="mt-1 h-3 w-3 shrink-0 rounded-full border border-slate-200" style={{ background: CATEGORY_COLORS[cat] }} />
+                <div>
+                  <span className="font-semibold text-slate-800">{cat}</span>
+                  <span className="text-slate-500"> — {desc}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="mt-3 text-xs text-slate-400">
+            Edge cases inherited from the original app: a played pick'em counts as an Underdog win, and played ties stay in the "(No Score)"
+            buckets while still counting in the Favorite/Home Win % denominators.
+          </p>
+        </Card>
+      )}
 
       {!reg.length && <Loading label="Loading schedule…" />}
 
-      {mode === "season" ? (
-        <div className="space-y-8">
-          {seasons.map((s) => (
-            <Block key={s} title={`Season ${s}`} rows={reg.filter((r) => Number(r.season) === s)} xKey="week" />
-          ))}
-        </div>
-      ) : (
-        <div className="space-y-8">
-          {weeks.map((w) => (
-            <Block key={w} title={`Week ${w}`} rows={reg.filter((r) => Number(r.week) === w)} xKey="season" />
-          ))}
-        </div>
+      {reg.length > 0 && selected != null && (
+        <>
+          <Card
+            title={`KPI trends by ${mode} — ${seasonSpan}`}
+            subtitle={
+              mode === "season"
+                ? "Each point is one season. Dashed lines mark the all-time averages; click a point to open that season below."
+                : `Each point pools every Week-N game across all seasons (${seasonSpan}). Dashed lines mark the all-time averages; click a point to open that week below.`
+            }
+          >
+            <TrendChart groups={trendGroups} averages={averages} xLabel={mode === "season" ? "Season" : "Week"} selected={selected} onSelect={setSelected} />
+          </Card>
+
+          <div className="flex items-center gap-3">
+            <Select
+              label={mode === "season" ? "Season detail" : "Week detail"}
+              value={String(selected)}
+              onChange={(v) => setSelected(Number(v))}
+              options={groupValues.map((x) => ({ value: String(x), label: mode === "season" ? String(x) : `Week ${x}` }))}
+            />
+            {mode === "week" && (
+              <span className="text-xs text-slate-400">Week blocks pool all seasons {seasonSpan} for that week number.</span>
+            )}
+          </div>
+
+          <Block
+            key={`${mode}-${selected}`}
+            title={mode === "season" ? `Season ${selected}` : `Week ${selected} (all seasons)`}
+            rows={detailRows}
+            xKey={mode === "season" ? "week" : "season"}
+          />
+        </>
       )}
     </div>
   );
