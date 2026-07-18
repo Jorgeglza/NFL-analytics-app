@@ -56,6 +56,12 @@ Per page: run old app side-by-side (`pda-ie` env), match tables/KPIs/chart serie
 
 ## Session notes (newest first)
 
+### 2026-07-17 — Session 5 (cont.): Win Types — restore full block list per user feedback
+- User feedback: the single-block drill-down killed the "visually scan all seasons" workflow. Reworked to serve both:
+  - **All blocks back** (seasons newest-first / weeks ascending), each wrapped in `LazyMount` — charts init only when scrolled near the viewport (IntersectionObserver + a getBoundingClientRect scroll/resize fallback for environments where IO never ticks, e.g. the browser pane). Initial render is 2 charts instead of ~22.
+  - **Summary row improved**: KPI trend chart y-axis now auto-scales around the data (fixed 0–100 flattened the 50–70% swings — that was why it "said nothing"); added a second card: 100%-stacked **win-type mix by season/week** (composition shifts at a glance). Both charts + a "Jump to" chip row scroll to the matching block (instant jump + 350ms re-correction because lazy-mounting shifts layout; also dispatches a scroll event to nudge the fallback).
+- Verified in pane: 2 canvases on load → blocks mount while scrolling, zero blank; chip/chart jump lands on the block (top = scroll-mt offset) with painted charts. Tests 42/42, build green.
+
 ### 2026-07-17 — Session 5: audit implementation — Game Picks close-out + Win Types rework
 - **Game Picks** (remaining audit items; earlier Session-4 work already covered winner marking, picks record, stepper, spread bars):
   - Default week rule per audit §2: current in-progress week (earliest week with an unplayed game) while the season is live; last completed **regular-season** week once it's over — no more 1-row Super Bowl landing (2025 now opens on Week 18, 16 games).

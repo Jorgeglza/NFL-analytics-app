@@ -7,12 +7,12 @@
 //  - played pick'em games (spread 0 / null spread => Favorite "none") classify as Underdog
 //  - played ties (Winner null) fall into the "(No Score)" / "No Favorite" buckets
 //  - Favorite Win % / Home Win % denominators include played ties
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { EChartsOption } from "echarts";
 import { getSchedule, type Row } from "../../lib/data/loader";
 import { useECharts } from "../../components/charts/useECharts";
 import { Loading } from "../../components/Loading";
 import { Card, Segmented } from "../../components/ui";
-import { Select } from "../../components/filters/Select";
 
 type Category =
   | "Favorite home"
@@ -130,18 +130,52 @@ function Kpi({ label, value, border }: { label: string; value: string; border: s
   );
 }
 
+/** Mounts children only once scrolled near the viewport — keeps the block list
+ *  cheap (charts init on demand) without losing the scan-the-whole-page flow. */
+function LazyMount({ minHeight, children }: { minHeight: number; children: React.ReactNode }) {
+  const [visible, setVisible] = useState(false);
+  const holderRef = useCallback((node: HTMLDivElement | null) => {
+    if (!node) return;
+    let done = false;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) fire();
+      },
+      { rootMargin: "400px 0px" },
+    );
+    // Fallback for environments where IntersectionObserver never ticks:
+    // measure directly on mount and on scroll/resize.
+    const check = () => {
+      if (done || !node.isConnected) return;
+      const r = node.getBoundingClientRect();
+      if (r.top < window.innerHeight + 400 && r.bottom > -400) fire();
+    };
+    const fire = () => {
+      if (done) return;
+      done = true;
+      io.disconnect();
+      window.removeEventListener("scroll", check, true);
+      window.removeEventListener("resize", check);
+      setVisible(true);
+    };
+    io.observe(node);
+    window.addEventListener("scroll", check, { capture: true, passive: true });
+    window.addEventListener("resize", check);
+    requestAnimationFrame(check);
+  }, []);
+  return visible ? <>{children}</> : <div ref={holderRef} style={{ minHeight }} />;
+}
+
 /** Cross-group KPI trend lines with dashed all-time average reference lines. */
 function TrendChart({
   groups,
   averages,
   xLabel,
-  selected,
   onSelect,
 }: {
   groups: { x: number; k: Record<KpiKey, number | null> }[];
   averages: Record<KpiKey, number | null>;
   xLabel: string;
-  selected: number;
   onSelect: (x: number) => void;
 }) {
   const option = useMemo(() => {
@@ -161,7 +195,13 @@ function TrendChart({
         nameGap: 26,
         triggerEvent: true,
       },
-      yAxis: { type: "value" as const, name: "%", min: 0, max: 100 },
+      // auto-scale around the data (a fixed 0–100 axis flattens 50–70% swings into noise)
+      yAxis: {
+        type: "value" as const,
+        name: "%",
+        min: (v: { min: number }) => Math.max(0, Math.floor((v.min - 3) / 5) * 5),
+        max: (v: { max: number }) => Math.min(100, Math.ceil((v.max + 3) / 5) * 5),
+      },
       series: KPI_DEFS.map((d) => ({
         name: d.label,
         type: "line" as const,
@@ -169,7 +209,7 @@ function TrendChart({
         lineStyle: { color: d.color, width: 2 },
         itemStyle: { color: d.color },
         symbol: "circle",
-        symbolSize: (_: unknown, p: { dataIndex: number }) => (groups[p.dataIndex]?.x === selected ? 10 : 5),
+        symbolSize: 6,
         markLine: {
           silent: true,
           symbol: "none",
@@ -179,7 +219,7 @@ function TrendChart({
         },
       })),
     };
-  }, [groups, averages, xLabel, selected]);
+  }, [groups, averages, xLabel]);
 
   // the click handler is bound once at chart init — route through a ref so it
   // always sees the latest onSelect (mode changes swap the setter without remounting)
@@ -195,6 +235,67 @@ function TrendChart({
     },
   });
   return <div ref={ref} className="h-[320px]" />;
+}
+
+/** 100%-stacked win-type mix per group — shows how the outcome composition
+ *  shifts across seasons/weeks at a glance. */
+function MixChart({
+  groups,
+  xLabel,
+  onSelect,
+}: {
+  groups: { x: number; counts: Map<Category, number>; total: number }[];
+  xLabel: string;
+  onSelect: (x: number) => void;
+}) {
+  const option = useMemo(() => {
+    if (!groups.length) return null;
+    const present = CATEGORY_ORDER.filter((c) => groups.some((g) => (g.counts.get(c) ?? 0) > 0));
+    return {
+      grid: { left: 10, right: 15, top: 34, bottom: 10, containLabel: true },
+      legend: { top: 0, itemWidth: 14, itemHeight: 10, textStyle: { fontSize: 11 } },
+      tooltip: {
+        trigger: "axis" as const,
+        axisPointer: { type: "shadow" as const },
+        formatter: (ps: { seriesName: string; name: string; value: unknown; dataIndex: number }[]) => {
+          const g = groups[ps[0]?.dataIndex ?? 0];
+          const lines = ps
+            .filter((p) => Number(p.value) > 0)
+            .map((p) => `${p.seriesName}: ${g.counts.get(p.seriesName as Category) ?? 0} (${Number(p.value).toFixed(1)}%)`);
+          return `${xLabel} ${ps[0]?.name} — ${g.total} games<br/>${lines.join("<br/>")}`;
+        },
+      },
+      xAxis: {
+        type: "category" as const,
+        data: groups.map((g) => String(g.x)),
+        name: xLabel,
+        nameLocation: "middle" as const,
+        nameGap: 26,
+        triggerEvent: true,
+      },
+      yAxis: { type: "value" as const, name: "% of games", max: 100 },
+      series: present.map((cat) => ({
+        name: cat,
+        type: "bar" as const,
+        stack: "mix",
+        barMaxWidth: 34,
+        data: groups.map((g) => (g.total ? Number((((g.counts.get(cat) ?? 0) / g.total) * 100).toFixed(1)) : 0)),
+        itemStyle: { color: CATEGORY_COLORS[cat] },
+      })),
+    } as unknown as EChartsOption;
+  }, [groups, xLabel]);
+
+  const onSelectRef = useRef(onSelect);
+  onSelectRef.current = onSelect;
+  const ref = useECharts(option, {
+    onInit: (chart) => {
+      chart.on("click", (p: { name?: string; value?: unknown }) => {
+        const n = Number(p.name ?? p.value);
+        if (Number.isFinite(n)) onSelectRef.current(n);
+      });
+    },
+  });
+  return <div ref={ref} className="h-[300px]" />;
 }
 
 /** One bordered block (a season or a week): KPIs + stacked bar + spread scatter. */
@@ -341,8 +442,6 @@ function Block({ title, rows, xKey }: { title: string; rows: Row[]; xKey: "week"
 export default function WinTypes() {
   const [schedule, setSchedule] = useState<Row[]>([]);
   const [mode, setMode] = useState<"season" | "week">("season");
-  const [selSeason, setSelSeason] = useState<number | null>(null);
-  const [selWeek, setSelWeek] = useState<number | null>(null);
   const [glossaryOpen, setGlossaryOpen] = useState(false);
 
   useEffect(() => {
@@ -355,26 +454,37 @@ export default function WinTypes() {
   const weeks = useMemo(() => [...new Set(reg.map((r) => Number(r.week)))].sort((a, b) => a - b), [reg]);
 
   const groupValues = mode === "season" ? seasons : weeks;
-  const selected = mode === "season" ? (selSeason ?? seasons[0] ?? null) : (selWeek ?? weeks[0] ?? null);
-  const setSelected = (x: number) => (mode === "season" ? setSelSeason(x) : setSelWeek(x));
 
-  // KPI per group (trend view) + pooled all-time averages for the reference lines
+  // KPIs + category counts per group (summary charts) + pooled all-time averages
   const trendGroups = useMemo(() => {
     const key = mode === "season" ? "season" : "week";
     const asc = [...groupValues].sort((a, b) => a - b);
-    return asc.map((x) => ({
-      x,
-      k: kpis(reg.filter((r) => Number(r[key]) === x).map((r) => classify(r, mode === "season" ? "week" : "season"))),
-    }));
+    return asc.map((x) => {
+      const games = reg.filter((r) => Number(r[key]) === x).map((r) => classify(r, mode === "season" ? "week" : "season"));
+      const counts = new Map<Category, number>();
+      for (const g of games) counts.set(g.category, (counts.get(g.category) ?? 0) + 1);
+      return { x, k: kpis(games), counts, total: games.length };
+    });
   }, [reg, groupValues, mode]);
   const averages = useMemo(() => kpis(reg.map((r) => classify(r, "week"))), [reg]);
 
   const seasonSpan = seasons.length ? `${Math.min(...seasons)}–${Math.max(...seasons)}` : "";
-  const detailRows = useMemo(() => {
-    if (selected == null) return [];
-    const key = mode === "season" ? "season" : "week";
-    return reg.filter((r) => Number(r[key]) === selected);
-  }, [reg, mode, selected]);
+
+  // display order of the blocks (seasons newest-first, weeks ascending, as before)
+  const blockValues = groupValues;
+  // Instant jump + a delayed correction: blocks lazy-mount during the jump and
+  // their real height differs slightly from the placeholder, shifting the target.
+  const scrollToBlock = (x: number) => {
+    const el = () => document.getElementById(`wt-block-${mode}-${x}`);
+    // dispatching scroll nudges the LazyMount fallback in environments where
+    // programmatic scrolling emits no scroll event
+    const jump = () => {
+      el()?.scrollIntoView({ block: "start" });
+      window.dispatchEvent(new Event("scroll"));
+    };
+    jump();
+    setTimeout(jump, 350);
+  };
 
   return (
     <div className="space-y-6">
@@ -419,37 +529,56 @@ export default function WinTypes() {
 
       {!reg.length && <Loading label="Loading schedule…" />}
 
-      {reg.length > 0 && selected != null && (
+      {reg.length > 0 && (
         <>
-          <Card
-            title={`KPI trends by ${mode} — ${seasonSpan}`}
-            subtitle={
-              mode === "season"
-                ? "Each point is one season. Dashed lines mark the all-time averages; click a point to open that season below."
-                : `Each point pools every Week-N game across all seasons (${seasonSpan}). Dashed lines mark the all-time averages; click a point to open that week below.`
-            }
-          >
-            <TrendChart groups={trendGroups} averages={averages} xLabel={mode === "season" ? "Season" : "Week"} selected={selected} onSelect={setSelected} />
-          </Card>
+          <div className="grid gap-6 xl:grid-cols-2">
+            <Card
+              title={`KPI trends by ${mode} — ${seasonSpan}`}
+              subtitle={
+                mode === "season"
+                  ? "Each point is one season. Dashed lines mark the all-time averages; click a point to jump to that season below."
+                  : `Each point pools every Week-N game across all seasons (${seasonSpan}). Dashed lines mark the all-time averages; click a point to jump to that week below.`
+              }
+            >
+              <TrendChart groups={trendGroups} averages={averages} xLabel={mode === "season" ? "Season" : "Week"} onSelect={scrollToBlock} />
+            </Card>
+            <Card
+              title={`Win-type mix by ${mode}`}
+              subtitle="Share of games per win type — watch categories widen or shrink over time. Click a bar to jump to its detail block."
+            >
+              <MixChart groups={trendGroups} xLabel={mode === "season" ? "Season" : "Week"} onSelect={scrollToBlock} />
+            </Card>
+          </div>
 
-          <div className="flex items-center gap-3">
-            <Select
-              label={mode === "season" ? "Season detail" : "Week detail"}
-              value={String(selected)}
-              onChange={(v) => setSelected(Number(v))}
-              options={groupValues.map((x) => ({ value: String(x), label: mode === "season" ? String(x) : `Week ${x}` }))}
-            />
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="mr-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">Jump to</span>
+            {blockValues.map((x) => (
+              <button
+                key={x}
+                onClick={() => scrollToBlock(x)}
+                className="rounded-full border border-slate-200 bg-white px-2.5 py-0.5 text-xs font-medium text-slate-600 shadow-sm transition-colors hover:border-[#002f6c] hover:text-[#002f6c]"
+              >
+                {mode === "season" ? x : `Wk ${x}`}
+              </button>
+            ))}
             {mode === "week" && (
-              <span className="text-xs text-slate-400">Week blocks pool all seasons {seasonSpan} for that week number.</span>
+              <span className="ml-2 text-xs text-slate-400">Week blocks pool all seasons {seasonSpan} for that week number.</span>
             )}
           </div>
 
-          <Block
-            key={`${mode}-${selected}`}
-            title={mode === "season" ? `Season ${selected}` : `Week ${selected} (all seasons)`}
-            rows={detailRows}
-            xKey={mode === "season" ? "week" : "season"}
-          />
+          <div className="space-y-8">
+            {blockValues.map((x) => (
+              <div key={`${mode}-${x}`} id={`wt-block-${mode}-${x}`} className="scroll-mt-20">
+                <LazyMount minHeight={500}>
+                  <Block
+                    title={mode === "season" ? `Season ${x}` : `Week ${x} (all seasons)`}
+                    rows={reg.filter((r) => Number(r[mode === "season" ? "season" : "week"]) === x)}
+                    xKey={mode === "season" ? "week" : "season"}
+                  />
+                </LazyMount>
+              </div>
+            ))}
+          </div>
         </>
       )}
     </div>
