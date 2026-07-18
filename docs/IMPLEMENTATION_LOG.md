@@ -57,6 +57,14 @@ Per page: run old app side-by-side (`pda-ie` env), match tables/KPIs/chart serie
 
 ## Session notes (newest first)
 
+### 2026-07-17 — Session 5 (cont.): turnover data fix at source + Team Comparison interactions
+- **Turnover data root cause found & fixed** (known issue resolved): only 2025 was null — nflreadpy (the 2025 fallback source) renamed nfl_data_py's `interceptions` to `passing_interceptions`, so `turnovers`/`turnover_margin`/`int_per_attempt` (+ ranks) computed to null for nflreadpy-sourced seasons. New `_normalize_weekly()` in fetch.py renames it back, applied to both fresh fetches and cached parquets. Full pipeline rerun from cache: 2025 turnovers 570/570 non-null, league margin sums to 0, all 32 wk18 ranks present.
+  - **Consequence: 2025 grades changed** — the model now sees real turnover features instead of nulls (SF avg overall 55.0 → 58.1, rank #13 → #14; verified vs pandas). Numbers "verified" in earlier sessions for 2025 (grades, matchup blends) are superseded by this correction. 2015–2024 unaffected.
+  - Team Comparison's "Data unavailable" badges disappeared on their own (generic hasData check) — turnover rows now show values + ranks.
+- **Team Comparison — no scroll jump on stat click**: Section/StatRow/RankBar/StatCells/GradesBox were nested component *types* recreated every render → React remounted the whole subtree on every click (same bug as TeamColumn in Session 3). All converted to plain function calls; scroll position now stable (verified 900→900).
+- **Grades clickable**: Ovr/Off/Def cells are buttons that chart the grade like any stat — trend chart = weekly grade evolution (win/loss point colors, shared y-scale), matchup card = "Grade vs opponent" avg/prev bars + league-rank bar (from gradeRanks). Active cell highlighted.
+- Tests 42/42, build green; verified in pane (turnover values, no scroll jump, grade charts paint).
+
 ### 2026-07-17 — Session 5 (cont.): Team Comparison — audit §4 fixes + sticky layout
 - **Sticky on scroll** (user request): filter bar (title + Season/Week) sticks under the navbar (`top-[53px]`, z-30, blur backdrop); both side team columns stick at `lg:top-[120px]` so grades + trend/matchup charts stay visible while the long center stat column scrolls (they release at the container bottom, standard sticky).
 - **Dead turnover rows** (audit 🔴): stats with no data for either team (turnover family — all-null in pipeline, known issue) now render a "Data unavailable" dashed badge with an explanatory tooltip instead of `--`/0 pills and an empty rank bar. Generic check (`hasData` on both summaries), so it auto-heals when the pipeline is fixed.

@@ -14,6 +14,19 @@ def _cache_path(name: str):
     return RAW_CACHE_DIR / f"{name}.parquet"
 
 
+def _normalize_weekly(df: pd.DataFrame) -> pd.DataFrame:
+    """Schema drift fixes applied to every weekly frame (fresh or cached).
+
+    nflreadpy renamed nfl_data_py's `interceptions` (INTs thrown) to
+    `passing_interceptions`; without the rename every turnover-derived column
+    (turnovers, turnover_margin, int_per_attempt + their ranks) is null for
+    nflreadpy-sourced seasons.
+    """
+    if "interceptions" not in df.columns and "passing_interceptions" in df.columns:
+        df = df.rename(columns={"passing_interceptions": "interceptions"})
+    return df
+
+
 def _load_player_week_year_with_fallback(year: int) -> pd.DataFrame:
     """Verbatim port of data_utils.py:_load_player_week_year_with_fallback."""
     import nfl_data_py as nfl
@@ -42,6 +55,7 @@ def _load_player_week_year_with_fallback(year: int) -> pd.DataFrame:
         # game_type); drop them so the schedule merge in transform.py stays the
         # single source of those fields (matches original nfl_data_py schema).
         df = df.drop(columns=[c for c in ("game_id", "gameday", "game_type") if c in df.columns])
+        df = _normalize_weekly(df)
         df["source"] = "nflreadpy"
         print(f"fallback succeeded for {year} via nflreadpy")
         return df
@@ -54,7 +68,7 @@ def fetch_weekly(years=None, refresh=False) -> pd.DataFrame:
     for year in years:
         path = _cache_path(f"weekly_{year}")
         if path.exists() and not refresh:
-            frames.append(pd.read_parquet(path))
+            frames.append(_normalize_weekly(pd.read_parquet(path)))
             continue
         try:
             df = _load_player_week_year_with_fallback(year)

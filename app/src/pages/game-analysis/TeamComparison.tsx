@@ -22,6 +22,10 @@ for (const [k, v] of Object.entries({ ...STAT_HIERARCHY })) {
 
 const title = (s: string) => s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
+// Grade metrics (grades.json columns) are chartable like stats via the grade boxes.
+const GRADE_METRICS = ["Overall Grade", "Offensive Grade", "Defensive Grade"] as const;
+const isGradeStat = (s: string) => (GRADE_METRICS as readonly string[]).includes(s);
+
 function fmtPrev(v: number | null): string {
   if (v == null || !Number.isFinite(v)) return "";
   const r = Math.round(v * 1000) / 1000;
@@ -203,7 +207,7 @@ export default function TeamComparison() {
     return (
       <div className={`flex items-center justify-center gap-4 ${sub ? "py-1 pl-4 opacity-90" : "py-1.5 text-sm"}`}>
         <div className="flex flex-1 justify-end">
-          <StatCells s={s1} order={["prev", "total", "avg"]} team={team1} sub={sub} />
+          {StatCells({ s: s1, order: ["prev", "total", "avg"], team: team1, sub })}
         </div>
         <div className="w-44 text-center">
           <div className="mb-1 flex items-center justify-center gap-1">
@@ -224,10 +228,10 @@ export default function TeamComparison() {
               </button>
             )}
           </div>
-          <RankBar stat={stat} />
+          {RankBar({ stat })}
         </div>
         <div className="flex flex-1 justify-start">
-          <StatCells s={s2} order={["avg", "total", "prev"]} team={team2} sub={sub} />
+          {StatCells({ s: s2, order: ["avg", "total", "prev"], team: team2, sub })}
         </div>
       </div>
     );
@@ -240,8 +244,8 @@ export default function TeamComparison() {
         <div className="divide-y divide-slate-100">
           {stats.map((st) => (
             <div key={st}>
-              <StatRow stat={st} />
-              {expanded[st] && (STAT_HIERARCHY[st] ?? []).map((sub) => <StatRow key={sub} stat={sub} sub />)}
+              {StatRow({ stat: st })}
+              {expanded[st] && (STAT_HIERARCHY[st] ?? []).map((sub) => <div key={sub}>{StatRow({ stat: sub, sub: true })}</div>)}
             </div>
           ))}
         </div>
@@ -250,29 +254,55 @@ export default function TeamComparison() {
   }
 
   // ---------- side charts ----------
+  // Weekly series of the selected stat for one team. Grade metrics come from
+  // grades.json (win/opponent joined from team_week); everything else from team_week.
+  const seriesOf = (team: string): { week: number; value: number; opp: string; win: number | null }[] => {
+    const tw = teamRows.get(team) ?? [];
+    if (isGradeStat(selectedStat)) {
+      const byWeek = new Map(tw.map((r) => [Number(r.week), r]));
+      return grades
+        .filter((r) => String(r.Season) === season && String(r.Team) === team && Number(r.Week) <= wk && r[selectedStat] != null)
+        .map((r) => {
+          const w = Number(r.Week);
+          const twr = byWeek.get(w);
+          return {
+            week: w,
+            value: Number(r[selectedStat]),
+            opp: twr ? opponentLabel(String(twr.game_id ?? ""), team) : "",
+            win: twr?.win == null ? null : Number(twr.win),
+          };
+        })
+        .sort((a, b) => a.week - b.week);
+    }
+    return tw
+      .filter((r) => Number(r.week) <= wk && r[selectedStat] != null)
+      .map((r) => ({
+        week: Number(r.week),
+        value: Number(r[selectedStat]),
+        opp: opponentLabel(String(r.game_id ?? ""), team),
+        win: r.win == null ? null : Number(r.win),
+      }));
+  };
+
   // Shared y-range across both teams' trend charts (audit §4: independent
   // scales made visual comparison of margins misleading).
   const trendYRange = useMemo(() => {
-    const vals: number[] = [];
-    for (const t of [team1, team2]) {
-      for (const r of teamRows.get(t) ?? []) {
-        if (Number(r.week) <= wk && r[selectedStat] != null) vals.push(Number(r[selectedStat]));
-      }
-    }
+    const vals = [...seriesOf(team1), ...seriesOf(team2)].map((p) => p.value);
     if (!vals.length) return null;
     const lo = Math.min(...vals);
     const hi = Math.max(...vals);
     const pad = (hi - lo || 1) * 0.08;
     return { min: Math.floor(lo - pad), max: Math.ceil(hi + pad) };
-  }, [teamRows, team1, team2, selectedStat, wk]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [teamRows, grades, season, team1, team2, selectedStat, wk]);
 
   const trendOption = (team: string): EChartsOption | null => {
-    const rows = (teamRows.get(team) ?? []).filter((r) => Number(r.week) <= wk && r[selectedStat] != null);
-    if (!rows.length) return null;
-    const xs = rows.map((r) => String(r.week));
-    const ys = rows.map((r) => Number(r[selectedStat]));
+    const pts = seriesOf(team);
+    if (!pts.length) return null;
+    const xs = pts.map((p) => String(p.week));
+    const ys = pts.map((p) => p.value);
     const avg = ys.reduce((a, b) => a + b, 0) / ys.length;
-    const opps = rows.map((r) => opponentLabel(String(r.game_id ?? ""), team));
+    const opps = pts.map((p) => p.opp);
     return {
       grid: { left: 5, right: 10, top: 10, bottom: 5, containLabel: true },
       tooltip: {
@@ -289,7 +319,7 @@ export default function TeamComparison() {
           type: "line",
           data: ys.map((v, i) => ({
             value: +v.toFixed(2),
-            itemStyle: { color: Number(rows[i].win) === 1 ? "green" : "red" },
+            itemStyle: { color: pts[i].win === 1 ? "green" : "red" },
           })),
           lineStyle: { color: "#9E9E9E", width: 1 },
           symbolSize: 7,
@@ -301,14 +331,20 @@ export default function TeamComparison() {
 
   const matchupOptions = (team: string, opp: string): { main: EChartsOption; rank: EChartsOption } | null => {
     if (!teamWeek.length) return null;
-    const isAllowed = selectedStat.endsWith("_allowed");
+    const grade = isGradeStat(selectedStat);
+    const isAllowed = !grade && selectedStat.endsWith("_allowed");
     const base = isAllowed ? selectedStat.slice(0, -8) : selectedStat;
     const cols = new Set(Object.keys(teamWeek[0] ?? {}));
     const teamCol = selectedStat;
-    const oppCol = isAllowed ? base : cols.has(`${base}_allowed`) ? `${base}_allowed` : base;
+    // grade metrics compare team-vs-team on the same metric; stats compare vs the opponent's allowed side
+    const oppCol = grade ? selectedStat : isAllowed ? base : cols.has(`${base}_allowed`) ? `${base}_allowed` : base;
 
     const avgPrev = (t: string, col: string): [number | null, number | null] => {
-      const rows = (teamRows.get(t) ?? []).filter((r) => Number(r.week) <= wk && r[col] != null);
+      const rows = grade
+        ? grades
+            .filter((r) => String(r.Season) === season && String(r.Team) === t && Number(r.Week) <= wk && r[col] != null)
+            .sort((a, b) => Number(a.Week) - Number(b.Week))
+        : (teamRows.get(t) ?? []).filter((r) => Number(r.week) <= wk && r[col] != null);
       if (!rows.length) return [null, null];
       const vals = rows.map((r) => Number(r[col]));
       return [vals.reduce((a, b) => a + b, 0) / vals.length, vals[vals.length - 1]];
@@ -317,9 +353,9 @@ export default function TeamComparison() {
     const [tAvg, tPrev] = avgPrev(team, teamCol);
     const [oAvg, oPrev] = avgPrev(opp, oppCol);
     const tLabel = isAllowed ? `${team} (Allowed)` : team;
-    const oLabel = isAllowed ? opp : oppCol.endsWith("_allowed") ? `${opp} (Allowed)` : opp;
-    const tRank = rankOf(team, teamCol);
-    const oRank = rankOf(opp, oppCol);
+    const oLabel = grade ? opp : isAllowed ? opp : oppCol.endsWith("_allowed") ? `${opp} (Allowed)` : opp;
+    const tRank = grade ? (gradeRanks.ranks[selectedStat]?.get(team) ?? null) : rankOf(team, teamCol);
+    const oRank = grade ? (gradeRanks.ranks[selectedStat]?.get(opp) ?? null) : rankOf(opp, oppCol);
 
     const main: EChartsOption = {
       grid: { left: 5, right: 5, top: 25, bottom: 20, containLabel: true },
@@ -351,10 +387,10 @@ export default function TeamComparison() {
     return { main, rank };
   };
 
-  const trend1 = useMemo(() => trendOption(team1), [teamRows, team1, selectedStat, wk, trendYRange]);
-  const trend2 = useMemo(() => trendOption(team2), [teamRows, team2, selectedStat, wk, trendYRange]);
-  const m1 = useMemo(() => matchupOptions(team1, team2), [teamRows, ranks, team1, team2, selectedStat, wk]);
-  const m2 = useMemo(() => matchupOptions(team2, team1), [teamRows, ranks, team1, team2, selectedStat, wk]);
+  const trend1 = useMemo(() => trendOption(team1), [teamRows, grades, season, team1, selectedStat, wk, trendYRange]);
+  const trend2 = useMemo(() => trendOption(team2), [teamRows, grades, season, team2, selectedStat, wk, trendYRange]);
+  const m1 = useMemo(() => matchupOptions(team1, team2), [teamRows, ranks, grades, gradeRanks, season, team1, team2, selectedStat, wk]);
+  const m2 = useMemo(() => matchupOptions(team2, team1), [teamRows, ranks, grades, gradeRanks, season, team1, team2, selectedStat, wk]);
 
   const trend1Ref = useECharts(trend1);
   const trend2Ref = useECharts(trend2);
@@ -373,13 +409,20 @@ export default function TeamComparison() {
         <div className="absolute -top-2.5 left-3 bg-white px-1.5 text-xs font-semibold">Grades</div>
         <div className="flex gap-2">
           {([["Ovr", ovr], ["Off", off], ["Def", def]] as const).map(([l, v]) => {
-            const rank = gradeRanks.ranks[metricOf[l]]?.get(team);
+            const metric = metricOf[l];
+            const rank = gradeRanks.ranks[metric]?.get(team);
+            const active = selectedStat === metric;
             return (
-              <div key={l} className="flex-1 rounded-lg border border-slate-200 px-2 py-1.5 text-center" title={rank ? `League rank #${rank} of ${gradeRanks.nTeams} (season-to-date average)` : undefined}>
-                <div className="text-[0.7rem] text-slate-500">{l}</div>
+              <button
+                key={l}
+                onClick={() => setSelectedStat(metric)}
+                className={`flex-1 rounded-lg border px-2 py-1.5 text-center transition-colors ${active ? "border-[#002f6c] bg-[#002f6c]/5" : "border-slate-200 hover:border-[#002f6c]/50"}`}
+                title={`Click to chart ${metric} by week${rank ? ` — league rank #${rank} of ${gradeRanks.nTeams} (season-to-date average)` : ""}`}
+              >
+                <div className={`text-[0.7rem] ${active ? "font-semibold text-[#002f6c]" : "text-slate-500"}`}>{l}</div>
                 <div className="text-lg font-bold">{v}</div>
                 {rank != null && <div className="text-[10px] font-semibold text-slate-400">#{rank}</div>}
-              </div>
+              </button>
             );
           })}
         </div>
@@ -401,16 +444,16 @@ export default function TeamComparison() {
       <div className="w-full lg:sticky lg:top-[120px] lg:w-1/4 lg:self-start">
         <h2 className="mb-2 text-center text-sm font-semibold text-slate-600">{label}</h2>
         <Select label="" value={team} onChange={setTeam} options={teams.map((t) => ({ value: t, label: meta!.get(t)?.name ?? t }))} />
-        <div className="mt-3">
-          <GradesBox team={team} />
-        </div>
+        <div className="mt-3">{GradesBox({ team })}</div>
         <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
           <div className="mb-1 text-xs font-semibold text-slate-500">{title(selectedStat)} by week</div>
           <div ref={trendRef} className="h-44" />
         </div>
         <div className="mt-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
           <div className="mb-1 text-xs font-semibold text-slate-500">
-            {title(selectedStat.endsWith("_allowed") ? `${selectedStat.slice(0, -8)} allowed vs opp off` : `${selectedStat} vs opp allowed`)} — Wk{wk}
+            {isGradeStat(selectedStat)
+              ? `${selectedStat} vs opponent — Wk${wk}`
+              : `${title(selectedStat.endsWith("_allowed") ? `${selectedStat.slice(0, -8)} allowed vs opp off` : `${selectedStat} vs opp allowed`)} — Wk${wk}`}
           </div>
           <div className="flex gap-2">
             <div ref={mainRef} className="h-64 flex-[3]" />
@@ -462,9 +505,9 @@ export default function TeamComparison() {
               <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: color(team2) }} />
             </div>
           </div>
-          <Section name="Overall" stats={["points_margin", "turnover_margin", "epa_diff"]} />
-          <Section name="Offensive stats" stats={STAT_LIST} bg="rgba(255,0,0,0.025)" />
-          <Section name="Defensive stats" stats={STAT_LIST.map((s) => `${s}_allowed`)} bg="rgba(0,123,255,0.025)" />
+          {Section({ name: "Overall", stats: ["points_margin", "turnover_margin", "epa_diff"] })}
+          {Section({ name: "Offensive stats", stats: STAT_LIST, bg: "rgba(255,0,0,0.025)" })}
+          {Section({ name: "Defensive stats", stats: STAT_LIST.map((s) => `${s}_allowed`), bg: "rgba(0,123,255,0.025)" })}
           </div>
           </div>
         </div>
