@@ -129,7 +129,7 @@ export default function WeekPreviewTab({
   }, [cards]);
   const anyCompleted = modelAcc.some((m) => m.total > 0);
 
-  const { correct, missed, winCounts } = useMemo(() => {
+  const { winCounts } = useMemo(() => {
     let correct = 0;
     let missed = 0;
     const winCounts: Record<string, number> = { FH: 0, FA: 0, UH: 0, UA: 0 };
@@ -143,7 +143,6 @@ export default function WeekPreviewTab({
   }, [cards]);
 
   const total = Object.values(winCounts).reduce((a, b) => a + b, 0);
-  const accTotal = correct + missed;
   const primaryLabel = MODEL_KEYS.find(([k]) => k === primary)?.[1] ?? "";
 
   const pct = (v: number | null) => (v == null ? "—" : `${Math.round(100 * v)}%`);
@@ -175,61 +174,38 @@ export default function WeekPreviewTab({
         </FilterGroup>
       </div>
 
+      {/* One KPI row: per-model records (color = the dot color on each card's
+          strip) + predicted win-type mix. */}
       <div className="flex flex-wrap items-stretch gap-2">
-        <div className="min-w-40 rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-sm" style={{ borderTop: "3px solid #2CA25F" }} title={`Accuracy of the selected model (${primaryLabel}) on completed games this week`}>
-          <div className="text-[10px] text-slate-500">Accuracy ({primaryLabel})</div>
-          <div className="text-sm">
-            <span className="mr-2 font-bold">✓ {correct}</span>
-            <span className="mr-2 font-bold">✗ {missed}</span>
-            <span>{accTotal ? Math.round((100 * correct) / accTotal) : 0}%</span>
-          </div>
-        </div>
-        {anyCompleted && (
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-sm" style={{ borderTop: "3px solid #002f6c" }} title="Each model graded on this week's completed games">
-            <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400">This week by model</span>
-            {modelAcc.map((m) => (
-              <button
-                key={m.key}
-                onClick={() => setPrimary(m.key)}
-                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] transition-colors ${primary === m.key ? "bg-slate-100 font-bold" : "hover:bg-slate-50"}`}
-                title={`${m.label}: ${m.correct} of ${m.total} correct — click to make it the primary model`}
-              >
-                <span className="inline-block h-2 w-2 rounded-full" style={{ background: MODEL_COLORS[m.key] }} />
-                {m.label}
-                <span className="font-bold tabular-nums">{m.total ? `${m.correct}/${m.total}` : "—"}</span>
-                {m.total > 0 && <span className="text-slate-400">({Math.round((100 * m.correct) / m.total)}%)</span>}
-              </button>
-            ))}
-          </div>
-        )}
+        {anyCompleted &&
+          modelAcc.map((m) => (
+            <button
+              key={m.key}
+              onClick={() => setPrimary(m.key)}
+              className={`min-w-28 rounded-2xl border px-2.5 py-1.5 text-left shadow-sm transition-all ${primary === m.key ? "ring-2 ring-offset-1" : "hover:brightness-95"}`}
+              style={{
+                borderColor: `${MODEL_COLORS[m.key]}66`,
+                borderTop: `3px solid ${MODEL_COLORS[m.key]}`,
+                background: `${MODEL_COLORS[m.key]}14`,
+                boxShadow: `0 1px 3px ${MODEL_COLORS[m.key]}33`,
+                ...(primary === m.key ? { ["--tw-ring-color" as string]: MODEL_COLORS[m.key] } : {}),
+              }}
+              title={`${m.label}: ${m.correct} of ${m.total} correct on completed games — click to make it the primary model. Its dots on the card strips use this color.`}
+            >
+              <div className="truncate text-[10px] font-semibold" style={{ color: MODEL_COLORS[m.key] }}>{m.label}</div>
+              <div className="text-base font-bold leading-none tabular-nums text-slate-800">{m.total ? `${m.correct}/${m.total}` : "—"}</div>
+              <div className="text-[10px] text-slate-500">{m.total > 0 ? `${Math.round((100 * m.correct) / m.total)}%` : "no results yet"}</div>
+            </button>
+          ))}
         <div className="ml-auto flex flex-wrap items-center gap-2">
           {(["FH", "UA", "FA", "UH"] as const).map((code) => (
             <div key={code} className="min-w-28 rounded-2xl border bg-white px-2.5 py-1.5 shadow-sm" style={{ borderColor: `${WIN_TYPE_CODE_COLORS[code]}55`, borderTop: `3px solid ${WIN_TYPE_CODE_COLORS[code]}`, color: WIN_TYPE_CODE_COLORS[code] }} title={WIN_TYPE_CODE_LONG[code]}>
-            <div className="truncate text-[10px]">{WIN_TYPE_CODE_LONG[code]}</div>
+              <div className="truncate text-[10px]">{WIN_TYPE_CODE_LONG[code]}</div>
               <div className="text-base font-bold leading-none">{winCounts[code]}</div>
               <div className="text-[10px]">{total ? Math.round((100 * winCounts[code]) / total) : 0}%</div>
             </div>
           ))}
         </div>
-      </div>
-
-      {/* legends: model colors for the dot strips + win-type code decoder */}
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-[11px] text-slate-500">
-        <span className="font-medium uppercase tracking-wider text-slate-400">Models</span>
-        {MODEL_KEYS.map(([k, lbl]) => (
-          <span key={k} className="inline-flex items-center gap-1">
-            <span className={k === "consensus" ? "inline-block h-3 w-1 rounded-sm" : "inline-block h-2.5 w-2.5 rounded-full"} style={{ background: MODEL_COLORS[k] }} />
-            {lbl}
-          </span>
-        ))}
-        <span className="ml-auto flex flex-wrap items-center gap-x-3">
-          <span className="font-medium uppercase tracking-wider text-slate-400">Badges</span>
-          {(["FH", "FA", "UH", "UA"] as const).map((c) => (
-            <span key={c} style={{ color: WIN_TYPE_CODE_COLORS[c] }}>
-              <b>{c}</b> = {WIN_TYPE_CODE_LONG[c]}
-            </span>
-          ))}
-        </span>
       </div>
 
       <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))" }}>

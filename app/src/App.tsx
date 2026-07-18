@@ -43,6 +43,11 @@ export default function App() {
         <Suspense fallback={<Loading />}>
           <Routes>
             <Route path="/" element={<Home />} />
+            {/* Not in the navbar — reached from the Matchup Previews header link */}
+            {(() => {
+              const Guide = IMPLEMENTED["/game_analysis/models_guide"];
+              return <Route path="/game_analysis/models_guide" element={<Guide />} />;
+            })()}
             {NAV_GROUPS.flatMap((g) => g.pages).map((page) => {
               const Impl = IMPLEMENTED[page.path];
               return (

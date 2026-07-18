@@ -57,6 +57,12 @@ Per page: run old app side-by-side (`pda-ie` env), match tables/KPIs/chart serie
 
 ## Session notes (newest first)
 
+### 2026-07-17 — Session 5 (cont.): Matchup Previews polish round 2
+- **Week Preview one-row KPIs**: dropped the primary-accuracy card and both legends; the six per-model record chips are now color-coded KPI tiles (tinted background/border/shadow in each model's color — same colors as the card dot-strips, so no legend needed; active model gets a ring) + the 4 win-type chips on the same row.
+- **Matchup tab remade**: layout = verdict strip + snapshot → key stats → **Model breakdown** (6 cards, one per model: pick pill + "how it got there" visuals — market bucket/grade/blend prob bars with N, the trend-edge contribution chart, implied-vs-fair with vig, Elo rating bars + resulting p, Pythagorean expected-win% bars + log5, consensus mini-strip of all five) → **Additional stats** (modernized stat-comparison card with team-color headers + rounded rank pill, recent-form and head-to-head as styled cards with logos/W-L colors/score column). Gauges and the old Spread-Pick-Engine/Trend-Edge blocks removed (content absorbed into the breakdown).
+- **Models Guide** removed from the navbar (nav.ts); route kept via an explicit Route in App.tsx — reachable only from the Matchup Previews header link.
+- Tests 49/49, build green; verified in pane (6 tinted chips, no legends/gauges, breakdown numbers consistent: bucket 57% N=388 → blend 55%, ML fair 58%).
+
 ### 2026-07-17 — Session 5 (cont.): Matchup Previews follow-ups (5 user requests)
 1. **Week Preview per-model accuracy**: "This week by model" chip strip — each of the 6 models graded on the week's completed games (✓/total, %); clicking a chip makes that model primary. 2025 wk18: most models 10/16, Trend Edge 8/16.
 2. **New page `/game_analysis/models_guide`** (`previews/ModelsGuide.tsx`, registered in nav.ts + App.tsx, cross-linked from the Matchup Previews header): plain-language card per model (what it does, exact inputs incl. weights/constants) + a **live worked example** — pick any game and each card shows the real input values (bucket + N, grades, trend features, moneylines + vig, Elo ratings, PF/PA) and the resulting probability, all computed by the same engine code.

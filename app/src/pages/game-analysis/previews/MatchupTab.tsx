@@ -30,6 +30,51 @@ import {
 const fmtMl = (ml: number | null) => (ml == null ? "—" : ml > 0 ? `+${Math.round(ml)}` : String(Math.round(ml)));
 const pct1 = (p: number | null) => (p == null ? "—" : `${(100 * p).toFixed(1)}%`);
 
+/** Horizontal probability bar (home-side share by convention) with a 50% tick. */
+function ProbBar({ label, p, color, note }: { label: string; p: number | null; color: string; note?: string }) {
+  return (
+    <div className="flex items-center gap-2 text-[11px]">
+      <span className="w-32 shrink-0 truncate text-slate-500" title={label}>{label}</span>
+      <div className="relative h-3.5 flex-1 overflow-hidden rounded-full bg-slate-100">
+        <div className="absolute inset-y-0 left-1/2 z-10 w-px bg-slate-300" />
+        {p != null && <div className="h-full rounded-full" style={{ width: `${Math.max(0, Math.min(100, 100 * p))}%`, background: color, opacity: 0.85 }} />}
+      </div>
+      <span className="w-10 shrink-0 text-right font-bold tabular-nums">{p == null ? "—" : `${Math.round(100 * p)}%`}</span>
+      {note != null && <span className="w-20 shrink-0 truncate text-slate-400" title={note}>{note}</span>}
+    </div>
+  );
+}
+
+/** One model's breakdown card: pick header + how-it-got-there visual. */
+function ModelBlock({
+  color,
+  title,
+  pick,
+  prob,
+  children,
+}: {
+  color: string;
+  title: string;
+  pick: string | null;
+  prob: number | null;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm" style={{ borderTop: `3px solid ${color}` }}>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
+          <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: color }} />
+          {title}
+        </div>
+        <span className="rounded-full px-2.5 py-0.5 text-[11px] font-bold text-white" style={{ background: pick ? color : "#cbd5e1" }}>
+          {pick ?? "—"}{prob != null && ` · ${Math.round(100 * prob)}%`}
+        </span>
+      </div>
+      <div className="space-y-1.5">{children}</div>
+    </div>
+  );
+}
+
 export default function MatchupTab({
   schedule,
   ranks,
@@ -185,28 +230,6 @@ export default function MatchupTab({
     return { fa, fh, gA, gH, parts, pAway, pHome, pick: pAway >= pHome ? away : home };
   }, [selGame, gradesIdx, twIdx, away, home, s, wkPlayed]);
 
-  const gaugeOption = (p: number | null, title: string): EChartsOption => ({
-    series: [
-      {
-        type: "gauge",
-        min: 0,
-        max: 100,
-        progress: { show: true, width: 8 },
-        axisLine: { lineStyle: { width: 8 } },
-        axisTick: { show: false },
-        splitLine: { length: 6 },
-        axisLabel: { fontSize: 8, distance: 12 },
-        pointer: { width: 3 },
-        title: { fontSize: 11, offsetCenter: [0, "75%"] },
-        detail: { fontSize: 18, formatter: "{value}%", offsetCenter: [0, "45%"] },
-        data: [{ value: p == null ? 0 : Math.round(100 * p), name: title }],
-      },
-    ],
-  } as EChartsOption);
-
-  const gaugeLeftRef = useECharts(useMemo(() => (engine ? gaugeOption(engine.pAway, `${away} win prob`) : null), [engine, away]));
-  const gaugeRightRef = useECharts(useMemo(() => (engine ? gaugeOption(engine.pHome, `${home} win prob`) : null), [engine, home]));
-
   const edgeBarOption = useMemo<EChartsOption | null>(() => {
     if (!trendEdge) return null;
     const names = ["Grade Δ", "Last3 PM Δ", "Last3 EPA Δ", "PM slope Δ", "Last3 TO margin Δ"];
@@ -344,6 +367,23 @@ export default function MatchupTab({
   const dateTxt = selGame.gameday
     ? new Date(`${selGame.gameday}T${selGame.gametime ?? "12:00"}`).toLocaleString("en-US", { weekday: "short", month: "short", day: "2-digit", hour: "numeric", minute: "2-digit" })
     : "—";
+
+  // model-breakdown helpers
+  const pickOf = (pair: [number | null, number | null]): string | null =>
+    pair[0] != null && pair[1] != null ? (pair[0] >= pair[1] ? away : home) : null;
+  const probOf = (pair: [number | null, number | null]): number | null =>
+    pair[0] != null && pair[1] != null ? Math.max(pair[0], pair[1]) : null;
+  const mktHome: number | null = (() => {
+    if (!engine || engine.fav == null) return null;
+    const r = engine.bucketRows.find((b) => b.side === engine.fav);
+    if (r?.p == null) return null;
+    return engine.fav === "home" ? r.p : 1 - r.p;
+  })();
+  const gradeHome: number | null = (() => {
+    if (!engine || engine.lOvr == null || engine.rOvr == null) return null;
+    const pA = gradeModelProb(engine.lOvr, engine.rOvr);
+    return pA == null ? null : 1 - pA;
+  })();
 
   const gradeBox = (team: string) => {
     const [ovr, off, def] = gradesIdx.triple(team, s, wkPlayed);
@@ -484,87 +524,71 @@ export default function MatchupTab({
         </div>
       )}
 
-      {/* Spread Pick Engine */}
-      {engine && (
-        <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-3">
-          <div className="mb-1 text-sm font-bold">Spread Pick Engine</div>
-          <div className="mb-2">
-            {engine.pHome == null ? (
-              <span className="text-sm">Pick Engine: insufficient data (no spread bucket or grades).</span>
-            ) : (
-              <span className="inline-flex flex-wrap items-center gap-2 text-sm">
-                <span className="rounded-full bg-[#002f6c] px-3 py-1 font-bold text-white">Pick: {engine.pickTeam ?? "—"} · {engine.conf}% conf</span>
-                <span className="text-slate-600">
-                  Home {Math.round(100 * engine.pHome)}% vs Away {100 - Math.round(100 * engine.pHome)}%
-                  {engine.spread != null && ` · ${engine.fav === "home" ? home : away} favored by ${Math.abs(engine.spread).toFixed(1)}`}
-                </span>
-              </span>
-            )}
+      {/* Model breakdown — each model's call and HOW it got there */}
+      {bundle && engine && trendEdge && keyStats && (
+        <div>
+          <div className="mb-2 flex flex-wrap items-baseline gap-2">
+            <div className="text-sm font-bold text-slate-800">Model breakdown</div>
+            <div className="text-[11px] text-slate-400">Bars show the home-side ({home}) probability · tick = 50% · each card explains its own inputs</div>
           </div>
-          <div className="flex flex-col gap-3 lg:flex-row">
-            <div ref={gaugeLeftRef} className="h-44 flex-1" />
-            <details className="flex-1">
-              <summary className="cursor-pointer select-none text-xs font-semibold text-slate-500 hover:text-slate-800">Evidence — bucket history, grades, caveats</summary>
-              <div className="mb-2 mt-2 flex flex-wrap gap-1.5 text-[11px]">
-                {engine.fav && (
-                  <>
-                    <span className="rounded-full bg-blue-600 px-2 py-0.5 text-white">{engine.fav === "home" ? "Favorite home" : "Favorite away"}</span>
-                    <span className="rounded-full bg-amber-500 px-2 py-0.5 text-white">{engine.fav === "home" ? "Underdog away" : "Underdog home"}</span>
-                  </>
-                )}
-                {engine.bucket && <span className="rounded-full bg-cyan-600 px-2 py-0.5 text-white">Bucket: {engine.bucket}</span>}
-                <span className={`rounded-full px-2 py-0.5 text-white ${engine.nBucket >= MIN_N_BUCKET ? "bg-green-600" : "bg-slate-500"}`}>N={engine.nBucket.toLocaleString()} hist</span>
-                {engine.lOvr != null && engine.rOvr != null && (
-                  <span className="rounded-full bg-slate-800 px-2 py-0.5 text-white">Grades Δ (away-home) = {engine.lOvr - engine.rOvr >= 0 ? "+" : ""}{engine.lOvr - engine.rOvr}</span>
-                )}
-              </div>
-              {engine.risks.length > 0 && (
-                <ul className="list-disc pl-4 text-xs text-red-800">
-                  {engine.risks.map((r) => (
-                    <li key={r}>{r}</li>
-                  ))}
-                </ul>
+          <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
+            <ModelBlock color={MODEL_COLORS.blend} title="Market-calibrated" pick={pickOf(bundle.blend)} prob={probOf(bundle.blend)}>
+              <ProbBar label={`Bucket history (${engine.bucket ?? "—"})`} p={mktHome} color={MODEL_COLORS.blend} note={`N=${engine.nBucket.toLocaleString()}`} />
+              <ProbBar label={`Grade model (${engine.lOvr ?? "—"} vs ${engine.rOvr ?? "—"})`} p={gradeHome} color={MODEL_COLORS.blend} note="60/40 blend →" />
+              <ProbBar label="Blended result" p={bundle.blend[1]} color={MODEL_COLORS.blend} />
+              {(engine.nBucket < MIN_N_BUCKET || engine.risks.length > 0) && (
+                <div className="text-[10px] text-amber-700">{engine.risks.join(" ") || `Low-N bucket (N=${engine.nBucket}).`}</div>
               )}
-              {engine.bucket && (
-                <table className="mt-2 w-full border text-xs">
-                  <thead className="bg-slate-50">
-                    <tr>{["Fav side", "Hist N", "Fav win %", "Note"].map((h) => <th key={h} className="border px-2 py-1 text-left">{h}</th>)}</tr>
-                  </thead>
-                  <tbody>
-                    {engine.bucketRows.map((r) => (
-                      <tr key={r.side}>
-                        <td className="border px-2 py-1">{r.side}</td>
-                        <td className="border px-2 py-1">{r.n ?? "—"}</td>
-                        <td className="border px-2 py-1">{r.p == null ? "—" : `${(100 * r.p).toFixed(1)}%`}</td>
-                        <td className="border px-2 py-1">{r.side === "home" ? "Fav is home" : "Fav is away"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </details>
-            <div ref={gaugeRightRef} className="h-44 flex-1" />
+            </ModelBlock>
+
+            <ModelBlock color={MODEL_COLORS.trend} title="Trend Edge" pick={pickOf(bundle.trend)} prob={probOf(bundle.trend)}>
+              <div ref={edgeRef} className="h-40" />
+              <div className="text-[10px] text-slate-400">Weighted recent-form differences (away − home): grade, last-3 margin & EPA, momentum, turnovers. Hover the bars.</div>
+            </ModelBlock>
+
+            <ModelBlock color={MODEL_COLORS.ml} title="ML Fair" pick={pickOf(bundle.ml)} prob={probOf(bundle.ml)}>
+              <ProbBar label={`Implied — ${home} ${fmtMl(mlHome)}`} p={impliedProb(mlHome)} color={MODEL_COLORS.ml} note={`${away} ${fmtMl(mlAway)}`} />
+              <ProbBar label="Fair (vig removed)" p={homeFair} color={MODEL_COLORS.ml} note={overround == null ? "" : `vig ${(100 * overround).toFixed(1)}%`} />
+              <div className="text-[10px] text-slate-400">The bookmaker's own probability once its margin is stripped out.</div>
+            </ModelBlock>
+
+            <ModelBlock color={MODEL_COLORS.elo} title="Elo" pick={pickOf(bundle.elo)} prob={probOf(bundle.elo)}>
+              {([[away, keyStats.eloAway], [home, keyStats.eloHome]] as const).map(([t, e]) => (
+                <div key={t} className="flex items-center gap-2 text-[11px]">
+                  <span className="w-32 shrink-0 text-slate-500">{t} rating</span>
+                  <div className="h-3.5 flex-1 overflow-hidden rounded-full bg-slate-100">
+                    {e != null && <div className="h-full rounded-full" style={{ width: `${Math.max(4, Math.min(100, ((e - 1200) / 600) * 100))}%`, background: MODEL_COLORS.elo, opacity: t === home ? 0.85 : 0.55 }} />}
+                  </div>
+                  <span className="w-10 shrink-0 text-right font-bold tabular-nums">{e == null ? "—" : Math.round(e)}</span>
+                  <span className="w-20 shrink-0 text-slate-400">{t === home ? "+48 home" : ""}</span>
+                </div>
+              ))}
+              <ProbBar label="Resulting p(home)" p={bundle.elo[1]} color={MODEL_COLORS.elo} />
+              <div className="text-[10px] text-slate-400">Rolling power rating from every result since 2015 (1505 = average).</div>
+            </ModelBlock>
+
+            <ModelBlock color={MODEL_COLORS.pyth} title="Pythagorean" pick={pickOf(bundle.pyth)} prob={probOf(bundle.pyth)}>
+              <ProbBar label={`${away} expected win%`} p={keyStats.pythAway} color={MODEL_COLORS.pyth} />
+              <ProbBar label={`${home} expected win%`} p={keyStats.pythHome} color={MODEL_COLORS.pyth} />
+              <ProbBar label="log5 head-to-head" p={bundle.pyth[1]} color={MODEL_COLORS.pyth} />
+              <div className="text-[10px] text-slate-400">From points scored vs allowed through W{wkPlayed} — scoring margin predicts wins.</div>
+            </ModelBlock>
+
+            <ModelBlock color={MODEL_COLORS.consensus} title="Average (consensus)" pick={pickOf(bundle.consensus)} prob={probOf(bundle.consensus)}>
+              {(["blend", "trend", "ml", "elo", "pyth"] as const).map((k) => (
+                <ProbBar key={k} label={MODEL_KEYS.find(([mk]) => mk === k)?.[1] ?? k} p={bundle[k][1]} color={MODEL_COLORS[k]} />
+              ))}
+              <div className="text-[10px] text-slate-400">Equal-weight mean of the five models — historically the best calibrated.</div>
+            </ModelBlock>
           </div>
         </div>
       )}
 
-      {/* Trend Edge Predictor */}
-      {trendEdge && (
-        <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-3">
-          <div className="mb-1 text-sm font-bold">Trend Edge Predictor</div>
-          <div className="mb-1 text-sm">
-            <b>Trend Pick: {trendEdge.pick}</b>
-            {" · "}Away prob {Math.round(100 * trendEdge.pAway)}% vs Home {Math.round(100 * trendEdge.pHome)}%{" · "}
-            Confidence {Math.round(100 * Math.max(trendEdge.pAway, trendEdge.pHome))}%
-          </div>
-          <div ref={edgeRef} className="h-72" />
-        </div>
-      )}
-
-      {/* Trends + rank bar */}
-      <div className="flex flex-col gap-4 lg:flex-row">
-        <div className="flex-1">
-          <h4 className="mb-1 text-sm font-semibold">Left Team Trend ({away})</h4>
+      {/* Additional stats — stat comparison + history */}
+      <div className="mb-1 mt-2 text-sm font-bold text-slate-800">Additional stats</div>
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <div className="text-sm font-semibold text-slate-700">Stat comparison — weekly values (green dot = win, dashed = season avg)</div>
           <Select
             label=""
             value={stat}
@@ -574,72 +598,102 @@ export default function MatchupTab({
               label: v.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
             }))}
           />
-          <div ref={leftTrendRef} className="mt-2 h-44" />
         </div>
-        <div className="w-full lg:w-56">
-          <h4 className="mb-1 text-sm font-semibold">Rank Bar (selected stat)</h4>
-          {rankBar ? (
-            <div className="mt-8 flex h-8 overflow-hidden rounded">
-              <div className="grid place-items-center text-xs font-bold text-white" style={{ width: `${rankBar.w1 * 100}%`, background: meta.get(away)?.color ?? "#d62728" }}>{Math.round(rankBar.n1)}</div>
-              <div className="grid place-items-center text-xs font-bold text-white" style={{ width: `${(1 - rankBar.w1) * 100}%`, background: meta.get(home)?.color ?? "#1f77b4" }}>{Math.round(rankBar.n2)}</div>
+        <div className="flex flex-col items-stretch gap-4 lg:flex-row">
+          <div className="min-w-0 flex-1">
+            <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-slate-500">
+              <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: meta.get(away)?.color ?? "#888" }} />
+              {away}
             </div>
-          ) : (
-            <div className="mt-8 text-center text-sm text-slate-400">N/A</div>
-          )}
-        </div>
-        <div className="flex-1">
-          <h4 className="mb-1 text-sm font-semibold">Right Team Trend ({home})</h4>
-          <div ref={rightTrendRef} className="mt-9 h-44" />
+            <div ref={leftTrendRef} className="h-44" />
+          </div>
+          <div className="flex w-full flex-col justify-center lg:w-52">
+            <div className="mb-1 text-center text-[10px] font-medium uppercase tracking-wider text-slate-400">League rank — bigger side = better</div>
+            {rankBar ? (
+              <div className="flex h-7 overflow-hidden rounded-full ring-1 ring-inset ring-black/5">
+                <div className="grid place-items-center text-xs font-bold text-white" style={{ width: `${rankBar.w1 * 100}%`, background: meta.get(away)?.color ?? "#d62728" }}>#{Math.round(rankBar.n1)}</div>
+                <div className="grid place-items-center text-xs font-bold text-white" style={{ width: `${(1 - rankBar.w1) * 100}%`, background: meta.get(home)?.color ?? "#1f77b4" }}>#{Math.round(rankBar.n2)}</div>
+              </div>
+            ) : (
+              <div className="text-center text-sm text-slate-400">N/A</div>
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="mb-1 flex items-center justify-end gap-1.5 text-xs font-semibold text-slate-500">
+              {home}
+              <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: meta.get(home)?.color ?? "#888" }} />
+            </div>
+            <div ref={rightTrendRef} className="h-44" />
+          </div>
         </div>
       </div>
 
-      {/* Recent + H2H */}
-      <div className="flex flex-col gap-4 lg:flex-row">
-        <div className="flex-1">
-          <h4 className="mb-2 text-sm font-semibold">
-            Recent Form (Last 3 Games) <span className="font-normal text-slate-400">— @ before the opponent = away game</span>
-          </h4>
-          {[away, home].map((t) => (
-            <table key={t} className="mb-3 w-full border text-xs">
-              <thead className="bg-slate-50">
-                <tr>{["Wk", "Opp", "W/L", "Pts", "Yds"].map((h) => <th key={h} className="border px-2 py-1 text-left">{h}</th>)}</tr>
-              </thead>
-              <tbody>
-                {recent(t).map((r) => (
-                  <tr key={`${t}${r.week}`}>
-                    <td className="border px-2 py-1">{r.week}</td>
-                    <td className="border px-2 py-1">{r.opp}</td>
-                    <td className="border px-2 py-1">{r.wl}</td>
-                    <td className="border px-2 py-1">{r.pts}</td>
-                    <td className="border px-2 py-1">{r.yds}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ))}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="mb-2 text-sm font-semibold text-slate-700">
+            Recent form — last 3 games <span className="font-normal text-slate-400">(@ = away game)</span>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {[away, home].map((t) => (
+              <div key={t}>
+                <div className="mb-1 flex items-center gap-1.5 text-xs font-bold" style={{ color: meta.get(t)?.color }}>
+                  {meta.get(t)?.logo && <img src={meta.get(t)!.logo} alt={t} className="h-5" />}
+                  {t}
+                </div>
+                <table className="w-full text-xs">
+                  <thead className="bg-slate-50 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                    <tr>{["Wk", "Opp", "W/L", "Pts", "Yds"].map((h) => <th key={h} className="px-2 py-1.5">{h}</th>)}</tr>
+                  </thead>
+                  <tbody>
+                    {recent(t).map((r) => (
+                      <tr key={`${t}${r.week}`} className="border-t border-slate-100">
+                        <td className="px-2 py-1.5 text-slate-500">{r.week}</td>
+                        <td className="px-2 py-1.5 font-medium">{r.opp}</td>
+                        <td className={`px-2 py-1.5 font-bold ${r.wl === "W" ? "text-[#3C9A5F]" : "text-[#C8102E]"}`}>{r.wl}</td>
+                        <td className="px-2 py-1.5 tabular-nums">{r.pts}</td>
+                        <td className="px-2 py-1.5 tabular-nums">{r.yds}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ))}
+          </div>
         </div>
-        <div className="flex-[1.2]">
-          <h4 className="mb-2 text-sm font-semibold">Head-to-Head <span className="font-normal text-slate-400">(since 2015 — dataset start)</span></h4>
+
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+            <div className="text-sm font-semibold text-slate-700">
+              Head-to-head <span className="font-normal text-slate-400">(since 2015 — dataset start)</span>
+            </div>
+            {h2h && <div className="text-[11px] text-slate-400">First {h2h.first} · last {h2h.last}</div>}
+          </div>
           {h2h && (
             <>
-              <div className="mb-2 text-xs text-slate-700">
-                <div className="font-bold">{away} vs {home}</div>
-                <div>Since 2015: {away} {h2h.winsA} – {h2h.winsB} {home}{h2h.ties ? ` (Ties: ${h2h.ties})` : ""}</div>
-                <div>First meeting: {h2h.first} | Most recent: {h2h.last}</div>
+              <div className="mb-3 flex items-center justify-center gap-3">
+                {([[away, h2h.winsA], [home, h2h.winsB]] as const).map(([t, wcount], i) => (
+                  <div key={t} className={`flex items-center gap-2 ${i === 1 ? "flex-row-reverse" : ""}`}>
+                    {meta.get(t)?.logo && <img src={meta.get(t)!.logo} alt={t} className="h-8" />}
+                    <span className="text-2xl font-extrabold tabular-nums" style={{ color: meta.get(t)?.color }}>{wcount}</span>
+                    {i === 0 && <span className="text-sm font-light text-slate-400">–</span>}
+                  </div>
+                ))}
+                {h2h.ties > 0 && <span className="text-xs text-slate-400">({h2h.ties} ties)</span>}
               </div>
-              <table className="w-full border text-xs">
-                <thead className="bg-slate-50">
-                  <tr>{["Season", "Week", "Date", "Away", "Home", "Winner"].map((h) => <th key={h} className="border px-2 py-1 text-left">{h}</th>)}</tr>
+              <table className="w-full text-xs">
+                <thead className="bg-slate-50 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                  <tr>{["Season", "Wk", "Date", "Score", "Winner"].map((h) => <th key={h} className="px-2 py-1.5">{h}</th>)}</tr>
                 </thead>
                 <tbody>
                   {h2h.rows.map(({ g, winner, date }) => (
-                    <tr key={String(g.game_id)}>
-                      <td className="border px-2 py-1">{String(g.season)}</td>
-                      <td className="border px-2 py-1">{String(g.week)}</td>
-                      <td className="border px-2 py-1">{date}</td>
-                      <td className="border px-2 py-1">{String(g.away_team)} {g.away_score == null ? "" : Math.round(Number(g.away_score))}</td>
-                      <td className="border px-2 py-1">{String(g.home_team)} {g.home_score == null ? "" : Math.round(Number(g.home_score))}</td>
-                      <td className="border px-2 py-1">{winner ?? ""}</td>
+                    <tr key={String(g.game_id)} className="border-t border-slate-100">
+                      <td className="px-2 py-1.5 text-slate-500">{String(g.season)}</td>
+                      <td className="px-2 py-1.5 text-slate-500">{String(g.week)}</td>
+                      <td className="px-2 py-1.5 text-slate-500">{date}</td>
+                      <td className="px-2 py-1.5 tabular-nums">
+                        {String(g.away_team)} {g.away_score == null ? "" : Math.round(Number(g.away_score))} @ {String(g.home_team)} {g.home_score == null ? "" : Math.round(Number(g.home_score))}
+                      </td>
+                      <td className="px-2 py-1.5 font-bold" style={{ color: winner && winner !== "TIE" ? meta.get(winner)?.color : undefined }}>{winner ?? ""}</td>
                     </tr>
                   ))}
                 </tbody>
