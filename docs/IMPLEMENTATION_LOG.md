@@ -57,6 +57,14 @@ Per page: run old app side-by-side (`pda-ie` env), match tables/KPIs/chart serie
 
 ## Session notes (newest first)
 
+### 2026-07-17 — Session 5 (cont.): Matchup Previews follow-ups (5 user requests)
+1. **Week Preview per-model accuracy**: "This week by model" chip strip — each of the 6 models graded on the week's completed games (✓/total, %); clicking a chip makes that model primary. 2025 wk18: most models 10/16, Trend Edge 8/16.
+2. **New page `/game_analysis/models_guide`** (`previews/ModelsGuide.tsx`, registered in nav.ts + App.tsx, cross-linked from the Matchup Previews header): plain-language card per model (what it does, exact inputs incl. weights/constants) + a **live worked example** — pick any game and each card shows the real input values (bucket + N, grades, trend features, moneylines + vig, Elo ratings, PF/PA) and the resulting probability, all computed by the same engine code.
+3. **Matchup tab decision card**: "Key stats — season to date (thru W{n-1})" — 6 side-by-side stats (points, allowed, yards, yards allowed, EPA diff, TO margin) with direction-adjusted league ranks and bold on the better side, plus each side's Elo rating and Pythagorean expected win% (the model inputs). Together with the verdict strip + engines + trends + H2H the tab now holds everything needed to call a winner.
+4. **Filter grouping**: new `FilterGroup` fieldset component in `components/ui.tsx` (labeled legend, e.g. "Slate — which games" / "Model — which pick counts" / "Display — card order"); applied across all three tabs + the guide. Week Preview's Accuracy KPI now names the model it grades.
+5. **Tab navigation**: the lost pill bar → three prominent card-tabs (icon + name + one-line description, selected = filled navy), full-width row under the title.
+- Tests 49/49, build green; verified in pane (per-model strip values, key-stats card matches replicas — Elo 1399/1473, Pyth 38/45% — guide worked example consistent with verified bucket N=388).
+
 ### 2026-07-17 — Session 5 (cont.): Matchup Previews — audit §7 + model fixes + Elo & Pythagorean
 - **New models** (user-approved; NOT ports — new analytics):
   - `lib/logic/elo.ts`: 538-style Elo (init 1505, K=20, HFA +48, MOV multiplier, ⅓ season regression, SD/OAK/STL alias carry-over). Pre-game ratings per game_id — no leakage. Verified exactly vs an independent pandas replica (CAR@TB 2025 wk18 pHome 0.6688 = app's 67%; final top-5 sane, SEA #1 = the SB winner).

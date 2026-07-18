@@ -13,6 +13,7 @@ const IMPLEMENTED: Record<string, LazyExoticComponent<ComponentType>> = {
   "/game_analysis/team_comparison": lazy(() => import("./pages/game-analysis/TeamComparison")),
   "/game_analysis/scorecards_teams": lazy(() => import("./pages/game-analysis/Scorecards")),
   "/game_analysis/matchup_previews": lazy(() => import("./pages/game-analysis/previews/MatchupPreviews")),
+  "/game_analysis/models_guide": lazy(() => import("./pages/game-analysis/previews/ModelsGuide")),
   "/player_analysis/prop_bets_players": lazy(() => import("./pages/player-analysis/PropBets")),
   "/player_analysis/build_parlay": lazy(() => import("./pages/player-analysis/ParlayBuilder")),
   "/player_analysis/player_team_stats": lazy(() => import("./pages/player-analysis/PlayerTeamStats")),

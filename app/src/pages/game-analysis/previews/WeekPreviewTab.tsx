@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import type { Row } from "../../../lib/data/loader";
 import type { TeamMeta } from "../../../lib/team/meta";
 import { Select } from "../../../components/filters/Select";
+import { FilterGroup } from "../../../components/ui";
 import {
   MODEL_KEYS,
   MODEL_COLORS,
@@ -109,6 +110,25 @@ export default function WeekPreviewTab({
     return rows;
   }, [reg, sel, selWeek, primary, sortMode, hist, gradesIdx, twIdx, eloIdx]);
 
+  // Per-model accuracy on this week's completed games (request #1): how did
+  // EACH model do, not just the primary one.
+  const modelAcc = useMemo(() => {
+    return MODEL_KEYS.map(([k, lbl]) => {
+      let c = 0;
+      let n = 0;
+      for (const r of cards) {
+        const actual = resultWinner(r.g);
+        if (!actual) continue;
+        const [pA, pH] = r.bundle[k];
+        if (pA == null || pH == null) continue;
+        n++;
+        if ((pA >= pH ? "away" : "home") === actual) c++;
+      }
+      return { key: k, label: lbl, correct: c, total: n };
+    });
+  }, [cards]);
+  const anyCompleted = modelAcc.some((m) => m.total > 0);
+
   const { correct, missed, winCounts } = useMemo(() => {
     let correct = 0;
     let missed = 0;
@@ -130,42 +150,62 @@ export default function WeekPreviewTab({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-end gap-4">
-        <Select label="Season" value={sel} onChange={setSeason} options={seasons.map((s) => ({ value: String(s), label: String(s) }))} />
-        <Select label="Week" value={selWeek} onChange={setWeek} options={weeks.map((w) => ({ value: String(w), label: `Week ${w}` }))} />
-        <div className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
-          Primary metric
-          <div className="flex gap-2">
+      <div className="flex flex-wrap items-stretch gap-3">
+        <FilterGroup label="Slate — which games">
+          <Select label="Season" value={sel} onChange={setSeason} options={seasons.map((s) => ({ value: String(s), label: String(s) }))} />
+          <Select label="Week" value={selWeek} onChange={setWeek} options={weeks.map((w) => ({ value: String(w), label: `Week ${w}` }))} />
+        </FilterGroup>
+        <FilterGroup label="Model — which pick counts">
+          <div className="flex flex-wrap gap-2">
             {MODEL_KEYS.map(([k, lbl]) => (
-              <button key={k} onClick={() => setPrimary(k)} className={`rounded-full px-3 py-1.5 text-sm normal-case tracking-normal ${primary === k ? "bg-[#002f6c] text-white shadow-sm" : "bg-slate-100 text-slate-600 hover:text-slate-900"}`}>
+              <button key={k} onClick={() => setPrimary(k)} className={`rounded-full px-3 py-1.5 text-sm ${primary === k ? "bg-[#002f6c] text-white shadow-sm" : "bg-slate-100 text-slate-600 hover:text-slate-900"}`}>
                 {lbl}
               </button>
             ))}
           </div>
-        </div>
-        <div className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
-          Sort
+        </FilterGroup>
+        <FilterGroup label="Display — card order">
           <div className="flex gap-2">
             {([["time", "Time"], ["confidence", "Highest prob"], ["disagree", "Disagreement"]] as const).map(([m, lbl]) => (
-              <button key={m} onClick={() => setSortMode(m)} title={m === "disagree" ? "Games where the models disagree the most first — the value-hunting view" : undefined} className={`rounded-full px-3 py-1.5 text-sm normal-case tracking-normal ${sortMode === m ? "bg-[#002f6c] text-white shadow-sm" : "bg-slate-100 text-slate-600 hover:text-slate-900"}`}>
+              <button key={m} onClick={() => setSortMode(m)} title={m === "disagree" ? "Games where the models disagree the most first — the value-hunting view" : undefined} className={`rounded-full px-3 py-1.5 text-sm ${sortMode === m ? "bg-[#002f6c] text-white shadow-sm" : "bg-slate-100 text-slate-600 hover:text-slate-900"}`}>
                 {lbl}
               </button>
             ))}
           </div>
-        </div>
+        </FilterGroup>
+      </div>
 
-        <div className="ml-auto flex flex-wrap items-center gap-2">
-          <div className="min-w-40 rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-sm" style={{ borderTop: "3px solid #2CA25F" }} title="Accuracy (completed games only)">
-            <div className="text-[10px] text-slate-500">Accuracy</div>
-            <div className="text-sm">
-              <span className="mr-2 font-bold">✓ {correct}</span>
-              <span className="mr-2 font-bold">✗ {missed}</span>
-              <span>{accTotal ? Math.round((100 * correct) / accTotal) : 0}%</span>
-            </div>
+      <div className="flex flex-wrap items-stretch gap-2">
+        <div className="min-w-40 rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-sm" style={{ borderTop: "3px solid #2CA25F" }} title={`Accuracy of the selected model (${primaryLabel}) on completed games this week`}>
+          <div className="text-[10px] text-slate-500">Accuracy ({primaryLabel})</div>
+          <div className="text-sm">
+            <span className="mr-2 font-bold">✓ {correct}</span>
+            <span className="mr-2 font-bold">✗ {missed}</span>
+            <span>{accTotal ? Math.round((100 * correct) / accTotal) : 0}%</span>
           </div>
+        </div>
+        {anyCompleted && (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-sm" style={{ borderTop: "3px solid #002f6c" }} title="Each model graded on this week's completed games">
+            <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400">This week by model</span>
+            {modelAcc.map((m) => (
+              <button
+                key={m.key}
+                onClick={() => setPrimary(m.key)}
+                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] transition-colors ${primary === m.key ? "bg-slate-100 font-bold" : "hover:bg-slate-50"}`}
+                title={`${m.label}: ${m.correct} of ${m.total} correct — click to make it the primary model`}
+              >
+                <span className="inline-block h-2 w-2 rounded-full" style={{ background: MODEL_COLORS[m.key] }} />
+                {m.label}
+                <span className="font-bold tabular-nums">{m.total ? `${m.correct}/${m.total}` : "—"}</span>
+                {m.total > 0 && <span className="text-slate-400">({Math.round((100 * m.correct) / m.total)}%)</span>}
+              </button>
+            ))}
+          </div>
+        )}
+        <div className="ml-auto flex flex-wrap items-center gap-2">
           {(["FH", "UA", "FA", "UH"] as const).map((code) => (
             <div key={code} className="min-w-28 rounded-2xl border bg-white px-2.5 py-1.5 shadow-sm" style={{ borderColor: `${WIN_TYPE_CODE_COLORS[code]}55`, borderTop: `3px solid ${WIN_TYPE_CODE_COLORS[code]}`, color: WIN_TYPE_CODE_COLORS[code] }} title={WIN_TYPE_CODE_LONG[code]}>
-              <div className="truncate text-[10px]">{WIN_TYPE_CODE_LONG[code]}</div>
+            <div className="truncate text-[10px]">{WIN_TYPE_CODE_LONG[code]}</div>
               <div className="text-base font-bold leading-none">{winCounts[code]}</div>
               <div className="text-[10px]">{total ? Math.round((100 * winCounts[code]) / total) : 0}%</div>
             </div>

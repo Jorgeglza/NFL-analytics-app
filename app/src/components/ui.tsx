@@ -109,6 +109,17 @@ export function Chip({ color = NAVY, children, title }: { color?: string; childr
   );
 }
 
+/** Labeled cluster of related filters — keeps mixed control bars scannable
+ *  (which controls select the data vs the model vs the presentation). */
+export function FilterGroup({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <fieldset className="relative rounded-xl border border-slate-200 bg-white/60 px-3 pb-2.5 pt-3">
+      <legend className="px-1.5 text-[10px] font-bold uppercase tracking-wider text-[#002f6c]/70">{label}</legend>
+      <div className="flex flex-wrap items-end gap-3">{children}</div>
+    </fieldset>
+  );
+}
+
 /** Consistent table classes. */
 export const tableWrapCls = "overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm";
 export const theadCls = "bg-slate-50 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400";

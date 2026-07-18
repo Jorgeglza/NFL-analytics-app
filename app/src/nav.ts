@@ -51,6 +51,12 @@ export const NAV_GROUPS: NavGroup[] = [
         description: "Game previews with spread pick engine, trend edges and model accuracy",
         implemented: true,
       },
+      {
+        label: "Models Guide",
+        path: "/game_analysis/models_guide",
+        description: "How each prediction model works — inputs, formulas and live worked examples",
+        implemented: true,
+      },
     ],
   },
   {

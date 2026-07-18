@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import type { Row } from "../../../lib/data/loader";
 import type { TeamMeta } from "../../../lib/team/meta";
+import { FilterGroup } from "../../../components/ui";
 import {
   MODEL_KEYS,
   type MetricKey,
@@ -212,51 +213,51 @@ export default function ModelOverviewTab({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-end gap-4">
-        <div className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
-          Group by
-          <div className="flex gap-2">
-            {(["season", "week"] as const).map((g) => (
-              <button key={g} onClick={() => setGrouping(g)} className={`rounded-full px-3 py-1.5 text-sm normal-case tracking-normal ${grouping === g ? "bg-[#002f6c] text-white shadow-sm" : "bg-slate-100 text-slate-600 hover:text-slate-900"}`}>
-                {g === "season" ? "Season" : "Week #"}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
-          Primary metric
-          <div className="flex gap-2">
+      <div className="flex flex-wrap items-stretch gap-3">
+        <FilterGroup label="Model — which picks are graded">
+          <div className="flex flex-wrap gap-2">
             {MODEL_KEYS.map(([k, lbl]) => (
-              <button key={k} onClick={() => setPrimary(k)} className={`rounded-full px-3 py-1.5 text-sm normal-case tracking-normal ${primary === k ? "bg-[#002f6c] text-white shadow-sm" : "bg-slate-100 text-slate-600 hover:text-slate-900"}`}>
+              <button key={k} onClick={() => setPrimary(k)} className={`rounded-full px-3 py-1.5 text-sm ${primary === k ? "bg-[#002f6c] text-white shadow-sm" : "bg-slate-100 text-slate-600 hover:text-slate-900"}`}>
                 {lbl}
               </button>
             ))}
           </div>
-        </div>
-        <div className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
-          Order columns by
-          <div className="flex gap-2">
-            {([["time", "Kickoff time"], ["rank", "Confidence"]] as const).map(([v, lbl]) => (
-              <button key={v} onClick={() => setOrder(v)} className={`rounded-full px-3 py-1.5 text-sm normal-case tracking-normal ${order === v ? "bg-[#002f6c] text-white shadow-sm" : "bg-slate-100 text-slate-600 hover:text-slate-900"}`}>
-                {lbl}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
-          Filters
+        </FilterGroup>
+        <FilterGroup label="Games — which are included">
           <div className="flex gap-2">
             {([["", "All"], ["upcoming", "Upcoming only"], ["completed", "Completed only"]] as const).map(([v, lbl]) => (
-              <button key={v} onClick={() => setFilterMode(v)} className={`rounded-full px-3 py-1.5 text-sm normal-case tracking-normal ${filterMode === v ? "bg-[#002f6c] text-white shadow-sm" : "bg-slate-100 text-slate-600 hover:text-slate-900"}`}>
+              <button key={v} onClick={() => setFilterMode(v)} className={`rounded-full px-3 py-1.5 text-sm ${filterMode === v ? "bg-[#002f6c] text-white shadow-sm" : "bg-slate-100 text-slate-600 hover:text-slate-900"}`}>
                 {lbl}
               </button>
             ))}
           </div>
-        </div>
-        <label className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
-          Min confidence: {Math.round(minConf * 100)}%
-          <input type="range" min={0.5} max={1} step={0.01} value={minConf} onChange={(e) => setMinConf(Number(e.target.value))} className="w-56" />
-        </label>
+          <label className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
+            Min confidence: {Math.round(minConf * 100)}%
+            <input type="range" min={0.5} max={1} step={0.01} value={minConf} onChange={(e) => setMinConf(Number(e.target.value))} className="w-48" />
+          </label>
+        </FilterGroup>
+        <FilterGroup label="Layout — how the grid reads">
+          <div className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
+            Group by
+            <div className="flex gap-2">
+              {(["season", "week"] as const).map((g) => (
+                <button key={g} onClick={() => setGrouping(g)} className={`rounded-full px-3 py-1.5 text-sm normal-case tracking-normal ${grouping === g ? "bg-[#002f6c] text-white shadow-sm" : "bg-slate-100 text-slate-600 hover:text-slate-900"}`}>
+                  {g === "season" ? "Season" : "Week #"}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
+            Column order
+            <div className="flex gap-2">
+              {([["time", "Kickoff time"], ["rank", "Confidence"]] as const).map(([v, lbl]) => (
+                <button key={v} onClick={() => setOrder(v)} className={`rounded-full px-3 py-1.5 text-sm normal-case tracking-normal ${order === v ? "bg-[#002f6c] text-white shadow-sm" : "bg-slate-100 text-slate-600 hover:text-slate-900"}`}>
+                  {lbl}
+                </button>
+              ))}
+            </div>
+          </div>
+        </FilterGroup>
       </div>
 
       {/* Accuracy by confidence — the tab's core answer */}

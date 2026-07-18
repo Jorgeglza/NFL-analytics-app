@@ -5,6 +5,8 @@ import type { EChartsOption } from "echarts";
 import type { Row } from "../../../lib/data/loader";
 import type { TeamMeta } from "../../../lib/team/meta";
 import { Select } from "../../../components/filters/Select";
+import { FilterGroup } from "../../../components/ui";
+import { pythWinPct } from "../../../lib/logic/pythagorean";
 import { useECharts } from "../../../components/charts/useECharts";
 import { gradeModelProb, blendProbs, MIN_N_BUCKET } from "../../../lib/logic/probBlend";
 import { edgeComposite, EDGE_WEIGHTS } from "../../../lib/logic/edgeComposite";
@@ -130,6 +132,45 @@ export default function MatchupTab({
     () => (selGame ? probBundle(selGame, s, w, hist, gradesIdx, twIdx, eloIdx) : null),
     [selGame, s, w, hist, gradesIdx, twIdx, eloIdx],
   );
+
+  // ---- key stats for the decision card (season-to-date thru week-1) ----
+  const keyStats = useMemo(() => {
+    if (!selGame) return null;
+    const avgOf = (team: string, col: string): number | null => {
+      const rows = twIdx.rowsFor(team, s).filter((r) => Number(r.week) <= wkPlayed && r[col] != null);
+      if (!rows.length) return null;
+      return rows.reduce((sm, r) => sm + Number(r[col]), 0) / rows.length;
+    };
+    const rankRows = ranks.get(s) ?? [];
+    const rankOf = (team: string, col: string): number | null => {
+      const v = rankRows.find((r) => String(r.team) === team && Number(r.week) === wkPlayed)?.[`${col}_rank`];
+      return v == null ? null : Math.round(Number(v));
+    };
+    const defs: [string, string, boolean][] = [
+      // [label, column, higherIsBetter]
+      ["Points/gm", "points", true],
+      ["Points allowed/gm", "points_allowed", false],
+      ["Total yards/gm", "total_yards", true],
+      ["Yards allowed/gm", "total_yards_allowed", false],
+      ["EPA diff/gm", "epa_diff", true],
+      ["Turnover margin/gm", "turnover_margin", true],
+    ];
+    const rows = defs.map(([label, col, hib]) => {
+      const a = avgOf(away, col);
+      const h = avgOf(home, col);
+      const better: "away" | "home" | null =
+        a == null || h == null || a === h ? null : (hib ? a > h : a < h) ? "away" : "home";
+      return { label, a, h, ra: rankOf(away, col), rh: rankOf(home, col), better };
+    });
+    // model inputs: elo ratings + pythagorean expectation
+    const eloE = eloIdx.get(String(selGame.game_id));
+    const pythExp = (team: string): number | null => {
+      const tw = twIdx.rowsFor(team, s).filter((r) => Number(r.week) <= wkPlayed && r.points != null && r.points_allowed != null);
+      if (!tw.length) return null;
+      return pythWinPct(tw.reduce((sm, r) => sm + Number(r.points), 0), tw.reduce((sm, r) => sm + Number(r.points_allowed), 0));
+    };
+    return { rows, eloAway: eloE?.eloAway ?? null, eloHome: eloE?.eloHome ?? null, pythAway: pythExp(away), pythHome: pythExp(home) };
+  }, [selGame, twIdx, ranks, eloIdx, away, home, s, wkPlayed]);
 
   // ---- trend edge ----
   const trendEdge = useMemo(() => {
@@ -323,11 +364,11 @@ export default function MatchupTab({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-end gap-4">
+      <FilterGroup label="Game — what to analyze">
         <Select label="Season" value={sel} onChange={setSeason} options={seasons.map((x) => ({ value: String(x), label: String(x) }))} />
         <Select label="Week" value={selWeek} onChange={setWeek} options={weeks.map((x) => ({ value: String(x), label: `Week ${x}` }))} />
         <Select label="Game" value={String(selGame.game_id)} onChange={setGameId} options={games.map((g) => ({ value: String(g.game_id), label: `${g.away_team} @ ${g.home_team}` }))} />
-      </div>
+      </FilterGroup>
 
       {/* Model verdict — every model's call for this game, conclusion first */}
       {bundle && (
@@ -399,6 +440,49 @@ export default function MatchupTab({
           </div>
         </div>
       </div>
+
+      {/* Key stats — what actually feeds the models, side by side */}
+      {keyStats && (
+        <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+          <div className="mb-2 flex flex-wrap items-baseline gap-2">
+            <div className="text-sm font-bold">Key stats — season to date (thru W{wkPlayed})</div>
+            <div className="text-[11px] text-slate-400">Bold = better side · #N = league rank (direction-adjusted, #1 best)</div>
+          </div>
+          <div className="grid gap-x-6 gap-y-1.5 sm:grid-cols-2">
+            {keyStats.rows.map((r) => (
+              <div key={r.label} className="flex items-center gap-2 text-sm">
+                <span className={`w-20 text-right tabular-nums ${r.better === "away" ? "font-bold text-slate-900" : "text-slate-500"}`}>
+                  {r.a == null ? "—" : r.a.toFixed(1)}
+                  {r.ra != null && <span className="ml-1 text-[10px] font-semibold text-slate-400">#{r.ra}</span>}
+                </span>
+                <span className="flex-1 text-center text-xs font-medium text-slate-500">{r.label}</span>
+                <span className={`w-20 tabular-nums ${r.better === "home" ? "font-bold text-slate-900" : "text-slate-500"}`}>
+                  {r.rh != null && <span className="mr-1 text-[10px] font-semibold text-slate-400">#{r.rh}</span>}
+                  {r.h == null ? "—" : r.h.toFixed(1)}
+                </span>
+              </div>
+            ))}
+            <div className="flex items-center gap-2 text-sm" title="Pre-game Elo power rating (1505 = league average). Feeds the Elo model.">
+              <span className={`w-20 text-right tabular-nums ${keyStats.eloAway != null && keyStats.eloHome != null && keyStats.eloAway > keyStats.eloHome ? "font-bold" : "text-slate-500"}`}>
+                {keyStats.eloAway == null ? "—" : Math.round(keyStats.eloAway)}
+              </span>
+              <span className="flex-1 text-center text-xs font-medium text-slate-500">Elo rating</span>
+              <span className={`w-20 tabular-nums ${keyStats.eloAway != null && keyStats.eloHome != null && keyStats.eloHome > keyStats.eloAway ? "font-bold" : "text-slate-500"}`}>
+                {keyStats.eloHome == null ? "—" : Math.round(keyStats.eloHome)}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 text-sm" title="Pythagorean expected win% from points scored/allowed. Feeds the Pythagorean model.">
+              <span className={`w-20 text-right tabular-nums ${keyStats.pythAway != null && keyStats.pythHome != null && keyStats.pythAway > keyStats.pythHome ? "font-bold" : "text-slate-500"}`}>
+                {keyStats.pythAway == null ? "—" : `${Math.round(100 * keyStats.pythAway)}%`}
+              </span>
+              <span className="flex-1 text-center text-xs font-medium text-slate-500">Pyth. expected win%</span>
+              <span className={`w-20 tabular-nums ${keyStats.pythAway != null && keyStats.pythHome != null && keyStats.pythHome > keyStats.pythAway ? "font-bold" : "text-slate-500"}`}>
+                {keyStats.pythHome == null ? "—" : `${Math.round(100 * keyStats.pythHome)}%`}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Spread Pick Engine */}
       {engine && (

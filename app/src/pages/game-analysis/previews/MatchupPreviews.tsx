@@ -10,8 +10,12 @@ import WeekPreviewTab from "./WeekPreviewTab";
 import MatchupTab from "./MatchupTab";
 import ModelOverviewTab from "./ModelOverviewTab";
 
-const TABS = ["Week Preview", "Matchup", "Model Overview"] as const;
-type Tab = (typeof TABS)[number];
+const TABS = [
+  ["Week Preview", "🗓️", "This week's slate — all models per game"],
+  ["Matchup", "⚔️", "One game, all the evidence"],
+  ["Model Overview", "🎯", "Historical accuracy of every model"],
+] as const;
+type Tab = (typeof TABS)[number][0];
 
 export default function MatchupPreviews() {
   const [tab, setTab] = useState<Tab>("Week Preview");
@@ -52,13 +56,28 @@ export default function MatchupPreviews() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-4">
         <h1 className="mr-auto flex items-center gap-2.5 text-2xl font-extrabold tracking-tight text-[#002f6c]"><span className="h-6 w-1.5 rounded-full bg-gradient-to-b from-[#002f6c] to-[#164a9c]" />Matchup Previews</h1>
-        <div className="flex rounded-full border border-slate-200 bg-slate-100 p-0.5">
-          {TABS.map((t) => (
-            <button key={t} onClick={() => setTab(t)} className={`rounded-full px-4 py-1.5 text-sm normal-case tracking-normal font-medium ${tab === t ? "bg-[#002f6c] text-white shadow-sm" : "text-slate-600 hover:text-slate-900"}`}>
+        <a href="#/game_analysis/models_guide" className="rounded-full border border-[#002f6c]/25 px-3 py-1.5 text-xs font-semibold text-[#002f6c] transition-colors hover:bg-[#002f6c]/5">
+          📖 How the models work →
+        </a>
+      </div>
+
+      {/* Prominent section tabs — cards, not a lost pill bar */}
+      <div className="grid gap-2 sm:grid-cols-3">
+        {TABS.map(([t, icon, desc]) => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            className={`rounded-2xl border px-4 py-2.5 text-left shadow-sm transition-all ${
+              tab === t ? "border-[#002f6c] bg-[#002f6c] text-white" : "border-slate-200 bg-white text-slate-700 hover:border-[#002f6c]/40"
+            }`}
+          >
+            <div className="flex items-center gap-2 text-sm font-bold">
+              <span>{icon}</span>
               {t}
-            </button>
-          ))}
-        </div>
+            </div>
+            <div className={`mt-0.5 text-[11px] ${tab === t ? "text-white/75" : "text-slate-400"}`}>{desc}</div>
+          </button>
+        ))}
       </div>
 
       {loading ? (
