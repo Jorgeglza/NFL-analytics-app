@@ -32,17 +32,23 @@ const DEFENSE_KW = [
   "hurries", "stops", "mtkl",
 ];
 
-// Stats actually offered at sportsbooks, listed first in the picker (UX audit §8).
-const PROP_MARKET_STATS: Record<"offense" | "defense", string[]> = {
+// Stats actually offered at sportsbooks, listed first in the picker (UX audit §8),
+// sectioned by play type.
+const PROP_MARKET_SECTIONS: Record<"offense" | "defense", { label: string; stats: string[] }[]> = {
   offense: [
-    "passing_yards", "passing_tds", "completions", "attempts", "interceptions",
-    "rushing_yards", "rushing_tds", "carries",
-    "receiving_yards", "receptions", "targets", "receiving_tds",
-    "fantasy_points", "fantasy_points_ppr",
+    { label: "Passing", stats: ["passing_yards", "passing_tds", "completions", "attempts", "interceptions"] },
+    { label: "Rushing", stats: ["rushing_yards", "rushing_tds", "carries"] },
+    { label: "Receiving", stats: ["receiving_yards", "receptions", "targets", "receiving_tds"] },
+    { label: "Fantasy", stats: ["fantasy_points", "fantasy_points_ppr"] },
   ],
   defense: [
-    "def_sacks", "def_tackles_solo", "def_tackle_assists", "def_tackles_for_loss",
-    "def_interceptions", "def_pass_defended", "def_qb_hits", "def_fumbles_forced",
+    {
+      label: "Defense",
+      stats: [
+        "def_sacks", "def_tackles_solo", "def_tackle_assists", "def_tackles_for_loss",
+        "def_interceptions", "def_pass_defended", "def_qb_hits", "def_fumbles_forced",
+      ],
+    },
   ],
 };
 
@@ -114,11 +120,14 @@ export default function PropBets() {
   const selStat = sideCols.includes(stat) ? stat : sideCols.includes("passing_yards") ? "passing_yards" : sideCols[0] ?? "";
 
   const statGroups = useMemo(() => {
-    const market = PROP_MARKET_STATS[side].filter((c) => sideCols.includes(c));
-    const marketSet = new Set(market);
-    const advanced = sideCols.filter((c) => !marketSet.has(c)).sort();
+    const sections = PROP_MARKET_SECTIONS[side].map((s) => ({
+      label: s.label,
+      options: s.stats.filter((c) => sideCols.includes(c)).map((c) => ({ value: c, label: statLabel(c) })),
+    }));
+    const inSection = new Set(sections.flatMap((s) => s.options.map((o) => o.value)));
+    const advanced = sideCols.filter((c) => !inSection.has(c)).sort();
     return [
-      { label: "Prop markets", options: market.map((c) => ({ value: c, label: statLabel(c) })) },
+      ...sections,
       { label: "Advanced / other", options: advanced.map((c) => ({ value: c, label: statLabel(c) })) },
     ];
   }, [sideCols, side]);
