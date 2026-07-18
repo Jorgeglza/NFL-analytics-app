@@ -57,6 +57,15 @@ Per page: run old app side-by-side (`pda-ie` env), match tables/KPIs/chart serie
 
 ## Session notes (newest first)
 
+### 2026-07-17 — Session 5 (cont.): Scorecards full rework (audit §5 + modernization)
+- Complete rewrite of `Scorecards.tsx` (old donuts/sparkline cards replaced; data sources unchanged: team_week + team_week_ranks + grades, REG only):
+  - **Hero card**: logo/name/record + Points/Allowed per game with `#N of 32` ranks + the three model grades with league ranks (same season-average ranking as Team Comparison).
+  - **Season journey chart** (new): weekly points-margin bars (green W / red L, opponent in tooltip) with the Overall grade overlaid on a second axis — the "movement through season" view.
+  - **Playstyle**: 4 undisclosed-metric donuts → six labeled pass/rush split bars (play volume, first downs, yards; offense + defense) each with a dashed league-average marker.
+  - **Stat panels**: 7 offense + 7 defense rows (incl. the newly-fixed Turnovers), each with explicit **per game / total (N gm) / league avg per game** labels (fixes the audit's 🔴 value↔label ambiguity), a tercile-colored rank chip (#1 always best), and a sparkline with dashed league-average line + green win dots and opponent tooltips.
+  - Components hoisted to module scope (StatRow/StatSpark/SplitBar) — no nested-type remounts, hooks safe.
+- Verified vs pandas (DAL 2025): totals/per-game (471 / 27.7 / 4,735 / 279), league avgs (23.0 / 342 / 225), wk18 ranks (points #7, total_yards #1, allowed #32), grades (55 #23 / 46 / 54). Tests 42/42, build green; 15 canvases painted in pane.
+
 ### 2026-07-17 — Session 5 (cont.): turnover data fix at source + Team Comparison interactions
 - **Turnover data root cause found & fixed** (known issue resolved): only 2025 was null — nflreadpy (the 2025 fallback source) renamed nfl_data_py's `interceptions` to `passing_interceptions`, so `turnovers`/`turnover_margin`/`int_per_attempt` (+ ranks) computed to null for nflreadpy-sourced seasons. New `_normalize_weekly()` in fetch.py renames it back, applied to both fresh fetches and cached parquets. Full pipeline rerun from cache: 2025 turnovers 570/570 non-null, league margin sums to 0, all 32 wk18 ranks present.
   - **Consequence: 2025 grades changed** — the model now sees real turnover features instead of nulls (SF avg overall 55.0 → 58.1, rank #13 → #14; verified vs pandas). Numbers "verified" in earlier sessions for 2025 (grades, matchup blends) are superseded by this correction. 2015–2024 unaffected.
