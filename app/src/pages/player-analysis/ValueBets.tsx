@@ -1,12 +1,17 @@
 // Port of value_bets_page_5.py — offense vs defense ranking mismatches from
 // to-date averages, players pivot with above-average highlighting, helper scatter.
+// UX audit §12: this is now the app's weekly mismatch radar — each matchup
+// "zooms in" to Matchup Bets (single-game drill-down, no longer in the
+// navbar) with season/week/game/stat carried over via URL params.
 import { useEffect, useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import type { EChartsOption } from "echarts";
 import { getPlayerWeek, getTeamWeek, getSchedule, getMeta, type Row } from "../../lib/data/loader";
 import { getTeamMetaMap, type TeamMeta } from "../../lib/team/meta";
 import { Select } from "../../components/filters/Select";
 import { useECharts } from "../../components/charts/useECharts";
 import { Loading } from "../../components/Loading";
+import { buildMismatchStatGroups } from "./statPicker";
 
 const PRIORITY = [
   "passing_yards", "rushing_yards", "receiving_yards", "passing_tds", "rushing_tds", "receiving_tds",
@@ -28,15 +33,17 @@ interface Mismatch {
 }
 
 export default function ValueBets() {
+  const [searchParams] = useSearchParams();
   const [meta, setMeta] = useState<Map<string, TeamMeta> | null>(null);
   const [schedule, setSchedule] = useState<Row[]>([]);
   const [seasons, setSeasons] = useState<number[]>([]);
-  const [season, setSeason] = useState("");
+  const [season, setSeason] = useState(searchParams.get("season") ?? "");
   const [pw, setPw] = useState<Row[]>([]);
   const [tw, setTw] = useState<Row[]>([]);
-  const [week, setWeek] = useState("");
-  const [stat, setStat] = useState("receiving_yards");
+  const [week, setWeek] = useState(searchParams.get("week") ?? "");
+  const [stat, setStat] = useState(searchParams.get("stat") ?? "receiving_yards");
   const [topN, setTopN] = useState(5);
+  const [showFullRoster, setShowFullRoster] = useState(false);
 
   useEffect(() => {
     Promise.all([getTeamMetaMap(), getSchedule(), getMeta()]).then(([m, s, mt]) => {
@@ -44,7 +51,7 @@ export default function ValueBets() {
       setSchedule(s);
       const ss = [...mt.seasons].sort((a, b) => b - a);
       setSeasons(ss);
-      if (ss.length) setSeason(String(ss[0]));
+      if (ss.length && !season) setSeason(String(ss[0]));
     });
   }, []);
   useEffect(() => {
@@ -60,6 +67,14 @@ export default function ValueBets() {
   const weeks = useMemo(() => [...new Set(regSched.map((g) => Number(g.week)))].sort((a, b) => a - b), [regSched]);
   const selWeek = weeks.map(String).includes(week) ? week : String(weeks[0] ?? "");
   const w = Number(selWeek);
+
+  // Game id for a team pair at the selected week (audit §12: "zoom in" to Matchup Bets).
+  const gameIdFor = (teamA: string, teamB: string): string | null => {
+    const g = regSched.find(
+      (g) => Number(g.week) === w && ((String(g.home_team) === teamA && String(g.away_team) === teamB) || (String(g.home_team) === teamB && String(g.away_team) === teamA)),
+    );
+    return g ? String(g.game_id) : null;
+  };
 
   const numericCols = useMemo(() => {
     if (!pw.length) return [];
@@ -259,11 +274,26 @@ export default function ValueBets() {
         };
       })
       .filter((p) => p.total !== 0)
-      .sort((a, b) => b.total - a.total);
-    const playerAvgs = players.map((p) => p.rowAvg ?? 0);
+      .sort((a, b) => b.total - a.total || (b.mismatch ?? 0) - (a.mismatch ?? 0));
+    // Rank within team (audit §12 🔴): the pivot was every player on a mismatched
+    // offense — roster noise drowned the 2-3 players who actually carry the mismatch.
+    const seenPerTeam = new Map<string, number>();
+    const ranked = players.map((p) => {
+      const n = (seenPerTeam.get(p.team) ?? 0) + 1;
+      seenPerTeam.set(p.team, n);
+      return { ...p, rankInTeam: n };
+    });
+    const playerAvgs = ranked.map((p) => p.rowAvg ?? 0);
     const kpiPlayerAvg = playerAvgs.length ? (playerAvgs.reduce((a, b) => a + b, 0) / playerAvgs.length).toFixed(1) : "-";
-    return { weeks: allWeeks, players, kpiPlayerAvg };
+    return { weeks: allWeeks, players: ranked, kpiPlayerAvg };
   }, [mismatches, pw, selStat, weeks]);
+
+  const TOP_PER_TEAM = 3;
+  const visiblePlayers = useMemo(
+    () => (pivot ? (showFullRoster ? pivot.players : pivot.players.filter((p) => p.rankInTeam <= TOP_PER_TEAM)) : []),
+    [pivot, showFullRoster],
+  );
+  const hiddenCount = pivot ? pivot.players.length - visiblePlayers.length : 0;
 
   const helperOption = useMemo<EChartsOption | null>(() => {
     if (!mismatches?.length) return null;
@@ -298,6 +328,25 @@ export default function ValueBets() {
 
   const fmt = (v: number | null | undefined) => (v == null ? "" : Number.isInteger(v) ? String(v) : v.toFixed(1));
 
+  // Unique games among this week's mismatches, for the "zoom in" list (audit §12 🟡:
+  // position Value Bets → Matchup Bets as a two-step journey instead of two
+  // disconnected pages with incompatible score scales).
+  const zoomGames = useMemo(() => {
+    if (!mismatches?.length) return [];
+    const seen = new Map<string, { away: string; home: string; gameId: string | null }>();
+    for (const m of mismatches) {
+      const key = [m.offTeam, m.defTeam].sort().join("|");
+      if (seen.has(key)) continue;
+      const gameId = gameIdFor(m.offTeam, m.defTeam);
+      const g = regSched.find((g) => String(g.game_id) === gameId);
+      seen.set(key, { away: g ? String(g.away_team) : m.defTeam, home: g ? String(g.home_team) : m.offTeam, gameId });
+    }
+    return [...seen.values()];
+  }, [mismatches, regSched]);
+
+  const matchupHref = (gameId: string | null, player?: string) =>
+    `/player_analysis/matchup_bets?season=${season}&week=${selWeek}${gameId ? `&game=${gameId}` : ""}&stat=${selStat}${player ? `&player=${encodeURIComponent(player)}` : ""}`;
+
   if (!pw.length || !tw.length) return <Loading label="Loading value-bet data…" />;
 
   return (
@@ -306,26 +355,49 @@ export default function ValueBets() {
         <h1 className="mr-auto flex items-center gap-2.5 text-2xl font-extrabold tracking-tight text-[#002f6c]"><span className="h-6 w-1.5 rounded-full bg-gradient-to-b from-[#002f6c] to-[#164a9c]" />Value Bets — Mismatches</h1>
         <Select label="Season" value={season} onChange={setSeason} options={seasons.map((x) => ({ value: String(x), label: String(x) }))} />
         <Select label="Week" value={selWeek} onChange={setWeek} options={weeks.map((x) => ({ value: String(x), label: `W${x}` }))} />
-        <Select label="Stat" value={selStat} onChange={setStat} options={numericCols.map((c) => ({ value: c, label: c }))} />
+        <Select label="Stat" value={selStat} onChange={setStat} groups={buildMismatchStatGroups(numericCols)} />
         <label className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-wider text-slate-400">
           Top-N: {topN}
           <input type="range" min={1} max={32} step={1} value={topN} onChange={(e) => setTopN(Number(e.target.value))} className="w-44" />
         </label>
       </div>
 
+      {/* Two primary KPIs (audit §12 🟢 — the other two summarized the noisy table, not the decision) */}
       <div className="flex flex-wrap gap-3">
         {[
-          [`Avg Mismatch (Top ${topN})`, kpis?.avg ?? "-"],
           ["Best Mismatch Score", kpis?.best ?? "-"],
-          [`Avg Opp Allowed (Top ${topN})`, kpis?.opp ?? "-"],
-          ["Avg per Player (table)", pivot?.kpiPlayerAvg ?? "-"],
+          [`Avg Mismatch (Top ${topN})`, kpis?.avg ?? "-"],
         ].map(([l, v]) => (
           <div key={l} className="min-w-44 flex-1 rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 shadow-sm">
             <div className="text-[11px] font-medium uppercase tracking-wider text-slate-400">{l}</div>
             <div className="text-[22px] font-bold">{v}</div>
           </div>
         ))}
+        <div className="flex min-w-44 flex-1 items-center rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-3.5 py-2.5 text-[11px] text-slate-500">
+          Avg opp allowed {kpis?.opp ?? "-"} · Avg per player (table) {pivot?.kpiPlayerAvg ?? "-"}
+        </div>
       </div>
+
+      <div className="rounded-2xl border border-blue-100 bg-blue-50/60 px-4 py-2.5 text-xs text-slate-600">
+        This score uses <b>to-date average ranks</b>, recomputed fresh each week. Matchup Bets (single-game drill-down) uses{" "}
+        <b>carry-forward ranks</b> instead — the two scores aren't directly comparable game-to-game. Use this page to scan the
+        week; zoom in below for the full single-game breakdown.
+      </div>
+
+      {zoomGames.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Zoom in:</span>
+          {zoomGames.map((g) => (
+            <Link
+              key={`${g.away}-${g.home}`}
+              to={matchupHref(g.gameId)}
+              className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:border-[#002f6c] hover:text-[#002f6c]"
+            >
+              {g.away} @ {g.home} →
+            </Link>
+          ))}
+        </div>
+      )}
 
       <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="mb-1 text-sm font-semibold">
@@ -341,6 +413,16 @@ export default function ValueBets() {
 
       {pivot && (
         <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+              Top {TOP_PER_TEAM} players per mismatched team
+            </span>
+            {hiddenCount > 0 && (
+              <button onClick={() => setShowFullRoster((v) => !v)} className="text-xs font-medium text-[#002f6c] hover:underline">
+                {showFullRoster ? "Show top players only" : `Show full roster (${hiddenCount} more)`}
+              </button>
+            )}
+          </div>
           <table className="w-full text-xs">
             <thead className="bg-slate-50 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
               <tr>
@@ -353,10 +435,11 @@ export default function ValueBets() {
                 ))}
                 <th className="px-2 py-2 text-center">Mismatch</th>
                 <th className="px-2 py-2 text-center">Total</th>
+                <th className="px-2 py-2" />
               </tr>
             </thead>
             <tbody>
-              {pivot.players.map((p) => (
+              {visiblePlayers.map((p) => (
                 <tr key={`${p.player}|${p.team}`} className="border-t border-slate-100 hover:bg-slate-50">
                   <td className="px-2 py-1">{logo(p.team) && <img src={logo(p.team)!} alt={p.team} className="h-6 w-6 object-contain" />}</td>
                   <td className="px-2 py-1 text-left">{p.team}</td>
@@ -376,6 +459,15 @@ export default function ValueBets() {
                     {p.mismatch == null ? "" : `${p.mismatch >= 0 ? "+" : ""}${p.mismatch}`}
                   </td>
                   <td className="px-2 py-1 text-center font-semibold">{fmt(p.total)}</td>
+                  <td className="px-2 py-1 text-center">
+                    <Link
+                      to={matchupHref(gameIdFor(p.team, p.opp), p.player)}
+                      title="Zoom in on this matchup"
+                      className="text-slate-400 hover:text-[#002f6c]"
+                    >
+                      →
+                    </Link>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -386,6 +478,21 @@ export default function ValueBets() {
       <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="mb-1 text-sm font-semibold">Matchup Helper — Team Avg vs Opp Allowed (to date)</div>
         <div ref={helperRef} className="h-[340px]" />
+      </div>
+
+      {/* The "Zoom in" chips above only cover this week's mismatches — this is the
+          general escape hatch to browse any game via Matchup Bets' own Season/Week/Game
+          dropdowns (not just the mismatched ones). */}
+      <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+        <div className="text-xs text-slate-500">
+          Looking for a specific game, including ones without a standout mismatch this week?
+        </div>
+        <Link
+          to={`/player_analysis/matchup_bets?season=${season}&week=${selWeek}`}
+          className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[#002f6c] px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-[#164a9c]"
+        >
+          Open Matchup Bets — pick any game →
+        </Link>
       </div>
     </div>
   );

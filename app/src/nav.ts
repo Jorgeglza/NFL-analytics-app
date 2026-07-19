@@ -75,15 +75,9 @@ export const NAV_GROUPS: NavGroup[] = [
         implemented: true,
       },
       {
-        label: "Matchup Bets",
-        path: "/player_analysis/matchup_bets",
-        description: "Single-game player pivots, stat mismatches and opponent-allowed trends",
-        implemented: true,
-      },
-      {
         label: "Value Bets",
         path: "/player_analysis/value_bets",
-        description: "Offense vs defense ranking mismatches to find weekly value spots",
+        description: "Weekly offense-vs-defense mismatch radar — zoom in on any game for the full single-game breakdown",
         implemented: true,
       },
     ],

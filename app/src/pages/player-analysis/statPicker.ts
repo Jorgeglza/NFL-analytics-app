@@ -49,6 +49,26 @@ export function buildStatGroups(sideCols: string[], side: Side) {
   ];
 }
 
+/**
+ * Same curation, for pages with no offense/defense toggle (Matchup Bets,
+ * Value Bets — mismatch stats span both sides of the ball). Offense + defense
+ * prop-market sections first, everything else (punting internals, etc.)
+ * behind "Advanced / other" (audit §11/§12: the raw ~130-item list was the
+ * worst instance of the shared stat-selector problem).
+ */
+export function buildMismatchStatGroups(cols: string[]) {
+  const sections = [...PROP_MARKET_SECTIONS.offense, ...PROP_MARKET_SECTIONS.defense].map((s) => ({
+    label: s.label,
+    options: s.stats.filter((c) => cols.includes(c)).map((c) => ({ value: c, label: statLabel(c) })),
+  }));
+  const inSection = new Set(sections.flatMap((s) => s.options.map((o) => o.value)));
+  const advanced = cols.filter((c) => !inSection.has(c)).sort();
+  return [
+    ...sections,
+    { label: "Advanced / other", options: advanced.map((c) => ({ value: c, label: statLabel(c) })) },
+  ];
+}
+
 export const HIT_COLOR = "#059669";
 export const MISS_COLOR = "#dc2626";
 export const NEUTRAL_COLOR = "#002f6c";

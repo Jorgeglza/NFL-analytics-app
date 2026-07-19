@@ -1,6 +1,7 @@
 // Port of prop_bets_players_page_1.py — player-week pivot vs a prop line,
 // with per-player bar + made/below donut.
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import type { EChartsOption } from "echarts";
 import { getPlayerWeek, getMeta, type Row } from "../../lib/data/loader";
 import { Select } from "../../components/filters/Select";
@@ -35,21 +36,25 @@ const DEFENSE_KW = [
 
 
 export default function PropBets() {
+  // Seeded from the URL when arriving via a cross-link (audit §11 🟢, e.g. from
+  // Matchup Bets) so the player/team/stat context carries over instead of
+  // re-asking.
+  const [searchParams] = useSearchParams();
   const [seasons, setSeasons] = useState<number[]>([]);
-  const [season, setSeason] = useState("");
+  const [season, setSeason] = useState(searchParams.get("season") ?? "");
   const [rows, setRows] = useState<Row[]>([]);
   const [seasonType, setSeasonType] = useState("REG");
-  const [team, setTeam] = useState("");
+  const [team, setTeam] = useState(searchParams.get("team") ?? "");
   const [side, setSide] = useState<"offense" | "defense">("offense");
-  const [stat, setStat] = useState("passing_yards");
+  const [stat, setStat] = useState(searchParams.get("stat") ?? "passing_yards");
   const [setLine, setSetLine] = useState<string>("");
-  const [selectedPlayer, setSelectedPlayer] = useState<string | null>(null);
+  const [selectedPlayer, setSelectedPlayer] = useState<string | null>(searchParams.get("player"));
 
   useEffect(() => {
     getMeta().then((m) => {
       const ss = [...m.seasons].sort((a, b) => b - a);
       setSeasons(ss);
-      if (ss.length) setSeason(String(ss[0]));
+      if (ss.length && !season) setSeason(String(ss[0]));
     });
   }, []);
   useEffect(() => {

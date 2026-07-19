@@ -48,6 +48,11 @@ export default function App() {
               const Guide = IMPLEMENTED["/game_analysis/models_guide"];
               return <Route path="/game_analysis/models_guide" element={<Guide />} />;
             })()}
+            {/* Not in the navbar — reached by "zoom in" from Value Bets (audit §11/§12: two-step journey) */}
+            {(() => {
+              const Matchup = IMPLEMENTED["/player_analysis/matchup_bets"];
+              return <Route path="/player_analysis/matchup_bets" element={<Matchup />} />;
+            })()}
             {NAV_GROUPS.flatMap((g) => g.pages).map((page) => {
               const Impl = IMPLEMENTED[page.path];
               return (

@@ -1,7 +1,12 @@
 // Port of matchup_bets_page_4.py — single-game player pivots, stat mismatches
 // and opponent-allowed trends. (Deviation: browser-local time instead of
 // hardcoded America/Monterrey for the default week.)
+// UX audit §11: this page is now the single-game drill-down reached by
+// "zoom in" from Value Bets (audit's "two-step journey" recommendation) —
+// no longer in the navbar (see App.tsx); season/week/game/stat/player are
+// seeded from the URL so context carries over instead of re-asking.
 import { useEffect, useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import type { EChartsOption } from "echarts";
 import { getPlayerWeek, getTeamWeek, getTeamWeekRanks, getSchedule, getMeta, type Row } from "../../lib/data/loader";
 import { getTeamMetaMap, type TeamMeta } from "../../lib/team/meta";
@@ -9,6 +14,7 @@ import { Select } from "../../components/filters/Select";
 import { useECharts } from "../../components/charts/useECharts";
 import { opponentLabel } from "../grading-model/shared";
 import { Loading } from "../../components/Loading";
+import { buildMismatchStatGroups } from "./statPicker";
 
 const PRIORITY = [
   "passing_yards", "rushing_yards", "receiving_yards", "passing_tds", "rushing_tds", "receiving_tds",
@@ -25,19 +31,26 @@ const EXCLUDE = new Set([
 ]);
 
 export default function MatchupBets() {
+  const [searchParams] = useSearchParams();
+  const urlSeason = searchParams.get("season") ?? "";
+  const urlWeek = searchParams.get("week") ?? "";
+  const urlGame = searchParams.get("game") ?? "";
+  const urlStat = searchParams.get("stat");
+  const urlPlayer = searchParams.get("player");
+
   const [meta, setMeta] = useState<Map<string, TeamMeta> | null>(null);
   const [schedule, setSchedule] = useState<Row[]>([]);
   const [seasons, setSeasons] = useState<number[]>([]);
-  const [season, setSeason] = useState("");
+  const [season, setSeason] = useState(urlSeason);
   const [pw, setPw] = useState<Row[]>([]);
   const [tw, setTw] = useState<Row[]>([]);
   const [ranks, setRanks] = useState<Row[]>([]);
-  const [week, setWeek] = useState("");
-  const [gameId, setGameId] = useState("");
-  const [stat, setStat] = useState("passing_yards");
+  const [week, setWeek] = useState(urlWeek);
+  const [gameId, setGameId] = useState(urlGame);
+  const [stat, setStat] = useState(urlStat ?? "passing_yards");
   const [setLine, setSetLine] = useState("");
   const [topN, setTopN] = useState(8);
-  const [selectedPlayer, setSelectedPlayer] = useState<string | null>(null);
+  const [selectedPlayer, setSelectedPlayer] = useState<string | null>(urlPlayer);
 
   useEffect(() => {
     Promise.all([getTeamMetaMap(), getSchedule(), getMeta()]).then(([m, s, mt]) => {
@@ -45,7 +58,7 @@ export default function MatchupBets() {
       setSchedule(s);
       const ss = [...mt.seasons].sort((a, b) => b - a);
       setSeasons(ss);
-      if (ss.length) setSeason(String(ss[0]));
+      if (ss.length && !season) setSeason(String(ss[0]));
     });
   }, []);
   useEffect(() => {
@@ -143,8 +156,19 @@ export default function MatchupBets() {
         }
       }
     }
-    rows.sort((a, b) => b.edge - a.edge);
-    return rows.slice(0, topN);
+    // Edge = maxRank − offR + 1 + defR, bounded [2, 2·maxRank] (offR/defR ∈ [1, maxRank]).
+    // Give the raw number a scale (audit §11 🟡): 0–100 position on that fixed range + a
+    // qualitative band, so "52.0" reads as something without needing this week's full population.
+    const lo = 2;
+    const hi = 2 * maxRank;
+    const scored = rows
+      .sort((a, b) => b.edge - a.edge)
+      .map((r) => {
+        const scalePct = Math.round(((r.edge - lo) / (hi - lo)) * 100);
+        const band = scalePct >= 75 ? "Strong" : scalePct >= 50 ? "Solid" : scalePct >= 25 ? "Slight" : "Weak";
+        return { ...r, scalePct, band, edgeMax: hi };
+      });
+    return scored.slice(0, topN);
   }, [ranks, away, home, w, topN]);
 
   const mmRanksOption = useMemo<EChartsOption | null>(() => {
@@ -409,14 +433,26 @@ export default function MatchupBets() {
 
   if (!pw.length || !meta) return <Loading label="Loading matchup data…" />;
 
+  const bandColor = (band: string) =>
+    band === "Strong" ? "bg-emerald-100 text-emerald-800 border-emerald-200"
+    : band === "Solid" ? "bg-blue-100 text-blue-800 border-blue-200"
+    : band === "Slight" ? "bg-amber-100 text-amber-800 border-amber-200"
+    : "bg-slate-100 text-slate-600 border-slate-200";
+
   return (
     <div className="space-y-4">
+      <Link
+        to={`/player_analysis/value_bets?season=${season}&week=${selWeek}`}
+        className="inline-flex items-center gap-1 text-xs font-medium text-[#002f6c] hover:underline"
+      >
+        ← Back to Value Bets
+      </Link>
       <div className="flex flex-wrap items-end gap-3">
         <h1 className="mr-auto flex items-center gap-2.5 text-2xl font-extrabold tracking-tight text-[#002f6c]"><span className="h-6 w-1.5 rounded-full bg-gradient-to-b from-[#002f6c] to-[#164a9c]" />Matchup Bets</h1>
         <Select label="Season" value={season} onChange={setSeason} options={seasons.map((x) => ({ value: String(x), label: String(x) }))} />
         <Select label="Week" value={selWeek} onChange={setWeek} options={weeks.map((x) => ({ value: String(x), label: `W${x}` }))} />
         <Select label="Game" value={selGameId} onChange={setGameId} options={games.map((g) => ({ value: String(g.game_id), label: `${g.away_team} @ ${g.home_team} — ${g.gameday ?? ""}` }))} />
-        <Select label="Stat" value={selStat} onChange={setStat} options={numericCols.map((c) => ({ value: c, label: c }))} />
+        <Select label="Stat" value={selStat} onChange={setStat} groups={buildMismatchStatGroups(numericCols)} />
         <label className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
           Set line
           <input type="number" value={setLine} onChange={(e) => setSetLine(e.target.value)} placeholder="set_line" className="w-28 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
@@ -434,7 +470,7 @@ export default function MatchupBets() {
         </div>
         <div className="mb-2 flex gap-3">
           {[
-            ["Best Edge", mismatches?.length ? mismatches[0].edge.toFixed(1) : "—"],
+            ["Best Edge", mismatches?.length ? `${mismatches[0].edge.toFixed(1)} — ${mismatches[0].band}` : "—"],
             ["Avg Edge (Top-N)", mismatches?.length ? (mismatches.reduce((a, m) => a + m.edge, 0) / mismatches.length).toFixed(1) : "—"],
           ].map(([l, v]) => (
             <div key={l} className="min-w-40 rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
@@ -443,11 +479,27 @@ export default function MatchupBets() {
             </div>
           ))}
         </div>
+        {mismatches?.length ? (
+          <div className="mb-3 flex flex-wrap gap-1.5">
+            {mismatches.map((m) => (
+              <span
+                key={`${m.stat}-${m.offTeam}-${m.defTeam}`}
+                title={`Off rank ${m.offRank} vs ${m.defTeam} allowed rank ${m.defAllowedRank} (scale 2–${m.edgeMax})`}
+                className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[11px] font-medium ${bandColor(m.band)}`}
+              >
+                {m.offTeam} {m.stat.replace(/_/g, " ")} <b>{m.edge.toFixed(1)}</b> · {m.band}
+              </span>
+            ))}
+          </div>
+        ) : null}
         <div className="flex flex-wrap gap-3">
           <div ref={mmRanksRef} className="h-80 min-w-80 flex-1" />
           <div ref={mmScoreRef} className="h-80 min-w-80 flex-1" />
         </div>
-        <div className="mt-1 text-xs text-slate-500">Edge = Offense strength (inverted rank) + Opponent allowed rank. Higher = better mismatch.</div>
+        <div className="mt-1 text-xs text-slate-500">
+          Edge = Offense strength (inverted rank) + Opponent allowed rank, on a fixed 2–{mismatches?.length ? mismatches[0].edgeMax : "2N"} scale for this league size.
+          Weak &lt;25% · Slight 25–50% · Solid 50–75% · Strong ≥75%. Higher = better mismatch.
+        </div>
       </div>
 
       {/* Team totals */}
@@ -480,6 +532,7 @@ export default function MatchupBets() {
                   <th key={wk} className="px-1.5 py-2 text-center">W{wk}</th>
                 ))}
                 <th className="px-2 py-2 text-center">Total</th>
+                <th className="px-2 py-2" />
               </tr>
             </thead>
             <tbody>
@@ -500,6 +553,16 @@ export default function MatchupBets() {
                     );
                   })}
                   <td className="px-2 py-1 text-center font-semibold">{fmt(p.total)}</td>
+                  <td className="px-2 py-1 text-center">
+                    <Link
+                      to={`/player_analysis/prop_bets_players?season=${season}&team=${p.team}&stat=${selStat}&player=${encodeURIComponent(p.player)}`}
+                      title="Open in Prop Bets"
+                      onClick={(e) => e.stopPropagation()}
+                      className="text-slate-400 hover:text-[#002f6c]"
+                    >
+                      →
+                    </Link>
+                  </td>
                 </tr>
               ))}
             </tbody>
