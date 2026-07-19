@@ -14,7 +14,18 @@ import { Select } from "../../components/filters/Select";
 import { useECharts } from "../../components/charts/useECharts";
 import { opponentLabel } from "../grading-model/shared";
 import { Loading } from "../../components/Loading";
-import { buildMismatchStatGroups } from "./statPicker";
+import { buildMismatchStatGroups, statLabel } from "./statPicker";
+
+const CATEGORY_ORDER = ["Passing", "Rushing", "Receiving", "Other"] as const;
+const PASSING_EXTRA = new Set(["completions", "attempts", "interceptions", "pacr", "dakota", "sack_fumbles", "sack_fumbles_lost", "sack_yards_lost", "sacks_suffered"]);
+const RECEIVING_EXTRA = new Set(["targets", "receptions", "racr", "target_share", "air_yards_share", "wopr"]);
+function categoryOf(base: string): (typeof CATEGORY_ORDER)[number] {
+  const b = base.toLowerCase();
+  if (b.startsWith("passing") || PASSING_EXTRA.has(b)) return "Passing";
+  if (b.startsWith("rushing") || b === "carries") return "Rushing";
+  if (b.startsWith("receiving") || RECEIVING_EXTRA.has(b)) return "Receiving";
+  return "Other";
+}
 
 const PRIORITY = [
   "passing_yards", "rushing_yards", "receiving_yards", "passing_tds", "rushing_tds", "receiving_tds",
@@ -107,6 +118,7 @@ export default function MatchupBets() {
     return String((fut[0] ?? games[0])?.game_id ?? "");
   }, [games]);
   const selGameId = games.some((g) => String(g.game_id) === gameId) ? gameId : defaultGame;
+  const selGame = games.find((g) => String(g.game_id) === selGameId);
   const [away, home] = useMemo(() => {
     const parts = selGameId.split("_");
     return parts.length === 4 ? [parts[2], parts[3]] : ["", ""];
@@ -166,61 +178,35 @@ export default function MatchupBets() {
       .map((r) => {
         const scalePct = Math.round(((r.edge - lo) / (hi - lo)) * 100);
         const band = scalePct >= 75 ? "Strong" : scalePct >= 50 ? "Solid" : scalePct >= 25 ? "Slight" : "Weak";
-        return { ...r, scalePct, band, edgeMax: hi };
+        return { ...r, scalePct, band, edgeMax: hi, category: categoryOf(r.stat) };
       });
     return scored.slice(0, topN);
   }, [ranks, away, home, w, topN]);
 
-  const mmRanksOption = useMemo<EChartsOption | null>(() => {
-    if (!mismatches?.length) return null;
-    const labels = mismatches.map((m) => m.stat.replace(/_/g, " "));
-    return {
-      grid: { left: 10, right: 10, top: 30, bottom: 10, containLabel: true },
-      legend: { top: 0, textStyle: { fontSize: 10 } },
-      tooltip: {
-        trigger: "item",
-        formatter: (p: unknown) => {
-          const q = p as { seriesName: string; dataIndex: number };
-          const m = mismatches[q.dataIndex];
-          return q.seriesName.startsWith("Offense")
-            ? `<b>${m.offTeam}</b> Offense<br/>Stat: ${m.stat}<br/>Rank: ${m.offRank}`
-            : `Vs <b>${m.defTeam}</b> Defense<br/>Stat: ${m.stat}<br/>Allowed Rank: ${m.defAllowedRank}`;
-        },
-      },
-      xAxis: { type: "category", data: labels, axisLabel: { rotate: 30, fontSize: 9 } },
-      yAxis: { type: "value", name: "Rank" },
-      series: [
-        { name: "Offense Rank (lower better)", type: "bar", data: mismatches.map((m) => ({ value: m.offRank, itemStyle: { color: color(m.offTeam) } })) },
-        { name: "Opp Allowed Rank", type: "bar", data: mismatches.map((m) => m.defAllowedRank), itemStyle: { color: "rgba(0,0,0,0.35)" } },
-      ],
-    } as EChartsOption;
-  }, [mismatches, meta]);
+  // Group the biggest mismatches by category (audit follow-up: the flat 8-stat
+  // list plus two rank-bar charts didn't answer "what kind of mismatch is
+  // this" — categories let you scan Passing/Rushing/Receiving/Other and drill
+  // into one at a time instead of parsing two dense always-on charts).
+  const groupedMismatches = useMemo(() => {
+    if (!mismatches?.length) return [];
+    const byCat = new Map<string, typeof mismatches>();
+    for (const m of mismatches) {
+      const list = byCat.get(m.category) ?? [];
+      list.push(m);
+      byCat.set(m.category, list);
+    }
+    return CATEGORY_ORDER.filter((c) => byCat.has(c))
+      .map((category) => ({ category, stats: byCat.get(category)!, best: byCat.get(category)![0] }))
+      .sort((a, b) => b.best.edge - a.best.edge);
+  }, [mismatches]);
 
-  const mmScoreOption = useMemo<EChartsOption | null>(() => {
-    if (!mismatches?.length) return null;
-    const scores = mismatches.map((m) => m.defAllowedRank - m.offRank);
-    const maxAbs = Math.max(5, ...scores.map(Math.abs)) + 2;
-    return {
-      grid: { left: 10, right: 10, top: 20, bottom: 10, containLabel: true },
-      tooltip: {
-        trigger: "item",
-        formatter: (p: unknown) => {
-          const q = p as { dataIndex: number };
-          const m = mismatches[q.dataIndex];
-          return `<b>${m.offTeam}</b> offense vs <b>${m.defTeam}</b><br/>Stat: ${m.stat}<br/>Off Rank: ${m.offRank} | Opp Allowed Rank: ${m.defAllowedRank}<br/>Score: ${scores[q.dataIndex] >= 0 ? "+" : ""}${scores[q.dataIndex]}`;
-        },
-      },
-      xAxis: { type: "category", data: mismatches.map((m) => `${m.offTeam} vs ${m.defTeam} — ${m.stat.replace(/_/g, " ")}`), axisLabel: { rotate: 30, fontSize: 8 } },
-      yAxis: { type: "value", min: -maxAbs, max: maxAbs, name: "OppAllowedRank − OffRank" },
-      series: [
-        {
-          type: "bar",
-          data: mismatches.map((m, i) => ({ value: scores[i], itemStyle: { color: color(m.offTeam) } })),
-          markLine: { symbol: "none", lineStyle: { color: "#aaa", width: 2 }, label: { show: false }, data: [{ yAxis: 0 }] },
-        },
-      ],
-    } as EChartsOption;
-  }, [mismatches, meta]);
+  const [openCategory, setOpenCategory] = useState<string | null>(null);
+  useEffect(() => {
+    setOpenCategory(groupedMismatches[0]?.category ?? null);
+    // Reset the drill-down to the biggest category whenever the selected game
+    // (or its just-loaded mismatch data) changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selGameId, ranks.length]);
 
   // ---------- team totals ----------
   const scope = useMemo(
@@ -421,8 +407,6 @@ export default function MatchupBets() {
     } as EChartsOption;
   }, [pivot, playerRow, line]);
 
-  const mmRanksRef = useECharts(mmRanksOption);
-  const mmScoreRef = useECharts(mmScoreOption);
   const totalsBarRef = useECharts(totalsBarOption);
   const totalsDonutRef = useECharts(totalsDonutOption);
   const oppAllowedRef = useECharts(oppAllowedOption);
@@ -447,81 +431,132 @@ export default function MatchupBets() {
       >
         ← Back to Value Bets
       </Link>
+      {/* 1. Game-specific selection — Stat lives below, next to the section it actually drives */}
       <div className="flex flex-wrap items-end gap-3">
         <h1 className="mr-auto flex items-center gap-2.5 text-2xl font-extrabold tracking-tight text-[#002f6c]"><span className="h-6 w-1.5 rounded-full bg-gradient-to-b from-[#002f6c] to-[#164a9c]" />Matchup Bets</h1>
         <Select label="Season" value={season} onChange={setSeason} options={seasons.map((x) => ({ value: String(x), label: String(x) }))} />
         <Select label="Week" value={selWeek} onChange={setWeek} options={weeks.map((x) => ({ value: String(x), label: `W${x}` }))} />
         <Select label="Game" value={selGameId} onChange={setGameId} options={games.map((g) => ({ value: String(g.game_id), label: `${g.away_team} @ ${g.home_team} — ${g.gameday ?? ""}` }))} />
-        <Select label="Stat" value={selStat} onChange={setStat} groups={buildMismatchStatGroups(numericCols)} />
-        <label className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
-          Set line
-          <input type="number" value={setLine} onChange={(e) => setSetLine(e.target.value)} placeholder="set_line" className="w-28 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
-        </label>
       </div>
 
-      {/* Mismatches */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-3">
-        <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
-          <span className="text-sm font-semibold">Matchup Mismatches (by Stat)</span>
-          <label className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-wider text-slate-400">
-            Top-N: {topN}
-            <input type="range" min={3} max={16} step={1} value={topN} onChange={(e) => setTopN(Number(e.target.value))} className="w-40" />
-          </label>
+      {/* 2. General KPIs / game info */}
+      <div className="flex flex-wrap items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex items-center gap-2.5">
+          {meta?.get(away)?.logo && <img src={meta.get(away)!.logo} alt={away} className="h-9 w-9 object-contain" />}
+          <span className="text-xl font-extrabold text-slate-800">{away}</span>
+          <span className="text-sm font-medium text-slate-400">@</span>
+          <span className="text-xl font-extrabold text-slate-800">{home}</span>
+          {meta?.get(home)?.logo && <img src={meta.get(home)!.logo} alt={home} className="h-9 w-9 object-contain" />}
+          {selGame?.gameday && <span className="ml-1 text-xs text-slate-400">{selGame.gameday}</span>}
         </div>
-        <div className="mb-2 flex gap-3">
+        <div className="ml-auto flex flex-wrap gap-3">
           {[
-            ["Best Edge", mismatches?.length ? `${mismatches[0].edge.toFixed(1)} — ${mismatches[0].band}` : "—"],
-            ["Avg Edge (Top-N)", mismatches?.length ? (mismatches.reduce((a, m) => a + m.edge, 0) / mismatches.length).toFixed(1) : "—"],
+            ["Best Mismatch", mismatches?.length ? `${mismatches[0].edge.toFixed(1)} — ${mismatches[0].band}` : "—"],
+            [`Avg Edge (Top ${topN})`, mismatches?.length ? (mismatches.reduce((a, m) => a + m.edge, 0) / mismatches.length).toFixed(1) : "—"],
           ].map(([l, v]) => (
-            <div key={l} className="min-w-40 rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
+            <div key={l} className="min-w-40 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
               <div className="text-[11px] font-medium uppercase tracking-wider text-slate-400">{l}</div>
               <div className="text-xl font-bold">{v}</div>
             </div>
           ))}
         </div>
-        {mismatches?.length ? (
-          <div className="mb-3 flex flex-wrap gap-1.5">
-            {mismatches.map((m) => (
-              <span
-                key={`${m.stat}-${m.offTeam}-${m.defTeam}`}
-                title={`Off rank ${m.offRank} vs ${m.defTeam} allowed rank ${m.defAllowedRank} (scale 2–${m.edgeMax})`}
-                className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[11px] font-medium ${bandColor(m.band)}`}
-              >
-                {m.offTeam} {m.stat.replace(/_/g, " ")} <b>{m.edge.toFixed(1)}</b> · {m.band}
-              </span>
-            ))}
+      </div>
+
+      {/* 3. Biggest mismatches, grouped by category with a drill-down */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-3">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
+          <span className="text-sm font-semibold">Matchup Mismatches — by category</span>
+          <label className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-wider text-slate-400">
+            Top-N: {topN}
+            <input type="range" min={3} max={16} step={1} value={topN} onChange={(e) => setTopN(Number(e.target.value))} className="w-40" />
+          </label>
+        </div>
+        {groupedMismatches.length ? (
+          <div className="divide-y divide-slate-100">
+            {groupedMismatches.map((g) => {
+              const isOpen = openCategory === g.category;
+              const maxRank = g.best.edgeMax / 2;
+              return (
+                <div key={g.category}>
+                  <button
+                    onClick={() => setOpenCategory(isOpen ? null : g.category)}
+                    className="flex w-full items-center gap-2 py-2.5 text-left"
+                  >
+                    <span className={`text-slate-400 transition-transform ${isOpen ? "rotate-90" : ""}`}>›</span>
+                    <span className="font-semibold text-slate-800">{g.category}</span>
+                    <span className="text-xs text-slate-400">{g.stats.length} stat{g.stats.length === 1 ? "" : "s"}</span>
+                    <span className={`ml-auto inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${bandColor(g.best.band)}`}>
+                      Best: {statLabel(g.best.stat)} <b>{g.best.edge.toFixed(1)}</b> · {g.best.band}
+                    </span>
+                  </button>
+                  {isOpen && (
+                    <div className="space-y-2 pb-3 pl-5">
+                      {g.stats.map((m) => (
+                        <div key={`${m.stat}-${m.offTeam}-${m.defTeam}`} className="flex flex-wrap items-center gap-2.5">
+                          <span className="w-44 shrink-0 text-xs font-medium text-slate-700">{statLabel(m.stat)}</span>
+                          <div className="flex min-w-40 flex-1 items-center gap-1.5">
+                            <span className="w-20 shrink-0 text-right text-[10px] text-slate-500">{m.offTeam} #{m.offRank}</span>
+                            <div className="h-2 flex-1 rounded-full bg-slate-100">
+                              <div className="h-2 rounded-full" style={{ width: `${((maxRank - m.offRank + 1) / maxRank) * 100}%`, background: color(m.offTeam) }} />
+                            </div>
+                          </div>
+                          <div className="flex min-w-40 flex-1 items-center gap-1.5">
+                            <div className="h-2 flex-1 rounded-full bg-slate-100">
+                              <div className="h-2 rounded-full" style={{ width: `${(m.defAllowedRank / maxRank) * 100}%`, background: "rgba(0,0,0,0.35)" }} />
+                            </div>
+                            <span className="w-28 shrink-0 text-[10px] text-slate-500">vs {m.defTeam} #{m.defAllowedRank} allowed</span>
+                          </div>
+                          <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${bandColor(m.band)}`}>
+                            {m.edge.toFixed(1)} · {m.band}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
-        ) : null}
-        <div className="flex flex-wrap gap-3">
-          <div ref={mmRanksRef} className="h-80 min-w-80 flex-1" />
-          <div ref={mmScoreRef} className="h-80 min-w-80 flex-1" />
-        </div>
-        <div className="mt-1 text-xs text-slate-500">
+        ) : (
+          <div className="py-4 text-center text-sm text-slate-400">No rank data for this matchup yet.</div>
+        )}
+        <div className="mt-2 text-xs text-slate-500">
           Edge = Offense strength (inverted rank) + Opponent allowed rank, on a fixed 2–{mismatches?.length ? mismatches[0].edgeMax : "2N"} scale for this league size.
-          Weak &lt;25% · Slight 25–50% · Solid 50–75% · Strong ≥75%. Higher = better mismatch.
+          Weak &lt;25% · Slight 25–50% · Solid 50–75% · Strong ≥75%. Higher = better mismatch. Left bar = offense strength, right bar = opponent allowed — longer is better for that side.
         </div>
       </div>
 
-      {/* Team totals */}
-      <div className="flex flex-wrap gap-3">
-        <div className="min-w-72 flex-1 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="mb-1 text-sm font-semibold">{away} @ {home} — {selStat}</div>
-          <div ref={totalsBarRef} className="h-60" />
-        </div>
-        <div className="min-w-72 flex-1 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div ref={totalsDonutRef} className="h-64" />
-        </div>
-      </div>
-
-      {/* Opponent allowed & rank */}
+      {/* 4. Stat detail comparison — Stat + Set line live here, next to what they drive */}
       <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="mb-1 text-sm font-semibold">Opponent Avg Allowed &amp; Rank by Week — {away} vs {home}</div>
-        <div ref={oppAllowedRef} className="h-80" />
-      </div>
+        <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+          <span className="text-sm font-semibold">Stat Detail Comparison</span>
+          <div className="flex flex-wrap items-end gap-3">
+            <Select label="Stat" value={selStat} onChange={setStat} groups={buildMismatchStatGroups(numericCols)} />
+            <label className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
+              Set line
+              <input type="number" value={setLine} onChange={(e) => setSetLine(e.target.value)} placeholder="set_line" className="w-28 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
+            </label>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-3">
+          <div className="min-w-72 flex-1 rounded-xl border border-slate-100 bg-slate-50/60 p-3">
+            <div className="mb-1 text-xs font-semibold text-slate-500">{away} @ {home} — {statLabel(selStat)} (season total)</div>
+            <div ref={totalsBarRef} className="h-60" />
+          </div>
+          <div className="min-w-72 flex-1 rounded-xl border border-slate-100 bg-slate-50/60 p-3">
+            <div ref={totalsDonutRef} className="h-64" />
+          </div>
+        </div>
+
+        <div className="mt-3 rounded-xl border border-slate-100 bg-slate-50/60 p-3">
+          <div className="mb-1 text-xs font-semibold text-slate-500">Opponent Avg Allowed &amp; Rank by Week — {away} vs {home}</div>
+          <div ref={oppAllowedRef} className="h-80" />
+        </div>
 
       {/* Pivot */}
       {pivot && (
-        <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="mt-3 overflow-x-auto rounded-xl border border-slate-100">
           <table className="w-full text-xs">
             <thead className="bg-slate-50 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
               <tr>
@@ -572,20 +607,21 @@ export default function MatchupBets() {
 
       {/* Player detail */}
       {playerRow && (
-        <div className="flex flex-wrap gap-4">
-          <div className="min-w-80 flex-1 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="mt-3 flex flex-wrap gap-3">
+          <div className="min-w-80 flex-1 rounded-xl border border-slate-100 bg-slate-50/60 p-3">
             <div className="mb-2 flex min-h-14 items-center gap-3">
               {headshot && <img src={headshot} alt={playerRow.player} className="h-14 w-14 rounded-full object-cover" />}
-              <span className="text-lg font-semibold">{playerRow.player} — {selStat}</span>
+              <span className="text-sm font-semibold">{playerRow.player} — {statLabel(selStat)}</span>
             </div>
             <div ref={playerBarRef} className="h-[360px]" />
           </div>
-          <div className="min-w-80 flex-1 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="mb-2 min-h-14 text-lg font-semibold">Made vs Below line</div>
+          <div className="min-w-80 flex-1 rounded-xl border border-slate-100 bg-slate-50/60 p-3">
+            <div className="mb-2 min-h-14 text-sm font-semibold">Made vs Below line</div>
             <div ref={playerDonutRef} className="h-[360px]" />
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

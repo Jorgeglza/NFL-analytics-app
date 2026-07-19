@@ -57,6 +57,14 @@ Per page: run old app side-by-side (`pda-ie` env), match tables/KPIs/chart serie
 
 ## Session notes (newest first)
 
+### 2026-07-19 — Session 6 (cont.): Matchup Bets page restructure (user feedback)
+User feedback on the merged page: "Stat" at the top only affected some charts, the mismatch section (flat 8-chip list + two rank-bar echarts) didn't make sense, and the stat-comparison controls were far from what they drove. Reworked `MatchupBets.tsx` into the requested top-to-bottom order:
+1. **Game selection** — Season/Week/Game only; Stat/Set line moved down to the section they actually drive.
+2. **General KPIs / game info** — team logos + matchup name + gameday, Best Mismatch and Avg Edge KPIs.
+3. **Biggest mismatches, grouped by category** — new `categoryOf()` buckets each mismatch base into Passing/Rushing/Receiving/Other; single-open accordion (`openCategory` state, resets to the top category on game change) replaces the old always-on `mmRanksOption`/`mmScoreOption` echarts pair (which had overlapping axis labels and near-identical bar heights — no longer legible). Each open category lists its stats as a plain-CSS two-sided rank bar (offense strength vs. opponent-allowed) + edge/band chip — no chart library involved, so no axis/label rendering bugs.
+4. **Stat Detail Comparison** — one bordered card containing the Stat + Set line controls at its header, then team totals (bar/donut), opponent-allowed-by-week, the player pivot table, and player detail (bar/donut) all nested inside — previously these were four separate un-related cards with the driving controls stranded at the top of the page.
+Verified in pane (TB@ATL wk1 2025, receiving_yards): KPI header renders logos/gameday/Best Mismatch 64.0—Strong; Passing category auto-opens (tied-best with Receiving, stable sort keeps Passing first per `CATEGORY_ORDER`); clicking Receiving closes Passing and opens Receiving (single-open accordion confirmed); canvas count dropped from 7 to 5 (the two removed mismatch charts). Tests 49/49, build green.
+
 ### 2026-07-19 — Session 6: Matchup Bets merged into Value Bets as a drill-down (audit §11/§12)
 - **Curated stat picker** (audit §11 🔴, applied to both pages): new `statPicker.buildMismatchStatGroups(cols)` — offense + defense prop-market sections combined (no side toggle on these pages), advanced/other alphabetical below. Replaces the raw ~130-item list on both Matchup Bets and Value Bets.
 - **Edge score scale** (audit §11 🟡): edge = maxRank − offR + 1 + defR is mathematically bounded to [2, 2·maxRank] for a given league size (offR/defR ∈ [1, maxRank]) — used that fixed range instead of a this-week-population percentile. Each mismatch row now gets a `scalePct` (0–100 position on that range) and a qualitative band (Weak/Slight/Solid/Strong at 25/50/75% cutoffs), shown as colored chips under the KPIs and folded into the "Best Edge" KPI (e.g. "64.0 — Strong").
