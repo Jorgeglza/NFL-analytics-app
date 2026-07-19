@@ -57,6 +57,14 @@ Per page: run old app side-by-side (`pda-ie` env), match tables/KPIs/chart serie
 
 ## Session notes (newest first)
 
+### 2026-07-19 — Session 6 (cont.): Value Bets — "What to Target This Week" overview
+User request: a top-of-page section (below Season/Week) answering "what stats to target in which games" before picking one stat, plus move the Stat/Top-N controls down to the single-stat section they drive.
+- Refactored the to-date-mean rank computation out of the `mismatches` memo into a standalone `statRankMaps(base, tw, w)` so it's reusable.
+- New `weekOverview` memo scans `CURATED_STATS` (`PROP_MARKET_SECTIONS.offense + .defense` from `statPicker.ts` — same curated list used everywhere else, not the raw ~130 columns) across every game of the selected week, keeps each game's top 3 offense-vs-defense picks by score, and sorts games by their best pick.
+- New "What to Target This Week" card renders one tile per game (logos, Zoom-in link, top-3 stat picks as buttons showing offense team / stat / defense team / score). Clicking a pick sets `stat` — the "Stat Detail" section below (now titled with the live stat name) reacts immediately, so the overview acts as an index into the rest of the page rather than a separate view.
+- Moved the Stat select and Top-N slider from the page's top filter bar down to a new "Stat Detail — {stat}" row directly above the KPIs, per user's ask to put the dropdown next to what it drives.
+- Verified in pane (2025 wk1): overview renders 16 game tiles each with 3 ranked picks (e.g. "IND Carries vs MIA +31"); clicking "CIN Def Tackle Assists" pick updates the "Stat Detail —" heading to "Def Tackle Assists" immediately. Tests 49/49, build green.
+
 ### 2026-07-19 — Session 6 (cont.): Matchup Bets page restructure (user feedback)
 User feedback on the merged page: "Stat" at the top only affected some charts, the mismatch section (flat 8-chip list + two rank-bar echarts) didn't make sense, and the stat-comparison controls were far from what they drove. Reworked `MatchupBets.tsx` into the requested top-to-bottom order:
 1. **Game selection** — Season/Week/Game only; Stat/Set line moved down to the section they actually drive.

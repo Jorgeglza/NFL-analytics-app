@@ -11,7 +11,7 @@ import { getTeamMetaMap, type TeamMeta } from "../../lib/team/meta";
 import { Select } from "../../components/filters/Select";
 import { useECharts } from "../../components/charts/useECharts";
 import { Loading } from "../../components/Loading";
-import { buildMismatchStatGroups } from "./statPicker";
+import { buildMismatchStatGroups, statLabel, PROP_MARKET_SECTIONS } from "./statPicker";
 
 const PRIORITY = [
   "passing_yards", "rushing_yards", "receiving_yards", "passing_tds", "rushing_tds", "receiving_tds",
@@ -31,6 +31,47 @@ interface Mismatch {
   avgDefAllowed: number;
   score: number;
 }
+
+// Shared to-date-mean rank computation for a base stat (base + `${base}_allowed`
+// columns), reused by both the single-stat mismatch list and the cross-stat
+// "what to target" overview above it.
+function statRankMaps(base: string, tw: Row[], w: number) {
+  const allowedCol = `${base}_allowed`;
+  const cols = new Set(tw.length ? Object.keys(tw[0]) : []);
+  if (!cols.has(base) || !cols.has(allowedCol)) return null;
+  const upTo = tw.filter((r) => Number(r.week) <= w);
+  const meanOf = (col: string): Map<string, number> => {
+    const sum = new Map<string, { s: number; n: number }>();
+    for (const r of upTo) {
+      if (r[col] == null) continue;
+      const t = String(r.team);
+      if (!sum.has(t)) sum.set(t, { s: 0, n: 0 });
+      const e = sum.get(t)!;
+      e.s += Number(r[col]);
+      e.n++;
+    }
+    return new Map([...sum.entries()].map(([t, e]) => [t, e.s / e.n]));
+  };
+  const offAvg = meanOf(base);
+  const defAvg = meanOf(allowedCol);
+  if (!offAvg.size || !defAvg.size) return null;
+  // rank: off higher=better (rank 1 = highest); def lower allowed = better (rank 1 = lowest)
+  const rankMap = (m: Map<string, number>, higherBetter: boolean): Map<string, number> => {
+    const out = new Map<string, number>();
+    for (const [t, v] of m) {
+      let r = 1;
+      for (const [, v2] of m) if (higherBetter ? v2 > v : v2 < v) r++;
+      out.set(t, r);
+    }
+    return out;
+  };
+  return { offAvg, defAvg, offRank: rankMap(offAvg, true), defRank: rankMap(defAvg, false) };
+}
+
+// Curated stats to scan for the "what to target" overview (audit's shared
+// curated-stat-list fix, applied here too) — prop-market offense + defense
+// stats only, not the full ~130-item raw list.
+const CURATED_STATS = [...PROP_MARKET_SECTIONS.offense, ...PROP_MARKET_SECTIONS.defense].flatMap((s) => s.stats);
 
 export default function ValueBets() {
   const [searchParams] = useSearchParams();
@@ -89,37 +130,9 @@ export default function ValueBets() {
   const mismatches = useMemo<Mismatch[] | null>(() => {
     if (!tw.length || !selStat || !regSched.length) return null;
     const base = selStat.endsWith("_allowed") ? selStat.slice(0, -8) : selStat;
-    const allowedCol = `${base}_allowed`;
-    const cols = new Set(Object.keys(tw[0] ?? {}));
-    if (!cols.has(base) || !cols.has(allowedCol)) return null;
-    const upTo = tw.filter((r) => Number(r.week) <= w);
-    const meanOf = (col: string): Map<string, number> => {
-      const sum = new Map<string, { s: number; n: number }>();
-      for (const r of upTo) {
-        if (r[col] == null) continue;
-        const t = String(r.team);
-        if (!sum.has(t)) sum.set(t, { s: 0, n: 0 });
-        const e = sum.get(t)!;
-        e.s += Number(r[col]);
-        e.n++;
-      }
-      return new Map([...sum.entries()].map(([t, e]) => [t, e.s / e.n]));
-    };
-    const offAvg = meanOf(base);
-    const defAvg = meanOf(allowedCol);
-    if (!offAvg.size || !defAvg.size) return null;
-    // rank: off higher=better (rank 1 = highest); def lower allowed = better (rank 1 = lowest)
-    const rankMap = (m: Map<string, number>, higherBetter: boolean): Map<string, number> => {
-      const out = new Map<string, number>();
-      for (const [t, v] of m) {
-        let r = 1;
-        for (const [, v2] of m) if (higherBetter ? v2 > v : v2 < v) r++;
-        out.set(t, r);
-      }
-      return out;
-    };
-    const offRank = rankMap(offAvg, true);
-    const defRank = rankMap(defAvg, false);
+    const maps = statRankMaps(base, tw, w);
+    if (!maps) return null;
+    const { offAvg, defAvg, offRank, defRank } = maps;
     const rows: Mismatch[] = [];
     for (const g of regSched.filter((g) => Number(g.week) === w)) {
       const away = String(g.away_team);
@@ -142,6 +155,38 @@ export default function ValueBets() {
     rows.sort((a, b) => b.score - a.score);
     return rows.slice(0, topN);
   }, [tw, selStat, regSched, w, topN]);
+
+  // "What to target this week" overview (user request): scans every curated
+  // stat across every game so the page answers "which stat, in which game"
+  // before the user has to pick one stat first.
+  const weekOverview = useMemo(() => {
+    if (!tw.length || !regSched.length) return [];
+    const gamesThisWeek = regSched.filter((g) => Number(g.week) === w);
+    if (!gamesThisWeek.length) return [];
+    type Pick = { stat: string; offTeam: string; defTeam: string; score: number; offRank: number; defRank: number };
+    const perGame = new Map<string, { away: string; home: string; gameId: string; picks: Pick[] }>();
+    for (const g of gamesThisWeek) {
+      perGame.set(String(g.game_id), { away: String(g.away_team), home: String(g.home_team), gameId: String(g.game_id), picks: [] });
+    }
+    for (const base of CURATED_STATS) {
+      const maps = statRankMaps(base, tw, w);
+      if (!maps) continue;
+      for (const g of gamesThisWeek) {
+        const away = String(g.away_team);
+        const home = String(g.home_team);
+        for (const [off, def] of [[away, home], [home, away]] as const) {
+          const ro = maps.offRank.get(off);
+          const rd = maps.defRank.get(def);
+          if (ro == null || rd == null) continue;
+          perGame.get(String(g.game_id))!.picks.push({ stat: base, offTeam: off, defTeam: def, score: rd - ro, offRank: ro, defRank: rd });
+        }
+      }
+    }
+    return [...perGame.values()]
+      .map((g) => ({ ...g, picks: g.picks.sort((a, b) => b.score - a.score).slice(0, 3) }))
+      .filter((g) => g.picks.length)
+      .sort((a, b) => (b.picks[0]?.score ?? -Infinity) - (a.picks[0]?.score ?? -Infinity));
+  }, [tw, regSched, w]);
 
   const kpis = useMemo(() => {
     if (!mismatches?.length) return null;
@@ -349,17 +394,69 @@ export default function ValueBets() {
 
   if (!pw.length || !tw.length) return <Loading label="Loading value-bet data…" />;
 
+  const bestScore = (base: number) => (base > 0 ? "text-emerald-700" : base < 0 ? "text-red-700" : "text-slate-500");
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end gap-3">
         <h1 className="mr-auto flex items-center gap-2.5 text-2xl font-extrabold tracking-tight text-[#002f6c]"><span className="h-6 w-1.5 rounded-full bg-gradient-to-b from-[#002f6c] to-[#164a9c]" />Value Bets — Mismatches</h1>
         <Select label="Season" value={season} onChange={setSeason} options={seasons.map((x) => ({ value: String(x), label: String(x) }))} />
         <Select label="Week" value={selWeek} onChange={setWeek} options={weeks.map((x) => ({ value: String(x), label: `W${x}` }))} />
-        <Select label="Stat" value={selStat} onChange={setStat} groups={buildMismatchStatGroups(numericCols)} />
-        <label className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-wider text-slate-400">
-          Top-N: {topN}
-          <input type="range" min={1} max={32} step={1} value={topN} onChange={(e) => setTopN(Number(e.target.value))} className="w-44" />
-        </label>
+      </div>
+
+      {/* What to target this week — scans every curated stat across every game so
+          the page answers "which stat, in which game" before picking one stat. */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="mb-1 text-sm font-semibold">What to Target This Week</div>
+        <div className="mb-3 text-xs text-slate-500">
+          Best offense-vs-defense mismatches per game, scanned across {CURATED_STATS.length} common stats. Click a stat to load it below.
+        </div>
+        {weekOverview.length ? (
+          <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))" }}>
+            {weekOverview.map((g) => (
+              <div key={g.gameId} className="rounded-xl border border-slate-100 bg-slate-50/60 p-3">
+                <div className="mb-2 flex items-center gap-2">
+                  {logo(g.away) && <img src={logo(g.away)!} alt={g.away} className="h-5 w-5 object-contain" />}
+                  <span className="text-sm font-bold text-slate-800">{g.away} @ {g.home}</span>
+                  {logo(g.home) && <img src={logo(g.home)!} alt={g.home} className="h-5 w-5 object-contain" />}
+                  <Link to={matchupHref(g.gameId)} className="ml-auto text-[11px] font-medium text-[#002f6c] hover:underline">
+                    Zoom in →
+                  </Link>
+                </div>
+                <div className="space-y-1">
+                  {g.picks.map((p) => (
+                    <button
+                      key={`${p.stat}-${p.offTeam}`}
+                      onClick={() => setStat(p.stat)}
+                      className={`flex w-full items-center gap-1.5 rounded-lg border px-2 py-1 text-left text-[11px] transition-colors ${
+                        p.stat === selStat ? "border-[#002f6c] bg-[#002f6c]/5" : "border-transparent hover:border-slate-200 hover:bg-white"
+                      }`}
+                    >
+                      <span className="font-semibold text-slate-700">{p.offTeam}</span>
+                      <span className="text-slate-400">{statLabel(p.stat)}</span>
+                      <span className="text-slate-400">vs {p.defTeam}</span>
+                      <span className={`ml-auto font-bold ${bestScore(p.score)}`}>{p.score >= 0 ? "+" : ""}{p.score}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="py-4 text-center text-sm text-slate-400">No mismatch data for this week yet.</div>
+        )}
+      </div>
+
+      {/* Single-stat detail — Stat + Top-N controls live here, next to what they drive */}
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <span className="text-sm font-semibold text-slate-700">Stat Detail — {statLabel(selStat)}</span>
+        <div className="flex flex-wrap items-end gap-3">
+          <Select label="Stat" value={selStat} onChange={setStat} groups={buildMismatchStatGroups(numericCols)} />
+          <label className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-wider text-slate-400">
+            Top-N: {topN}
+            <input type="range" min={1} max={32} step={1} value={topN} onChange={(e) => setTopN(Number(e.target.value))} className="w-44" />
+          </label>
+        </div>
       </div>
 
       {/* Two primary KPIs (audit §12 🟢 — the other two summarized the noisy table, not the decision) */}
