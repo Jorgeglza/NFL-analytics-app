@@ -16,10 +16,12 @@ export default function WeeklyTab({
   grades,
   schedule,
   meta,
+  onSelectTeam,
 }: {
   grades: Row[];
   schedule: Row[];
   meta: Map<string, TeamMeta>;
+  onSelectTeam?: (team: string, season: string) => void;
 }) {
   const seasons = useMemo(() => [...new Set(grades.map((r) => Number(r.Season)))].sort((a, b) => b - a), [grades]);
   const [season, setSeason] = useState("");
@@ -211,6 +213,7 @@ export default function WeeklyTab({
       </div>
 
       <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        {onSelectTeam && <p className="mb-2 text-xs text-slate-500">Click a team to see what's driving its grade →</p>}
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead className="bg-slate-50 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">
@@ -220,6 +223,7 @@ export default function WeeklyTab({
                 <th className="px-3 py-2 text-right">Rank</th>
                 <th className="px-3 py-2 text-right">Z</th>
                 <th className="px-3 py-2 text-right">Percentile</th>
+                {onSelectTeam && <th className="px-3 py-2" />}
               </tr>
             </thead>
             <tbody>
@@ -230,6 +234,13 @@ export default function WeeklyTab({
                   <td className="px-3 py-1.5 text-right">{r.rank}</td>
                   <td className="px-3 py-1.5 text-right">{r.z.toFixed(2)}</td>
                   <td className="px-3 py-1.5 text-right">{r.pct.toFixed(1)}</td>
+                  {onSelectTeam && (
+                    <td className="px-3 py-1.5 text-right">
+                      <button onClick={() => onSelectTeam(r.team, sel)} className="font-semibold text-[#002f6c] hover:underline">
+                        Drivers →
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

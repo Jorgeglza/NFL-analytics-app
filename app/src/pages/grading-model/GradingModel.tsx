@@ -8,8 +8,13 @@ import TeamsTab from "./TeamsTab";
 import WeeklyTab from "./WeeklyTab";
 import FeaturesTab from "./FeaturesTab";
 
-const TABS = ["Season", "Teams", "Weekly", "Features"] as const;
-type Tab = (typeof TABS)[number];
+const TABS = [
+  ["Season", "🏆", "League-wide grade landscape for one season"],
+  ["Teams", "🔍", "Why one team is graded what it is"],
+  ["Weekly", "📊", "How one week's grades are distributed"],
+  ["Features", "🧬", "What goes into every grade"],
+] as const;
+type Tab = (typeof TABS)[number][0];
 
 export default function GradingModel() {
   const [tab, setTab] = useState<Tab>("Season");
@@ -18,6 +23,16 @@ export default function GradingModel() {
   const [schedule, setSchedule] = useState<Row[]>([]);
   const [meta, setMeta] = useState<Map<string, TeamMeta> | null>(null);
   const [contribParams, setContribParams] = useState<ContribParams | null>(null);
+
+  // Lifted so a click on a team in one tab (e.g. Weekly's ranking table) can
+  // jump straight into the Teams tab already scoped to that team/season.
+  const [teamsSeason, setTeamsSeason] = useState("");
+  const [teamsTeam, setTeamsTeam] = useState("DAL");
+  const jumpToTeam = (team: string, season: string) => {
+    setTeamsTeam(team);
+    setTeamsSeason(season);
+    setTab("Teams");
+  };
 
   useEffect(() => {
     Promise.all([getGrades(), getFeatureImportance(), getSchedule(), getTeamMetaMap(), getContribParams()]).then(
@@ -35,15 +50,28 @@ export default function GradingModel() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-4">
-        <h1 className="mr-auto flex items-center gap-2.5 text-2xl font-extrabold tracking-tight text-[#002f6c]"><span className="h-6 w-1.5 rounded-full bg-gradient-to-b from-[#002f6c] to-[#164a9c]" />Grading Model</h1>
-        <div className="flex rounded-full border border-slate-200 bg-slate-100 p-0.5">
-          {TABS.map((t) => (
-            <button key={t} onClick={() => setTab(t)} className={`rounded-full px-4 py-1.5 text-sm normal-case tracking-normal font-medium ${tab === t ? "bg-[#002f6c] text-white shadow-sm" : "text-slate-600 hover:text-slate-900"}`}>
+      <div>
+        <h1 className="flex items-center gap-2.5 text-2xl font-extrabold tracking-tight text-[#002f6c]"><span className="h-6 w-1.5 rounded-full bg-gradient-to-b from-[#002f6c] to-[#164a9c]" />Grading Model</h1>
+        <p className="mt-1 pl-4 text-sm text-slate-500">What every team's grade means, why it landed there, and what feeds into it.</p>
+      </div>
+
+      {/* Prominent section tabs — cards, not a lost pill bar (matches Matchup Previews). */}
+      <div className="grid gap-2 sm:grid-cols-4">
+        {TABS.map(([t, icon, desc]) => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            className={`rounded-2xl border px-4 py-2.5 text-left shadow-sm transition-all ${
+              tab === t ? "border-[#002f6c] bg-[#002f6c] text-white" : "border-slate-200 bg-white text-slate-700 hover:border-[#002f6c]/40"
+            }`}
+          >
+            <div className="flex items-center gap-2 text-sm font-bold">
+              <span>{icon}</span>
               {t}
-            </button>
-          ))}
-        </div>
+            </div>
+            <div className={`mt-0.5 text-[11px] ${tab === t ? "text-white/75" : "text-slate-400"}`}>{desc}</div>
+          </button>
+        ))}
       </div>
 
       {loading ? (
@@ -51,8 +79,18 @@ export default function GradingModel() {
       ) : (
         <>
           {tab === "Season" && <SeasonTab grades={grades} schedule={schedule} meta={meta} />}
-          {tab === "Teams" && <TeamsTab grades={grades} meta={meta} contribParams={contribParams} />}
-          {tab === "Weekly" && <WeeklyTab grades={grades} schedule={schedule} meta={meta} />}
+          {tab === "Teams" && (
+            <TeamsTab
+              grades={grades}
+              meta={meta}
+              contribParams={contribParams}
+              season={teamsSeason}
+              onSeasonChange={setTeamsSeason}
+              team={teamsTeam}
+              onTeamChange={setTeamsTeam}
+            />
+          )}
+          {tab === "Weekly" && <WeeklyTab grades={grades} schedule={schedule} meta={meta} onSelectTeam={jumpToTeam} />}
           {tab === "Features" && <FeaturesTab importance={importance} />}
         </>
       )}

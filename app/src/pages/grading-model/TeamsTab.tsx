@@ -7,6 +7,7 @@ import type { TeamMeta } from "../../lib/team/meta";
 import { Select } from "../../components/filters/Select";
 import { useECharts } from "../../components/charts/useECharts";
 import { weekContributions, type GradeType } from "../../lib/logic/contributions";
+import { buildStatGroups, statLabel } from "../player-analysis/statPicker";
 import { teamPalette, opponentLabel } from "./shared";
 
 const GRADE_OPTS: GradeType[] = ["Overall Grade", "Offensive Grade", "Defensive Grade"];
@@ -15,17 +16,23 @@ export default function TeamsTab({
   grades,
   meta,
   contribParams,
+  season,
+  onSeasonChange,
+  team,
+  onTeamChange,
 }: {
   grades: Row[];
   meta: Map<string, TeamMeta>;
   contribParams: ContribParams;
+  season: string;
+  onSeasonChange: (v: string) => void;
+  team: string;
+  onTeamChange: (v: string) => void;
 }) {
   const seasons = useMemo(() => [...new Set(grades.map((r) => Number(r.Season)))].sort((a, b) => b - a), [grades]);
   const teams = useMemo(() => [...new Set(grades.map((r) => String(r.Team)))].sort(), [grades]);
 
-  const [season, setSeason] = useState("");
   const sel = season || String(seasons[0] ?? "");
-  const [team, setTeam] = useState("DAL");
   const [gradeType, setGradeType] = useState<GradeType>("Overall Grade");
   const [topN, setTopN] = useState(7);
   const [throughWeek, setThroughWeek] = useState<number | null>(null);
@@ -161,9 +168,18 @@ export default function TeamsTab({
         usedWeeks++;
       }
     }
-    const weeksInScope = inScope.map((g) => Number(g.Week));
-    return { meanSigned, cnt, scaledSum, usedWeeks, rawByWeek, weeksInScope };
-  }, [teamGrades, tw, contribsByWeek, gradeType]);
+    // weeks the team actually has a grade for (byes/missing data excluded) —
+    // drives the averaging divisor, unchanged from before.
+    const playedWeeks = inScope.map((g) => Number(g.Week));
+    // full week range for display, so a bye week gets its own labeled column
+    // instead of silently vanishing from the table (audit: "W10 absent for DAL").
+    const rangeStart = weeks[0] ?? 1;
+    const displayWeeks: number[] = [];
+    for (let w = rangeStart; w <= tw; w++) displayWeeks.push(w);
+    const playedSet = new Set(playedWeeks);
+    const byeWeeks = new Set(displayWeeks.filter((w) => !playedSet.has(w)));
+    return { meanSigned, cnt, scaledSum, usedWeeks, rawByWeek, weeksInScope: playedWeeks, displayWeeks, byeWeeks };
+  }, [teamGrades, tw, contribsByWeek, gradeType, weeks.join(",")]);
 
   // ---- Top Drivers (mean signed contribution) ----
   const driversOption = useMemo<EChartsOption | null>(() => {
@@ -238,16 +254,17 @@ export default function TeamsTab({
 
   // ---- Drivers stats table ----
   const driversTable = useMemo(() => {
-    const { scaledSum, usedWeeks, rawByWeek, weeksInScope } = windowAgg;
+    const { scaledSum, usedWeeks, rawByWeek, weeksInScope, displayWeeks, byeWeeks } = windowAgg;
     if (!usedWeeks || !scaledSum.size) return null;
     // avg scaled contribution over ALL weeks in scope (missing = 0), like the old np.mean over weeks_in_scope
     const nWeeks = weeksInScope.length || 1;
     const avgScaled = new Map([...scaledSum.entries()].map(([f, v]) => [f, v / nWeeks]));
     const top = [...avgScaled.entries()].sort((a, b) => b[1] - a[1]).slice(0, topN);
     return {
-      weeks: weeksInScope,
+      weeks: displayWeeks,
+      byeWeeks,
       rows: top.map(([f, avgCont]) => {
-        const raws = weeksInScope.map((wk) => rawByWeek.get(wk)?.get(f) ?? null);
+        const raws = displayWeeks.map((wk) => (byeWeeks.has(wk) ? null : rawByWeek.get(wk)?.get(f) ?? null));
         const clean = raws.filter((v): v is number => v != null && Number.isFinite(v));
         return {
           feature: f.replace(/_/g, " "),
@@ -268,6 +285,7 @@ export default function TeamsTab({
       .filter((c) => !c.endsWith("_allowed") && set.has(`${c}_allowed`) && c !== "season" && c !== "week")
       .sort();
   }, [teamWeek]);
+  const statGroups = useMemo(() => buildStatGroups(statOptions, "offense"), [statOptions]);
   const [stat, setStat] = useState("passing_epa");
   const selStat = statOptions.includes(stat) ? stat : statOptions[0] ?? "";
 
@@ -288,7 +306,7 @@ export default function TeamsTab({
     const avgMain = mean(main);
     const avgAllowed = mean(allowed);
     const opps = rows.map((r) => opponentLabel(String(r.game_id ?? ""), team));
-    const title = selStat.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+    const title = statLabel(selStat);
     return {
       grid: { left: 10, right: 15, top: 30, bottom: 10, containLabel: true },
       legend: { top: 0 },
@@ -319,8 +337,8 @@ export default function TeamsTab({
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end gap-4">
-        <Select label="Season" value={sel} onChange={setSeason} options={seasons.map((s) => ({ value: String(s), label: String(s) }))} />
-        <Select label="Team" value={team} onChange={setTeam} options={teams.map((t) => ({ value: t, label: meta.get(t)?.name ?? t }))} />
+        <Select label="Season" value={sel} onChange={onSeasonChange} options={seasons.map((s) => ({ value: String(s), label: String(s) }))} />
+        <Select label="Team" value={team} onChange={onTeamChange} options={teams.map((t) => ({ value: t, label: meta.get(t)?.name ?? t }))} />
         <div className="flex gap-2">
           {GRADE_OPTS.map((g) => (
             <button key={g} onClick={() => setGradeType(g)} className={`rounded-full px-3 py-1.5 text-sm normal-case tracking-normal ${gradeType === g ? "bg-[#002f6c] text-white shadow-sm" : "bg-slate-100 text-slate-600 hover:text-slate-900"}`}>
@@ -360,7 +378,9 @@ export default function TeamsTab({
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <h3 className="mb-1 text-sm font-semibold text-slate-700">Top Drivers – Actual Stats</h3>
           <p className="mb-2 text-xs text-slate-500">
-            Top {topN} drivers ranked by average contribution. Cells show the actual game stat per week; 'Avg' is the mean raw stat, 'Avg. Cont.' is the mean scaled contribution to the model grade.
+            Top {topN} drivers ranked by average contribution. Each week's cell is the raw stat that game.{" "}
+            <b className="text-slate-700">Avg (raw)</b> is that stat's mean across played weeks — a real-world number (yards, EPA, etc.).{" "}
+            <b className="text-slate-700">Avg. contrib. (pts)</b> is a different unit: how many of the 0–100 grade's points that stat contributed on average, once weighted and scaled. A stat can average high in raw terms but contribute little to the grade, or vice versa.
           </p>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
@@ -370,17 +390,19 @@ export default function TeamsTab({
                   {driversTable.weeks.map((w) => (
                     <th key={w} className="px-2 py-2 text-right">W{w}</th>
                   ))}
-                  <th className="bg-slate-200/70 px-2 py-2 text-right">Avg</th>
-                  <th className="bg-slate-200/70 px-2 py-2 text-right">Avg. Cont.</th>
+                  <th className="bg-slate-200/70 px-2 py-2 text-right" title="Mean raw stat value across played weeks">Avg (raw)</th>
+                  <th className="bg-slate-200/70 px-2 py-2 text-right" title="Mean scaled contribution toward the 0–100 grade">Avg. contrib. (pts)</th>
                 </tr>
               </thead>
               <tbody>
                 {driversTable.rows.map((r) => (
                   <tr key={r.feature} className="border-t border-slate-100">
                     <td className="px-2 py-1.5 font-semibold">{r.feature}</td>
-                    {r.raws.map((v, i) => (
-                      <td key={i} className="px-2 py-1.5 text-right">{v == null ? "—" : v.toFixed(2)}</td>
-                    ))}
+                    {r.raws.map((v, i) => {
+                      const wk = driversTable.weeks[i];
+                      if (driversTable.byeWeeks.has(wk)) return <td key={i} className="px-2 py-1.5 text-right italic text-slate-400">Bye</td>;
+                      return <td key={i} className="px-2 py-1.5 text-right">{v == null ? "—" : v.toFixed(2)}</td>;
+                    })}
                     <td className="bg-slate-100/70 px-2 py-1.5 text-right">{r.avg == null ? "—" : r.avg.toFixed(2)}</td>
                     <td className="bg-slate-100/70 px-2 py-1.5 text-right">{r.avgCont.toFixed(2)}</td>
                   </tr>
@@ -393,7 +415,7 @@ export default function TeamsTab({
 
       <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="mb-2 flex items-end gap-4">
-          <Select label="Select Stat" value={selStat} onChange={setStat} options={statOptions.map((c) => ({ value: c, label: c.replace(/_/g, " ").replace(/\b\w/g, (ch) => ch.toUpperCase()) }))} />
+          <Select label="Select Stat" value={selStat} onChange={setStat} groups={statGroups} />
         </div>
         <div ref={statRef} className="h-[520px]" />
       </div>

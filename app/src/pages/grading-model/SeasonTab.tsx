@@ -56,6 +56,20 @@ export default function SeasonTab({
 
   return (
     <div className="space-y-6">
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm" style={{ borderTop: "3px solid #002f6c" }}>
+        <h2 className="text-sm font-bold uppercase tracking-wider text-[#002f6c]">How a grade is built</h2>
+        <p className="mt-2 max-w-3xl text-sm leading-relaxed text-slate-600">
+          Three Random Forest models — Overall, Offense, Defense — are retrained on every week's team box scores, learning which stats actually predict wins, scoring margin, and points allowed.
+          Each team's stats that week are normalized, weighted by how much the model relies on them (see the <span className="font-semibold text-slate-700">Features</span> tab), and summed into a single score.
+          That score is rescaled 0–100 across the league, so a <span className="font-semibold text-slate-700">Grade</span> is a relative rank, not a fixed benchmark — the league mean sits in the 50s by construction, and 100 means "best team that week," not "flawless."
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2 text-xs">
+          <span className="rounded-full bg-slate-100 px-3 py-1 font-medium text-slate-600"><b className="text-slate-800">Overall</b> — win + margin combined</span>
+          <span className="rounded-full bg-slate-100 px-3 py-1 font-medium text-slate-600"><b className="text-slate-800">Offense</b> — win + points scored</span>
+          <span className="rounded-full bg-slate-100 px-3 py-1 font-medium text-slate-600"><b className="text-slate-800">Defense</b> — win + points allowed (inverted: allowing less scores higher)</span>
+        </div>
+      </div>
+
       <Select label="Season" value={sel} onChange={setSeason} options={seasons.map((s) => ({ value: String(s), label: String(s) }))} />
       {[
         { title: `🏆 Overall Grades – ${sel}`, ref: overallRef, h: "h-[600px]" },
