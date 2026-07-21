@@ -3,7 +3,7 @@
 // UX audit §12: this is now the app's weekly mismatch radar — each matchup
 // "zooms in" to Matchup Bets (single-game drill-down, no longer in the
 // navbar) with season/week/game/stat carried over via URL params.
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import type { EChartsOption } from "echarts";
 import { getPlayerWeek, getTeamWeek, getSchedule, getMeta, type Row } from "../../lib/data/loader";
@@ -12,6 +12,7 @@ import { Select } from "../../components/filters/Select";
 import { useECharts } from "../../components/charts/useECharts";
 import { Loading } from "../../components/Loading";
 import { buildMismatchStatGroups, statLabel, PROP_MARKET_SECTIONS } from "./statPicker";
+import { useSeasonWeek } from "../../context/SeasonWeekContext";
 
 const PRIORITY = [
   "passing_yards", "rushing_yards", "receiving_yards", "passing_tds", "rushing_tds", "receiving_tds",
@@ -75,13 +76,12 @@ const CURATED_STATS = [...PROP_MARKET_SECTIONS.offense, ...PROP_MARKET_SECTIONS.
 
 export default function ValueBets() {
   const [searchParams] = useSearchParams();
+  const { season, week, setSeason, setWeek } = useSeasonWeek();
   const [meta, setMeta] = useState<Map<string, TeamMeta> | null>(null);
   const [schedule, setSchedule] = useState<Row[]>([]);
   const [seasons, setSeasons] = useState<number[]>([]);
-  const [season, setSeason] = useState(searchParams.get("season") ?? "");
   const [pw, setPw] = useState<Row[]>([]);
   const [tw, setTw] = useState<Row[]>([]);
-  const [week, setWeek] = useState(searchParams.get("week") ?? "");
   const [stat, setStat] = useState(searchParams.get("stat") ?? "receiving_yards");
   const [topN, setTopN] = useState(5);
   const [showFullRoster, setShowFullRoster] = useState(false);
@@ -92,9 +92,24 @@ export default function ValueBets() {
       setSchedule(s);
       const ss = [...mt.seasons].sort((a, b) => b - a);
       setSeasons(ss);
-      if (ss.length && !season) setSeason(String(ss[0]));
     });
   }, []);
+
+  // Deep-linked season/week (e.g. from Matchup Bets) win over the shared
+  // season/week context, applied once per mount.
+  const deepLinkApplied = useRef(false);
+  useEffect(() => {
+    if (deepLinkApplied.current) return;
+    const s = searchParams.get("season");
+    const w = searchParams.get("week");
+    if (s && w) {
+      deepLinkApplied.current = true;
+      setSeason(s);
+      setWeek(w);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
   useEffect(() => {
     if (!season) return;
     Promise.all([getPlayerWeek(Number(season)), getTeamWeek(Number(season))]).then(([p, t]) => {

@@ -9,6 +9,7 @@ import { useECharts } from "../../components/charts/useECharts";
 import { percentile, sampleStd, type GradeType } from "../../lib/logic/contributions";
 import { seasonRecords, weekGameInfo } from "./shared";
 import { rankedBarOption, offDefScatterOption, type TeamPoint } from "./charts";
+import { useSeasonWeek } from "../../context/SeasonWeekContext";
 
 const GRADE_OPTS: GradeType[] = ["Overall Grade", "Offensive Grade", "Defensive Grade"];
 
@@ -23,14 +24,13 @@ export default function WeeklyTab({
   meta: Map<string, TeamMeta>;
   onSelectTeam?: (team: string, season: string) => void;
 }) {
+  const { season, week, setSeason, setWeek } = useSeasonWeek();
   const seasons = useMemo(() => [...new Set(grades.map((r) => Number(r.Season)))].sort((a, b) => b - a), [grades]);
-  const [season, setSeason] = useState("");
   const sel = season || String(seasons[0] ?? "");
   const weeks = useMemo(
     () => [...new Set(grades.filter((r) => String(r.Season) === sel).map((r) => Number(r.Week)))].sort((a, b) => a - b),
     [grades, sel],
   );
-  const [week, setWeek] = useState("");
   const selWeek = weeks.map(String).includes(week) ? week : String(weeks[weeks.length - 1] ?? "");
   const [gradeType, setGradeType] = useState<GradeType>("Overall Grade");
 

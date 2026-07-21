@@ -9,8 +9,8 @@ import { Select } from "../../components/filters/Select";
 import { useECharts } from "../../components/charts/useECharts";
 import { Loading } from "../../components/Loading";
 import { opponentLabel } from "../grading-model/shared";
-import { currentWeek } from "../../lib/logic/defaultWeek";
 import { usePageTitle } from "../../lib/hooks/usePageTitle";
+import { useSeasonWeek } from "../../context/SeasonWeekContext";
 
 const STAT_LIST = ["points", "total_yards", "total_tds", "passing_yards", "rushing_yards", "turnovers"];
 const STAT_HIERARCHY: Record<string, string[]> = {
@@ -45,13 +45,12 @@ interface StatSummary {
 
 export default function TeamComparison() {
   const [searchParams] = useSearchParams();
+  const { season, week, setSeason, setWeek } = useSeasonWeek();
   const [meta, setMeta] = useState<Map<string, TeamMeta> | null>(null);
   const [grades, setGrades] = useState<Row[]>([]);
   const [seasons, setSeasons] = useState<number[]>([]);
-  const [season, setSeason] = useState(searchParams.get("season") ?? "");
   const [teamWeek, setTeamWeek] = useState<Row[]>([]);
   const [ranks, setRanks] = useState<Row[]>([]);
-  const [week, setWeek] = useState(searchParams.get("week") ?? "");
   const [team1, setTeam1] = useState(searchParams.get("team1") ?? "SF");
   const [team2, setTeam2] = useState(searchParams.get("team2") ?? "CIN");
   const [selectedStat, setSelectedStat] = useState("points_margin");
@@ -60,11 +59,9 @@ export default function TeamComparison() {
 
   usePageTitle(`Team Comparison: ${team1} vs ${team2}`);
 
-  // Default season/week comes from grades' season list (below); a pending
-  // week from the random-matchup effect below (or a deep-linked ?week=) is
-  // consumed here once that season's weeks are known, so it isn't clobbered
-  // by the usual "default to the last available week" behavior.
-  const pendingWeekRef = useRef<number | null>(searchParams.get("week") ? Number(searchParams.get("week")) : null);
+  // Deep-linked season/week (e.g. from Game Picks) wins over the shared
+  // season/week context, applied once per mount.
+  const deepLinkApplied = useRef(false);
   // Skip randomization entirely when arriving via a deep link (e.g. from Game
   // Picks) that already specifies the teams.
   const randomizedRef = useRef(!!searchParams.get("team1"));
@@ -75,45 +72,51 @@ export default function TeamComparison() {
       setGrades(g);
       const ss = [...new Set(g.map((r) => Number(r.Season)))].sort((a, b) => b - a);
       setSeasons(ss);
-      if (ss.length && !searchParams.get("season")) setSeason(String(ss[0]));
     });
     getSchedule().then(setSchedule);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Default to a random current-week matchup (away = team1, home = team2),
-  // re-randomized every time the page is opened fresh (not persisted, and
-  // skipped entirely when deep-linked with explicit teams).
   useEffect(() => {
-    if (randomizedRef.current || !schedule.length) return;
-    const cw = currentWeek(schedule);
-    if (!cw || !cw.games.length) return;
+    if (deepLinkApplied.current) return;
+    const s = searchParams.get("season");
+    const w = searchParams.get("week");
+    if (s && w) {
+      deepLinkApplied.current = true;
+      setSeason(s);
+      setWeek(w);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  // Default to a random matchup (away = team1, home = team2) from the shared
+  // season/week's games, re-randomized every time the page is opened fresh
+  // (not persisted, and skipped entirely when deep-linked with explicit teams).
+  useEffect(() => {
+    if (randomizedRef.current || !schedule.length || !season || !week) return;
+    const games = schedule.filter((r) => String(r.season) === season && String(r.week) === week);
+    if (!games.length) return;
     randomizedRef.current = true;
-    const g = cw.games[Math.floor(Math.random() * cw.games.length)];
+    const g = games[Math.floor(Math.random() * games.length)];
     setTeam1(String(g.away_team));
     setTeam2(String(g.home_team));
-    pendingWeekRef.current = cw.week;
-    setSeason(String(cw.season));
-  }, [schedule]);
+  }, [schedule, season, week]);
 
   useEffect(() => {
     if (!season) return;
     Promise.all([getTeamWeek(Number(season)), getTeamWeekRanks(Number(season))]).then(([tw, rk]) => {
-      const reg = tw.filter((r) => r.game_type === "REG" || r.game_type == null);
-      setTeamWeek(reg);
+      setTeamWeek(tw.filter((r) => r.game_type === "REG" || r.game_type == null));
       setRanks(rk);
-      const wks = [...new Set(reg.map((r) => Number(r.week)))].sort((a, b) => a - b);
-      const pending = pendingWeekRef.current;
-      if (pending != null && wks.includes(pending)) {
-        setWeek(String(pending));
-        pendingWeekRef.current = null;
-      } else if (wks.length) {
-        setWeek(String(wks[wks.length - 1]));
-      }
     });
   }, [season]);
 
   const weeks = useMemo(() => [...new Set(teamWeek.map((r) => Number(r.week)))].sort((a, b) => a - b), [teamWeek]);
+
+  // This page's team_week data can lag schedule.json by a week; fall back to
+  // the latest week this season's data actually has rather than showing an
+  // invalid selection (without overwriting the shared season/week context).
+  useEffect(() => {
+    if (weeks.length && !weeks.includes(Number(week))) setWeek(String(weeks[weeks.length - 1]));
+  }, [weeks, week, setWeek]);
   const teams = useMemo(() => [...new Set(teamWeek.map((r) => String(r.team)))].sort(), [teamWeek]);
   const wk = Number(week);
 

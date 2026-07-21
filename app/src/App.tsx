@@ -5,6 +5,7 @@ import { Loading } from "./components/Loading";
 import Home from "./pages/Home";
 import { NAV_GROUPS } from "./nav";
 import { usePageTitle } from "./lib/hooks/usePageTitle";
+import { SeasonWeekProvider } from "./context/SeasonWeekContext";
 
 // Default tab title per route (page-specific overrides live inside the page
 // components themselves, e.g. Team Comparison reflects the selected teams).
@@ -60,36 +61,38 @@ export default function App() {
       <Navbar />
       <RouteTitle />
       <main className="mx-auto max-w-screen-2xl px-4 py-6">
-        <Suspense fallback={<Loading />}>
-          <Routes>
-            <Route path="/" element={<Home />} />
-            {/* Not in the navbar — reached from Home's footer link */}
-            {(() => {
-              const GlossaryPage = IMPLEMENTED["/glossary"];
-              return <Route path="/glossary" element={<GlossaryPage />} />;
-            })()}
-            {/* Not in the navbar — reached from the Matchup Previews header link */}
-            {(() => {
-              const Guide = IMPLEMENTED["/game_analysis/models_guide"];
-              return <Route path="/game_analysis/models_guide" element={<Guide />} />;
-            })()}
-            {/* Not in the navbar — reached by "zoom in" from Value Bets (audit §11/§12: two-step journey) */}
-            {(() => {
-              const Matchup = IMPLEMENTED["/player_analysis/matchup_bets"];
-              return <Route path="/player_analysis/matchup_bets" element={<Matchup />} />;
-            })()}
-            {NAV_GROUPS.flatMap((g) => g.pages).map((page) => {
-              const Impl = IMPLEMENTED[page.path];
-              return (
-                <Route
-                  key={page.path}
-                  path={page.path}
-                  element={Impl ? <Impl /> : <Placeholder name={page.label} description={page.description} />}
-                />
-              );
-            })}
-          </Routes>
-        </Suspense>
+        <SeasonWeekProvider>
+          <Suspense fallback={<Loading />}>
+            <Routes>
+              <Route path="/" element={<Home />} />
+              {/* Not in the navbar — reached from Home's footer link */}
+              {(() => {
+                const GlossaryPage = IMPLEMENTED["/glossary"];
+                return <Route path="/glossary" element={<GlossaryPage />} />;
+              })()}
+              {/* Not in the navbar — reached from the Matchup Previews header link */}
+              {(() => {
+                const Guide = IMPLEMENTED["/game_analysis/models_guide"];
+                return <Route path="/game_analysis/models_guide" element={<Guide />} />;
+              })()}
+              {/* Not in the navbar — reached by "zoom in" from Value Bets (audit §11/§12: two-step journey) */}
+              {(() => {
+                const Matchup = IMPLEMENTED["/player_analysis/matchup_bets"];
+                return <Route path="/player_analysis/matchup_bets" element={<Matchup />} />;
+              })()}
+              {NAV_GROUPS.flatMap((g) => g.pages).map((page) => {
+                const Impl = IMPLEMENTED[page.path];
+                return (
+                  <Route
+                    key={page.path}
+                    path={page.path}
+                    element={Impl ? <Impl /> : <Placeholder name={page.label} description={page.description} />}
+                  />
+                );
+              })}
+            </Routes>
+          </Suspense>
+        </SeasonWeekProvider>
       </main>
     </div>
   );

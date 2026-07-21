@@ -14,7 +14,8 @@ import { Loading } from "../../components/Loading";
 import { useECharts } from "../../components/charts/useECharts";
 import { LazyMount } from "../../components/LazyMount";
 import { RangeSlider } from "../../components/RangeSlider";
-import { buildStatGroups, statLabel } from "./statPicker";
+import { buildStatGroups, statLabel, seasonTypeOptions } from "./statPicker";
+import { useSeasonWeek } from "../../context/SeasonWeekContext";
 
 const EXCLUDE = new Set([
   "season", "week", "team", "opponent_team", "gameday", "game_id",
@@ -151,11 +152,11 @@ function TeamCard({ team, stat, players, xMax, meta }: {
 }
 
 export default function PlayerTeamStats() {
+  const { season, setSeason } = useSeasonWeek();
   const [meta, setMeta] = useState<Map<string, TeamMeta> | null>(null);
   const [seasons, setSeasons] = useState<number[]>([]);
-  const [season, setSeason] = useState("");
   const [rows, setRows] = useState<Row[]>([]);
-  const [seasonType, setSeasonType] = useState("REG");
+  const [seasonType, setSeasonType] = useState("");
   const [side, setSide] = useState<"offense" | "defense">("offense");
   const [stat, setStat] = useState("passing_yards");
   const [weekLo, setWeekLo] = useState(1);
@@ -166,8 +167,9 @@ export default function PlayerTeamStats() {
       setMeta(m);
       const ss = [...mt.seasons].sort((a, b) => b - a);
       setSeasons(ss);
-      if (ss.length) setSeason(String(ss[0]));
+      if (ss.length && !season) setSeason(String(ss[0]));
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => {
     if (season) getPlayerWeek(Number(season)).then(setRows);
@@ -277,7 +279,7 @@ export default function PlayerTeamStats() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-end gap-4">
         <h1 className="mr-auto flex items-center gap-2.5 text-2xl font-extrabold tracking-tight text-[#002f6c]"><span className="h-6 w-1.5 rounded-full bg-gradient-to-b from-[#002f6c] to-[#164a9c]" />Player Team Stats</h1>
-        <Select label="Season Type" value={seasonType} onChange={setSeasonType} options={(seasonTypes.length ? seasonTypes : ["REG"]).map((t) => ({ value: t, label: t }))} />
+        <Select label="Season Type" value={seasonType} onChange={setSeasonType} options={seasonTypeOptions(seasonTypes)} />
         <Select label="Season" value={season} onChange={setSeason} options={seasons.map((s) => ({ value: String(s), label: String(s) }))} />
         <div className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
           Side

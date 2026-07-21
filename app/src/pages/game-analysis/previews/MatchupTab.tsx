@@ -390,18 +390,24 @@ export default function MatchupTab({
     return pA == null ? null : 1 - pA;
   })();
 
+  const gradeMetricOf = { Ovr: "Overall Grade", Off: "Offensive Grade", Def: "Defensive Grade" } as const;
+
   const gradeBox = (team: string) => {
     const [ovr, off, def] = gradesIdx.triple(team, s, wkPlayed);
     return (
       <div className="relative mt-2 rounded-2xl border border-slate-200 bg-white shadow-sm p-3">
         <div className="absolute -top-2.5 left-3 bg-white px-1.5 text-xs font-semibold" title={`Season-average model grades through week ${wkPlayed} (pre-game information only)`}>Grades (thru W{wkPlayed})</div>
         <div className="flex gap-2">
-          {[["Ovr", ovr], ["Off", off], ["Def", def]].map(([l, v]) => (
-            <div key={String(l)} className="flex-1 rounded-lg border border-slate-200 px-2 py-1 text-center">
-              <div className="text-[0.7rem] text-slate-500">{l}</div>
-              <div className="text-lg font-bold">{v ?? "--"}</div>
-            </div>
-          ))}
+          {([["Ovr", ovr], ["Off", off], ["Def", def]] as const).map(([l, v]) => {
+            const r = gradesIdx.rank(team, s, wkPlayed, gradeMetricOf[l]);
+            return (
+              <div key={l} className="flex-1 rounded-lg border border-slate-200 px-2 py-1 text-center" title={r ? `League rank #${r.rank} of ${r.nTeams} (season-to-date average)` : undefined}>
+                <div className="text-[0.7rem] text-slate-500">{l}</div>
+                <div className="text-lg font-bold">{v ?? "--"}</div>
+                {r && <div className="text-[10px] font-semibold text-slate-400">#{r.rank}</div>}
+              </div>
+            );
+          })}
         </div>
       </div>
     );

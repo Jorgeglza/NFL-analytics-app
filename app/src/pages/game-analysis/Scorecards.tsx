@@ -3,7 +3,7 @@
 // context on every stat, disclosed playstyle metrics, grades with ranks, and a
 // season-journey chart (weekly margin + grade evolution). Data unchanged:
 // team_week + team_week_ranks + grades.json, regular season only.
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import type { EChartsOption } from "echarts";
 import { getTeamWeek, getTeamWeekRanks, getGrades, getMeta, type Row } from "../../lib/data/loader";
@@ -14,6 +14,7 @@ import { Loading } from "../../components/Loading";
 import { Card } from "../../components/ui";
 import { opponentLabel } from "../grading-model/shared";
 import { usePageTitle } from "../../lib/hooks/usePageTitle";
+import { useSeasonWeek } from "../../context/SeasonWeekContext";
 
 const OFF_ACCENT = "#c0392b";
 const DEF_ACCENT = "#2980b9";
@@ -207,9 +208,9 @@ function SplitBar({
 
 export default function Scorecards() {
   const [searchParams] = useSearchParams();
+  const { season, setSeason } = useSeasonWeek();
   const [meta, setMeta] = useState<Map<string, TeamMeta> | null>(null);
   const [seasons, setSeasons] = useState<number[]>([]);
-  const [season, setSeason] = useState(searchParams.get("season") ?? "");
   const [team, setTeam] = useState(searchParams.get("team") ?? "DAL");
   const [teamWeek, setTeamWeek] = useState<Row[]>([]);
   const [ranks, setRanks] = useState<Row[]>([]);
@@ -223,10 +224,21 @@ export default function Scorecards() {
       setGrades(g);
       const ss = [...mt.seasons].sort((a, b) => b - a);
       setSeasons(ss);
-      if (ss.length && !searchParams.get("season")) setSeason(String(ss[0]));
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Deep-linked season (e.g. from Team Comparison) wins over the shared
+  // season/week context, applied once per mount.
+  const deepLinkApplied = useRef(false);
+  useEffect(() => {
+    if (deepLinkApplied.current) return;
+    const s = searchParams.get("season");
+    if (s) {
+      deepLinkApplied.current = true;
+      setSeason(s);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   useEffect(() => {
     if (!season) return;

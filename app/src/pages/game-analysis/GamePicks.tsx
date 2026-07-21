@@ -1,22 +1,20 @@
 // Port of game_picks_page_1.py — weekly results table with manual-winner
 // checkboxes for unplayed games (persisted in localStorage), win-type counts
 // bar, and a spread-by-game bar chart (sortable by kickoff time or spread).
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import type { EChartsOption } from "echarts";
 import { getSchedule, type Row } from "../../lib/data/loader";
 import { Select } from "../../components/filters/Select";
 import { useECharts } from "../../components/charts/useECharts";
 import { Loading } from "../../components/Loading";
-import { currentWeek } from "../../lib/logic/defaultWeek";
 import { usePageTitle } from "../../lib/hooks/usePageTitle";
+import { WIN_TYPE_COLORS } from "../../lib/logic/winType";
+import { useSeasonWeek } from "../../context/SeasonWeekContext";
 
 const LABEL_FOR_NONE = "No result yet";
 const COLORS: Record<string, string> = {
-  "Favorite home": "#3C9A5F",
-  "Favorite away": "#2459A7",
-  "Underdog home": "#E87722",
-  "Underdog away": "#C8102E",
+  ...WIN_TYPE_COLORS,
   [LABEL_FOR_NONE]: "#e0e0e0",
 };
 const ROW_BG: Record<string, string> = {
@@ -38,11 +36,11 @@ function loadManual(): string[] {
 
 export default function GamePicks() {
   const [searchParams] = useSearchParams();
+  const { season, week, setSeason, setWeek } = useSeasonWeek();
   const [schedule, setSchedule] = useState<Row[]>([]);
-  const [season, setSeason] = useState(searchParams.get("season") ?? "");
-  const [week, setWeek] = useState(searchParams.get("week") ?? "");
   const [manual, setManual] = useState<string[]>(loadManual);
   const [spreadSort, setSpreadSort] = useState<"time" | "spread">("time");
+  const deepLinkApplied = useRef(false);
 
   usePageTitle(season && week ? `Game Picks — Wk ${week}, ${season}` : "Game Picks");
 
@@ -51,22 +49,24 @@ export default function GamePicks() {
   }, [manual]);
 
   useEffect(() => {
-    getSchedule().then((rows) => {
-      setSchedule(rows);
-      // Deep-linked from Home's "this week" launchpad — trust the params, no
-      // need to recompute the default.
-      if (searchParams.get("season") && searchParams.get("week")) return;
-      // Default week (audit §2): the current in-progress week while the season
-      // is live; once it's over, the last completed regular-season week — not
-      // the Super Bowl's 1-row table.
-      const cw = currentWeek(rows);
-      if (cw) {
-        setSeason(String(cw.season));
-        setWeek(String(cw.week));
-      }
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    getSchedule().then(setSchedule);
   }, []);
+
+  // Deep-linked (e.g. from Home's "this week" launchpad or another page) —
+  // the URL params win over whatever the shared season/week context has,
+  // applied once per mount. Otherwise the shared context (seeded from the
+  // current/last-completed week — audit §2) already provides the default.
+  useEffect(() => {
+    if (deepLinkApplied.current) return;
+    const s = searchParams.get("season");
+    const w = searchParams.get("week");
+    if (s && w) {
+      deepLinkApplied.current = true;
+      setSeason(s);
+      setWeek(w);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   const seasons = useMemo(() => [...new Set(schedule.map((r) => Number(r.season)))].sort((a, b) => b - a), [schedule]);
   const weeks = useMemo(

@@ -94,6 +94,21 @@ export const HIT_COLOR = "#059669";
 export const MISS_COLOR = "#dc2626";
 export const NEUTRAL_COLOR = "#002f6c";
 
+const SEASON_TYPE_LABELS: Record<string, string> = { REG: "Regular Season", POST: "Post Season" };
+
+/**
+ * Season Type <Select> options shared across Prop Bets, Parlay Builder, and
+ * Player Team Stats: an explicit "All" (value "") plus readable labels for
+ * whatever raw season_type codes are present in the data, instead of raw
+ * REG/POST codes with no "All" choice.
+ */
+export function seasonTypeOptions(types: string[]) {
+  return [
+    { value: "", label: "All" },
+    ...types.map((t) => ({ value: t, label: SEASON_TYPE_LABELS[t] ?? t })),
+  ];
+}
+
 /** American fair odds for probability p (null at 0/1 where odds are undefined). */
 export function americanOdds(p: number): string | null {
   if (p <= 0 || p >= 1) return null;

@@ -5,6 +5,8 @@
 // scraped 2026-07-20), scoped to the columns this app actually exposes via
 // `statPicker.ts`'s curated stat picker. Win-type + analytics sections are
 // authored for this app.
+import { CATEGORY_COLORS } from "./logic/winType";
+
 export interface GlossaryEntry {
   term: string;
   desc: string;
@@ -17,14 +19,14 @@ export interface GlossarySection {
 }
 
 export const WIN_TYPE_GLOSSARY: GlossaryEntry[] = [
-  { term: "Favorite home", desc: "The favorite won and was the home team.", color: "#3C9A5F" },
-  { term: "Favorite away", desc: "The favorite won on the road.", color: "#2459A7" },
-  { term: "Underdog home", desc: "The underdog won at home. Also covers pick'em games (no favorite) won by the home team.", color: "#E87722" },
-  { term: "Underdog away", desc: "The underdog won on the road. Also covers pick'em games won by the away team.", color: "#C8102E" },
-  { term: "Tie", desc: "The game ended tied. Its own category — not counted as a favorite win or loss in any percentage.", color: "#9333ea" },
-  { term: "Favorite Home (No Score)", desc: "Not played yet and the favorite is the home team.", color: "#D4AF37" },
-  { term: "Favorite Away (No Score)", desc: "Not played yet and the favorite is the away team.", color: "#8B4513" },
-  { term: "No Favorite", desc: "Not played yet and no favorite (pick'em or missing spread).", color: "#e0e0e0" },
+  { term: "Favorite home", desc: "The favorite won and was the home team.", color: CATEGORY_COLORS["Favorite home"] },
+  { term: "Favorite away", desc: "The favorite won on the road.", color: CATEGORY_COLORS["Favorite away"] },
+  { term: "Underdog home", desc: "The underdog won at home. Also covers pick'em games (no favorite) won by the home team.", color: CATEGORY_COLORS["Underdog home"] },
+  { term: "Underdog away", desc: "The underdog won on the road. Also covers pick'em games won by the away team.", color: CATEGORY_COLORS["Underdog away"] },
+  { term: "Tie", desc: "The game ended tied. Its own category — not counted as a favorite win or loss in any percentage.", color: CATEGORY_COLORS.Tie },
+  { term: "Favorite Home (No Score)", desc: "Not played yet and the favorite is the home team.", color: CATEGORY_COLORS["Favorite Home (No Score)"] },
+  { term: "Favorite Away (No Score)", desc: "Not played yet and the favorite is the away team.", color: CATEGORY_COLORS["Favorite Away (No Score)"] },
+  { term: "No Favorite", desc: "Not played yet and no favorite (pick'em or missing spread).", color: CATEGORY_COLORS["No Favorite"] },
 ];
 
 const PASSING: GlossaryEntry[] = [

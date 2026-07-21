@@ -12,7 +12,7 @@ import { MultiSelect } from "../../components/filters/MultiSelect";
 import { useECharts } from "../../components/charts/useECharts";
 import type { EChartsOption } from "echarts";
 import { wilson } from "../../lib/logic/wilson";
-import { WIN_TYPE_COLORS, type WinType } from "../../lib/logic/winType";
+import { WIN_TYPE_COLORS, CATEGORY_CODES, type WinType } from "../../lib/logic/winType";
 import { Loading } from "../../components/Loading";
 
 const WIN_TYPE_CATS: WinType[] = ["Favorite home", "Favorite away", "Underdog home", "Underdog away"];
@@ -312,7 +312,7 @@ export default function SpreadWinPct() {
           show: true,
           fontSize: 10,
           color: "#000",
-          formatter: (p: { value?: unknown }) => (Number(p.value) >= 5 ? `${Math.round(Number(p.value))}%` : ""),
+          formatter: (p: { value?: unknown }) => (Number(p.value) >= 5 ? `${CATEGORY_CODES[wt]} ${Math.round(Number(p.value))}%` : ""),
         },
         data: x.map((b) => {
           const t = totalOf(b);

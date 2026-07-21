@@ -1,7 +1,6 @@
 // Port of build_parlay_page_2.py — multi-leg parlay builder.
-// Quirks preserved: the player list ignores season_type. The old page's inert
-// Week dropdown (displayed but never used in the calc) has been removed
-// rather than kept as a non-functional control.
+// The old page's inert Week dropdown (displayed but never used in the calc)
+// has been removed rather than kept as a non-functional control.
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { EChartsOption } from "echarts";
 import { getPlayerWeek, getMeta, type Row } from "../../lib/data/loader";
@@ -10,7 +9,7 @@ import { Select } from "../../components/filters/Select";
 import { useECharts } from "../../components/charts/useECharts";
 import { opponentLabel } from "../grading-model/shared";
 import { Loading } from "../../components/Loading";
-import { buildStatGroups, statLabel, americanOdds, headshotCrop, randomItem, randomPassRushRecStat, HIT_COLOR, MISS_COLOR, NEUTRAL_COLOR } from "./statPicker";
+import { buildStatGroups, statLabel, americanOdds, headshotCrop, randomItem, randomPassRushRecStat, seasonTypeOptions, HIT_COLOR, MISS_COLOR, NEUTRAL_COLOR } from "./statPicker";
 
 const EXCLUDE = new Set([
   "season", "week", "team", "opponent_team", "gameday", "game_id",
@@ -107,9 +106,9 @@ function LegCard({
   const statGroups = useMemo(() => buildStatGroups(sideCols, leg.side), [sideCols, leg.side]);
   const stat = sideCols.includes(leg.stat) ? leg.stat : sideCols.includes("passing_yards") ? "passing_yards" : sideCols[0] ?? "";
 
-  // players with positive totals (season+team only, like the old page)
+  // players with positive totals (season+season-type+team, like the stat calc below)
   const players = useMemo(() => {
-    const seasonRows = rows.filter((r) => String(r.team) === team);
+    const seasonRows = typed.filter((r) => String(r.team) === team);
     const totals = new Map<string, number>();
     for (const r of seasonRows) {
       const p = String(r.player_display_name ?? r.player_name ?? r.player_id);
@@ -119,7 +118,7 @@ function LegCard({
       .filter(([, t]) => t > 0)
       .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
       .map(([p]) => p);
-  }, [rows, team, stat]);
+  }, [typed, team, stat]);
   const player = players.includes(leg.player) ? leg.player : players[0] ?? "";
 
   const line = leg.line === "" ? null : Number(leg.line);
@@ -195,7 +194,7 @@ function LegCard({
       <div className="min-w-[340px] flex-1">
         <div className="flex flex-wrap items-end gap-2">
           <Select label="Season" value={leg.season} onChange={(v) => set({ season: v })} options={seasons.map((s) => ({ value: String(s), label: String(s) }))} />
-          <Select label="Season Type" value={leg.seasonType} onChange={(v) => set({ seasonType: v })} options={(seasonTypes.length ? seasonTypes : ["REG"]).map((t) => ({ value: t, label: t }))} />
+          <Select label="Season Type" value={leg.seasonType} onChange={(v) => set({ seasonType: v })} options={seasonTypeOptions(seasonTypes)} />
           <Select label="Team" value={team} onChange={(v) => set({ team: v })} options={teams.map((t) => ({ value: t, label: teamMeta?.get(t)?.name ?? t }))} />
           <div className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
             Stat Type
@@ -275,7 +274,7 @@ function LegCard({
 // team/player are left blank — LegCard randomizes the team once its data
 // loads, and defaults the player to the stat's top player automatically.
 const defaultLeg = (season: number): Leg => ({
-  season: String(season), seasonType: "REG", team: "", side: "offense", stat: randomPassRushRecStat(), player: "", line: "",
+  season: String(season), seasonType: "", team: "", side: "offense", stat: randomPassRushRecStat(), player: "", line: "",
 });
 
 export default function ParlayBuilder() {

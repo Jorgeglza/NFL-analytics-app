@@ -18,27 +18,7 @@ import { Card, Segmented } from "../../components/ui";
 import { LazyMount } from "../../components/LazyMount";
 import { Glossary } from "../../components/Glossary";
 import { GLOSSARY_SECTIONS } from "../../lib/glossary";
-
-type Category =
-  | "Favorite home"
-  | "Favorite away"
-  | "Underdog home"
-  | "Underdog away"
-  | "Tie"
-  | "Favorite Home (No Score)"
-  | "Favorite Away (No Score)"
-  | "No Favorite";
-
-const CATEGORY_COLORS: Record<Category, string> = {
-  "Favorite home": "#3C9A5F",
-  "Favorite away": "#2459A7",
-  "Underdog home": "#E87722",
-  "Underdog away": "#C8102E",
-  Tie: "#9333ea",
-  "Favorite Home (No Score)": "#D4AF37",
-  "Favorite Away (No Score)": "#8B4513",
-  "No Favorite": "#e0e0e0",
-};
+import { CATEGORY_COLORS, CATEGORY_CODES, type Category } from "../../lib/logic/winType";
 
 const CATEGORY_ORDER: Category[] = [
   "Favorite home",
@@ -58,7 +38,9 @@ const KPI_DEFS = [
 ] as const;
 type KpiKey = (typeof KPI_DEFS)[number]["key"];
 
-// colors deliberately outside the win-type category palette (audit: color = category there)
+// Colors deliberately outside the win-type category palette (KPI trend lines,
+// not win-type categories — the stacked bars below are where color=category,
+// and their segments now carry a code label too, not just color).
 const SPLIT_DEFS = [
   { key: "homeFavWinPct", label: "Home favorites Win %", color: "#002f6c" },
   { key: "awayFavWinPct", label: "Away favorites Win %", color: "#7c3aed" },
@@ -268,6 +250,12 @@ function MixChart({
         barMaxWidth: 34,
         data: groups.map((g) => (g.total ? Number((((g.counts.get(cat) ?? 0) / g.total) * 100).toFixed(1)) : 0)),
         itemStyle: { color: CATEGORY_COLORS[cat] },
+        label: {
+          show: true,
+          fontSize: 8,
+          color: "#000",
+          formatter: (p: { value?: unknown }) => (Number(p.value) >= 5 ? `${CATEGORY_CODES[cat]} ${Math.round(Number(p.value))}%` : ""),
+        },
       })),
     } as unknown as EChartsOption;
   }, [groups, xLabel]);
@@ -326,7 +314,7 @@ function Block({ title, rows, xKey }: { title: string; rows: Row[]; xKey: "week"
               const v = Number(p.value);
               const total = totals.get(Number(p.name)) ?? 0;
               if (!v || !total) return "";
-              return `${v} | ${Math.round((v / total) * 100)}%`;
+              return `${CATEGORY_CODES[cat]} ${v} | ${Math.round((v / total) * 100)}%`;
             },
           },
         })),

@@ -4,6 +4,7 @@ import { getGrades, getFeatureImportance, getSchedule, getContribParams, type Ro
 import { getTeamMetaMap, type TeamMeta } from "../../lib/team/meta";
 import { Loading } from "../../components/Loading";
 import { usePageTitle } from "../../lib/hooks/usePageTitle";
+import { useSeasonWeek } from "../../context/SeasonWeekContext";
 import SeasonTab from "./SeasonTab";
 import TeamsTab from "./TeamsTab";
 import WeeklyTab from "./WeeklyTab";
@@ -25,9 +26,10 @@ export default function GradingModel() {
   const [meta, setMeta] = useState<Map<string, TeamMeta> | null>(null);
   const [contribParams, setContribParams] = useState<ContribParams | null>(null);
 
-  // Lifted so a click on a team in one tab (e.g. Weekly's ranking table) can
-  // jump straight into the Teams tab already scoped to that team/season.
-  const [teamsSeason, setTeamsSeason] = useState("");
+  // Season is shared app-wide (audit §1); team is Teams-tab-specific but
+  // still lifted so a click on a team in one tab (e.g. Weekly's ranking
+  // table) can jump straight into the Teams tab already scoped to it.
+  const { season: teamsSeason, setSeason: setTeamsSeason } = useSeasonWeek();
   const [teamsTeam, setTeamsTeam] = useState("DAL");
   const jumpToTeam = (team: string, season: string) => {
     setTeamsTeam(team);

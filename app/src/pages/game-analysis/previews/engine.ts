@@ -8,6 +8,7 @@ import { impliedProb, fairProbs } from "../../../lib/logic/moneyline";
 import { wilson } from "../../../lib/logic/wilson";
 import { buildEloIndex, type EloEntry, type EloGame } from "../../../lib/logic/elo";
 import { pythWinPct, log5 } from "../../../lib/logic/pythagorean";
+import { WIN_TYPE_COLORS } from "../../../lib/logic/winType";
 
 export type MetricKey = "consensus" | "blend" | "trend" | "ml" | "elo" | "pyth";
 export const MODEL_KEYS: [MetricKey, string][] = [
@@ -88,19 +89,28 @@ export function marketRate(hist: HistAgg, bucket: string, favSide: string, exclS
 }
 
 // ---------- grades ----------
+export type GradeMetric = "Overall Grade" | "Offensive Grade" | "Defensive Grade";
+
 export interface GradesIndex {
   /** avg Overall Grade for team over weeks <= wk (null if none) */
   avgOverall(team: string, season: number, wk: number): number | null;
   /** [ovr, off, def] rounded ints or null over weeks <= wk */
   triple(team: string, season: number, wk: number): [number | null, number | null, number | null];
+  /** League rank (1 = best) of a team's season-to-date average grade metric, and league size — same construction as Team Comparison's grade ranks (audit §4/§7: grades shown with no scale context). */
+  rank(team: string, season: number, wk: number, metric: GradeMetric): { rank: number; nTeams: number } | null;
 }
 
 export function buildGradesIndex(grades: Row[]): GradesIndex {
   const byTeamSeason = new Map<string, Row[]>();
+  const teamsBySeason = new Map<number, Set<string>>();
   for (const r of grades) {
-    const k = `${r.Team}|${r.Season}`;
+    const season = Number(r.Season);
+    const team = String(r.Team);
+    const k = `${team}|${season}`;
     if (!byTeamSeason.has(k)) byTeamSeason.set(k, []);
     byTeamSeason.get(k)!.push(r);
+    if (!teamsBySeason.has(season)) teamsBySeason.set(season, new Set());
+    teamsBySeason.get(season)!.add(team);
   }
   for (const rows of byTeamSeason.values()) rows.sort((a, b) => Number(a.Week) - Number(b.Week));
   const avgCol = (team: string, season: number, wk: number, col: string): number | null => {
@@ -115,6 +125,16 @@ export function buildGradesIndex(grades: Row[]): GradesIndex {
       const of_ = avgCol(t, s, w, "Offensive Grade");
       const d = avgCol(t, s, w, "Defensive Grade");
       return [o == null ? null : Math.round(o), of_ == null ? null : Math.round(of_), d == null ? null : Math.round(d)];
+    },
+    rank: (team, season, wk, metric) => {
+      const teams = teamsBySeason.get(season);
+      if (!teams) return null;
+      const avgs = [...teams]
+        .map((t) => ({ t, v: avgCol(t, season, wk, metric) }))
+        .filter((a): a is { t: string; v: number } => a.v != null)
+        .sort((a, b) => b.v - a.v);
+      const idx = avgs.findIndex((a) => a.t === team);
+      return idx < 0 ? null : { rank: idx + 1, nTeams: avgs.length };
     },
   };
 }
@@ -266,18 +286,17 @@ export function probBundle(
 }
 
 // ---------- win-type codes ----------
-export const WIN_TYPE_CODE_COLORS: Record<string, string> = {
-  FH: "#3C9A5F",
-  FA: "#2459A7",
-  UH: "#E87722",
-  UA: "#C8102E",
-};
 export const WIN_TYPE_CODE_LONG: Record<string, string> = {
   FH: "Favorite home",
   FA: "Favorite away",
   UH: "Underdog home",
   UA: "Underdog away",
 };
+// Derived from the shared win-type palette (lib/logic/winType.ts) rather than
+// a second hardcoded copy keyed by code.
+export const WIN_TYPE_CODE_COLORS: Record<string, string> = Object.fromEntries(
+  Object.entries(WIN_TYPE_CODE_LONG).map(([code, long]) => [code, WIN_TYPE_COLORS[long as keyof typeof WIN_TYPE_COLORS]]),
+);
 
 export function winTypeCode(favSide: string | null, winningSide: string | null): string | null {
   if (favSide !== "home" && favSide !== "away") return null;

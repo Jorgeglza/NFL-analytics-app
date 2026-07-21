@@ -9,7 +9,8 @@ import { Select } from "../../components/filters/Select";
 import { useECharts } from "../../components/charts/useECharts";
 import { opponentLabel } from "../grading-model/shared";
 import { Loading } from "../../components/Loading";
-import { buildStatGroups, statLabel, americanOdds, headshotCrop, randomItem, randomPassRushRecStat, randomDefenseStat, HIT_COLOR, MISS_COLOR, NEUTRAL_COLOR } from "./statPicker";
+import { buildStatGroups, statLabel, americanOdds, headshotCrop, randomItem, randomPassRushRecStat, randomDefenseStat, seasonTypeOptions, HIT_COLOR, MISS_COLOR, NEUTRAL_COLOR } from "./statPicker";
+import { useSeasonWeek } from "../../context/SeasonWeekContext";
 
 const EXCLUDE = new Set([
   "season", "week", "team", "opponent_team", "gameday", "game_id",
@@ -41,11 +42,11 @@ export default function PropBets() {
   // Matchup Bets) so the player/team/stat context carries over instead of
   // re-asking.
   const [searchParams] = useSearchParams();
+  const { season, setSeason } = useSeasonWeek();
   const [seasons, setSeasons] = useState<number[]>([]);
-  const [season, setSeason] = useState(searchParams.get("season") ?? "");
   const [rows, setRows] = useState<Row[]>([]);
   const [teamMeta, setTeamMeta] = useState<Map<string, TeamMeta> | null>(null);
-  const [seasonType, setSeasonType] = useState("REG");
+  const [seasonType, setSeasonType] = useState("");
   const [team, setTeam] = useState(searchParams.get("team") ?? "");
   const [side, setSide] = useState<"offense" | "defense">("offense");
   // First switch to Defense each page load gets a random defense stat instead
@@ -73,6 +74,20 @@ export default function PropBets() {
     });
     getTeamMetaMap().then(setTeamMeta);
   }, []);
+
+  // Deep-linked season (e.g. from Matchup Bets) wins over the shared
+  // season/week context, applied once per mount.
+  const seasonDeepLinkApplied = useRef(false);
+  useEffect(() => {
+    if (seasonDeepLinkApplied.current) return;
+    const s = searchParams.get("season");
+    if (s) {
+      seasonDeepLinkApplied.current = true;
+      setSeason(s);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
   useEffect(() => {
     if (season) getPlayerWeek(Number(season)).then(setRows);
   }, [season]);
@@ -258,7 +273,7 @@ export default function PropBets() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-end gap-3">
         <h1 className="mr-auto flex items-center gap-2.5 text-2xl font-extrabold tracking-tight text-[#002f6c]"><span className="h-6 w-1.5 rounded-full bg-gradient-to-b from-[#002f6c] to-[#164a9c]" />Prop Bets — Players</h1>
-        <Select label="Season Type" value={seasonType} onChange={setSeasonType} options={(seasonTypes.length ? seasonTypes : ["REG"]).map((t) => ({ value: t, label: t }))} />
+        <Select label="Season Type" value={seasonType} onChange={setSeasonType} options={seasonTypeOptions(seasonTypes)} />
         <Select label="Season" value={season} onChange={setSeason} options={seasons.map((s) => ({ value: String(s), label: String(s) }))} />
         <Select label="Team" value={selTeam} onChange={setTeam} options={teams.map((t) => ({ value: t, label: teamMeta?.get(t)?.name ?? t }))} />
         <div className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
