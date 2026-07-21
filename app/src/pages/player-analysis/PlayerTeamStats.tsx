@@ -13,6 +13,7 @@ import { Select } from "../../components/filters/Select";
 import { Loading } from "../../components/Loading";
 import { useECharts } from "../../components/charts/useECharts";
 import { LazyMount } from "../../components/LazyMount";
+import { RangeSlider } from "../../components/RangeSlider";
 import { buildStatGroups, statLabel } from "./statPicker";
 
 const EXCLUDE = new Set([
@@ -50,11 +51,14 @@ const fmtStat = (stat: string, v: number) =>
 
 /** League-wide top-N strip (audit §10 🟡): the page's most common question —
  *  "who leads the league in this stat" — previously required scanning all 32
- *  team cards; this answers it in one glance, ranked, with a shared bar scale. */
-function LeagueLeaders({ stat, leaders, meta }: {
+ *  team cards; this answers it in one glance, ranked, with a shared bar scale.
+ *  Hover shows this player's share of their team's total; clicking jumps to
+ *  that team's card below. */
+function LeagueLeaders({ stat, leaders, meta, onSelectTeam }: {
   stat: string;
-  leaders: { team: string; name: string; value: number }[];
+  leaders: { team: string; name: string; value: number; pct: number }[];
   meta: Map<string, TeamMeta>;
+  onSelectTeam: (team: string) => void;
 }) {
   if (!leaders.length) return null;
   const max = leaders[0].value || 1;
@@ -62,13 +66,19 @@ function LeagueLeaders({ stat, leaders, meta }: {
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="mb-2 flex items-center justify-between">
         <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">League leaders — {statLabel(stat)}</div>
+        <div className="text-[11px] text-slate-400">Click a row to jump to that team →</div>
       </div>
       <div className="space-y-1.5">
         {leaders.map((p, i) => {
           const tm = meta.get(p.team);
-          const pct = Math.max(4, (Math.abs(p.value) / Math.abs(max)) * 100);
+          const barPct = Math.max(4, (Math.abs(p.value) / Math.abs(max)) * 100);
           return (
-            <div key={`${p.team}-${p.name}`} className="flex items-center gap-2">
+            <button
+              key={`${p.team}-${p.name}`}
+              onClick={() => onSelectTeam(p.team)}
+              title={`${p.name} — ${fmtStat(stat, p.value)} (${p.pct.toFixed(1)}% of ${p.team}'s team total) — click to jump to ${p.team}`}
+              className="flex w-full items-center gap-2 rounded-lg px-1 py-0.5 text-left transition-colors hover:bg-slate-50"
+            >
               <span className="w-5 shrink-0 text-right text-xs font-semibold text-slate-400">{i + 1}</span>
               {tm?.logo && <img src={tm.logo} alt={p.team} className="h-5 w-5 shrink-0" />}
               <span className="w-40 shrink-0 truncate text-sm font-medium text-slate-800">{p.name}</span>
@@ -76,11 +86,12 @@ function LeagueLeaders({ stat, leaders, meta }: {
               <div className="relative h-5 flex-1 rounded bg-slate-100">
                 <div
                   className="h-5 rounded"
-                  style={{ width: `${pct}%`, background: tm?.color2 ?? tm?.color ?? "#002f6c" }}
+                  style={{ width: `${barPct}%`, background: tm?.color2 ?? tm?.color ?? "#002f6c" }}
                 />
               </div>
               <span className="w-16 shrink-0 text-right text-sm font-semibold text-slate-900">{fmtStat(stat, p.value)}</span>
-            </div>
+              <span className="w-14 shrink-0 text-right text-xs text-slate-400">{p.pct.toFixed(0)}% team</span>
+            </button>
           );
         })}
       </div>
@@ -238,7 +249,7 @@ export default function PlayerTeamStats() {
     // League-wide leaders: each team's own leader is necessarily the league
     // leader candidate pool (top5-per-team already covers it), flattened and re-ranked.
     const leaders = teamCards
-      .flatMap((t) => t.players.map((p) => ({ team: t.team, name: p.name, value: p.value })))
+      .flatMap((t) => t.players.map((p) => ({ team: t.team, name: p.name, value: p.value, pct: p.pct })))
       .sort((a, b) => Math.abs(b.value) - Math.abs(a.value))
       .slice(0, 10);
 
@@ -247,9 +258,19 @@ export default function PlayerTeamStats() {
 
   if (!meta) return <Loading />;
 
+  // Delayed re-correction (Win Types' pattern): team cards are lazy-mounted,
+  // so their real height differs from the placeholder and shifts the target
+  // slightly after the jump lands.
   const jumpTo = (id: string) => {
-    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    const el = () => document.getElementById(id);
+    const jump = () => {
+      el()?.scrollIntoView({ behavior: "smooth", block: "start" });
+      window.dispatchEvent(new Event("scroll"));
+    };
+    jump();
+    setTimeout(jump, 350);
   };
+  const jumpToTeam = (team: string) => jumpTo(`teamcard-${team}`);
 
   let prevConf = "";
   return (
@@ -269,18 +290,25 @@ export default function PlayerTeamStats() {
           </div>
         </div>
         <Select label="Stat" value={selStat} onChange={setStat} groups={buildStatGroups(sideCols, side)} />
-        <label className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
+        <div className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
           Weeks: {Math.min(weekLo, weekHi)}–{Math.max(weekLo, weekHi)}
-          <div className="flex items-center gap-2">
-            <input type="range" min={allWeeks[0] ?? 1} max={allWeeks[allWeeks.length - 1] ?? 18} value={weekLo} onChange={(e) => setWeekLo(Number(e.target.value))} className="w-32" />
-            <input type="range" min={allWeeks[0] ?? 1} max={allWeeks[allWeeks.length - 1] ?? 18} value={weekHi} onChange={(e) => setWeekHi(Number(e.target.value))} className="w-32" />
-          </div>
-        </label>
+          <RangeSlider
+            min={allWeeks[0] ?? 1}
+            max={allWeeks[allWeeks.length - 1] ?? 18}
+            lo={weekLo}
+            hi={weekHi}
+            onChange={(lo, hi) => {
+              setWeekLo(lo);
+              setWeekHi(hi);
+            }}
+            className="w-56"
+          />
+        </div>
       </div>
 
       {grid ? (
         <div className="space-y-4">
-          <LeagueLeaders stat={selStat} leaders={grid.leaders} meta={meta} />
+          <LeagueLeaders stat={selStat} leaders={grid.leaders} meta={meta} onSelectTeam={jumpToTeam} />
 
           <div className="sticky top-[53px] z-20 -mx-1 flex flex-wrap items-center gap-1.5 rounded-xl bg-white/90 px-1 py-2 backdrop-blur">
             <span className="mr-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Jump to</span>
@@ -315,9 +343,11 @@ export default function PlayerTeamStats() {
                   </div>
                   <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))" }}>
                     {b.teams.map((t) => (
-                      <LazyMount key={t.team} minHeight={268}>
-                        <TeamCard team={t.team} stat={selStat} players={t.players} xMax={grid.xMax} meta={meta.get(t.team)} />
-                      </LazyMount>
+                      <div key={t.team} id={`teamcard-${t.team}`} className="scroll-mt-24">
+                        <LazyMount minHeight={268}>
+                          <TeamCard team={t.team} stat={selStat} players={t.players} xMax={grid.xMax} meta={meta.get(t.team)} />
+                        </LazyMount>
+                      </div>
                     ))}
                   </div>
                 </div>

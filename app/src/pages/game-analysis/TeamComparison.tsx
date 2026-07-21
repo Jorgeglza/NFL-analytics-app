@@ -209,21 +209,32 @@ export default function TeamComparison() {
   }
 
   function StatCells({ s, order, team, sub }: { s: StatSummary; order: ("prev" | "total" | "avg")[]; team: string; sub?: boolean }) {
-    const pill = (key: string, label: string, value: string, hint?: string) => (
-      <div
-        key={key}
-        className={`rounded-xl border border-slate-200 bg-slate-50/80 text-center ${sub ? "w-14 px-1 py-0.5" : "w-[72px] px-1.5 py-1"}`}
-        title={hint}
-        style={{ boxShadow: `inset 0 2px 0 0 ${color(team)}33` }}
-      >
-        <div className={`font-semibold uppercase tracking-wider text-slate-400 ${sub ? "text-[8px]" : "text-[9px]"}`}>{label}</div>
-        <div className={`font-semibold tabular-nums text-slate-800 ${sub ? "text-[11px]" : "text-sm"}`}>{value || "--"}</div>
-      </div>
-    );
+    // A real zero (data present, value 0) and missing data ("--") look
+    // identical as plain "0" otherwise — user-reported confusion on
+    // low-count stats like Interceptions Allowed. Zero gets its own muted,
+    // dashed treatment + an explicit tooltip so it doesn't read as a glitch.
+    const pill = (key: string, label: string, value: string, raw: number | null, hint?: string) => {
+      const isZero = raw != null && raw === 0;
+      return (
+        <div
+          key={key}
+          className={`rounded-xl border text-center ${sub ? "w-14 px-1 py-0.5" : "w-[72px] px-1.5 py-1"} ${
+            isZero ? "border-dashed border-slate-200 bg-slate-50/40" : "border-slate-200 bg-slate-50/80"
+          }`}
+          title={isZero ? `${hint ? `${hint} — ` : ""}confirmed zero (data present, not missing)` : hint}
+          style={{ boxShadow: `inset 0 2px 0 0 ${color(team)}33` }}
+        >
+          <div className={`font-semibold uppercase tracking-wider text-slate-400 ${sub ? "text-[8px]" : "text-[9px]"}`}>{label}</div>
+          <div className={`font-semibold tabular-nums ${sub ? "text-[11px]" : "text-sm"} ${isZero ? "italic text-slate-400" : "text-slate-800"}`}>
+            {value || "--"}
+          </div>
+        </div>
+      );
+    };
     const cell: Record<string, JSX.Element> = {
-      prev: pill("prev", "Last", fmtPrev(s.prev), s.prevOpp ? `Week ${week} vs ${s.prevOpp}` : undefined),
-      avg: pill("avg", "Avg", s.average == null ? "" : (Math.round(s.average * 10) / 10).toFixed(1), "Per-game average this season"),
-      total: pill("total", "Total", Math.trunc(s.total).toLocaleString(), "Season total"),
+      prev: pill("prev", "Last", fmtPrev(s.prev), s.prev, s.prevOpp ? `Week ${week} vs ${s.prevOpp}` : undefined),
+      avg: pill("avg", "Avg", s.average == null ? "" : (Math.round(s.average * 10) / 10).toFixed(1), s.average, "Per-game average this season"),
+      total: pill("total", "Total", Math.trunc(s.total).toLocaleString(), s.total, "Season total"),
     };
     return <div className="flex gap-1.5">{order.map((k) => cell[k])}</div>;
   }
