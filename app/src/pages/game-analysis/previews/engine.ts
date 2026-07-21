@@ -6,7 +6,7 @@ import { gradeModelProb, blendProbs, BIN_SIZE_DEFAULT } from "../../../lib/logic
 import { edgeComposite, meanLastN, slopeLastN, EDGE_SCALE, type TrendFeatures } from "../../../lib/logic/edgeComposite";
 import { impliedProb, fairProbs } from "../../../lib/logic/moneyline";
 import { wilson } from "../../../lib/logic/wilson";
-import { buildEloIndex, type EloEntry, type EloGame } from "../../../lib/logic/elo";
+import { buildEloIndex, scheduleToEloGames, type EloEntry } from "../../../lib/logic/elo";
 import { pythWinPct, log5 } from "../../../lib/logic/pythagorean";
 import { WIN_TYPE_COLORS } from "../../../lib/logic/winType";
 
@@ -180,19 +180,7 @@ export function buildTeamWeekIndex(teamWeekBySeason: Map<number, Row[]>): TeamWe
 export type EloIndex = Map<string, EloEntry>;
 
 export function buildScheduleEloIndex(schedule: Row[]): EloIndex {
-  const games: EloGame[] = schedule
-    .filter((g) => g.game_id != null)
-    .map((g) => ({
-      gameId: String(g.game_id),
-      season: Number(g.season),
-      awayTeam: String(g.away_team),
-      homeTeam: String(g.home_team),
-      awayScore: g.away_score == null ? null : Number(g.away_score),
-      homeScore: g.home_score == null ? null : Number(g.home_score),
-      // order by date, then week as a tiebreaker for missing dates
-      order: (g.gameday ? Date.parse(String(g.gameday)) : 0) + Number(g.week) / 1000,
-    }));
-  return buildEloIndex(games);
+  return buildEloIndex(scheduleToEloGames(schedule));
 }
 
 // ---------- probability bundle ----------

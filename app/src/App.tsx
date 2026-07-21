@@ -27,6 +27,9 @@ function RouteTitle() {
 // Pages are lazy-loaded so ECharts-heavy routes don't bloat the initial bundle (M4).
 const IMPLEMENTED: Record<string, LazyExoticComponent<ComponentType>> = {
   "/glossary": lazy(() => import("./pages/GlossaryPage")),
+  "/game_analysis/power_rankings": lazy(() => import("./pages/game-analysis/PowerRankings")),
+  "/game_analysis/team_trends": lazy(() => import("./pages/game-analysis/TeamTrends")),
+  "/game_analysis/season_outlook": lazy(() => import("./pages/game-analysis/SeasonOutlook")),
   "/game_analysis/game_picks": lazy(() => import("./pages/game-analysis/GamePicks")),
   "/game_analysis/win_types": lazy(() => import("./pages/game-analysis/WinTypes")),
   "/game_analysis/spread_win_percentage": lazy(() => import("./pages/game-analysis/SpreadWinPct")),

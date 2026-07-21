@@ -16,6 +16,24 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Game Analysis",
     pages: [
       {
+        label: "Power Rankings",
+        path: "/game_analysis/power_rankings",
+        description: "Composite team strength for any week — Elo, season-to-date grade and Pythagorean win%, with movement",
+        implemented: true,
+      },
+      {
+        label: "Team Trends",
+        path: "/game_analysis/team_trends",
+        description: "Weekly grade and stat trajectories per team across a season — up to 3 teams compared",
+        implemented: true,
+      },
+      {
+        label: "Season Outlook",
+        path: "/game_analysis/season_outlook",
+        description: "Strength of schedule and playoff probability — where the road ahead gets harder or easier",
+        implemented: true,
+      },
+      {
         label: "Game Picks",
         path: "/game_analysis/game_picks",
         description: "Weekly results with favorite/underdog win types, spread scatter and pick tracking",

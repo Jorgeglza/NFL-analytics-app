@@ -50,6 +50,12 @@ Per page: run old app side-by-side (`pda-ie` env), match tables/KPIs/chart serie
 - ☐ Optional: screenshot-based visual QA (browser pane screenshot capture currently times out on this app).
 - ◐ **UX audit — per-page items (§1–13) done; Cross-Page/Global items (bottom of `UX_AUDIT.md`) mostly open.** See "M4 cross-page/general audit items" note below (2026-07-20) for the itemized status and the still-missing list carried into `UX_AUDIT.md`'s "What's still missing" section.
 
+### M3.5 — New analytics beyond old-app parity (not ports) ✅
+- ✅ /game_analysis/power_rankings — composite of Elo + season-to-date Overall Grade + Pythagorean win% (`lib/logic/powerRankings.ts`), any-week filter, movement vs. prior week, rank-trend chart.
+- ✅ /game_analysis/team_trends — weekly grade/stat trajectories, up to 3 teams (`pages/game-analysis/team-trends/shared.ts`).
+- ✅ /game_analysis/season_outlook — Strength of Schedule (played vs. remaining opponent Elo) + Playoff Probability (2,000-iteration Monte Carlo, simplified tiebreaker) tabs (`pages/game-analysis/season-outlook/shared.ts`, `lib/logic/playoffSim.ts`).
+- Deferred: Model Backtest + Value Bets Backtest — scoped but not built, see `docs/FUTURE_DEVELOPMENT.md` (blocked on historical prop-line data for the value-bets half).
+
 ### M5 — Deploy + automation
 - ✅ `.github/workflows/weekly-refresh.yml` (cron Tue 12:00 UTC + dispatch → pipeline → validate → auto-commit → explicit `gh workflow run deploy.yml` — GITHUB_TOKEN commits don't fire push triggers)
 - ✅ `.github/workflows/deploy.yml` (build → GitHub Pages, SPA fallback + Vite `base`) — live since Session 1
@@ -57,6 +63,52 @@ Per page: run old app side-by-side (`pda-ie` env), match tables/KPIs/chart serie
 - ◐ First end-to-end weekly-refresh run verified via workflow_dispatch
 
 ## Session notes (newest first)
+
+### 2026-07-20 — Session 8: Power Rankings, Team Trends, Season Outlook (new analytics, not ports)
+User asked what's missing from the rebuild for a more complete/robust analysis app. Since the rebuild had already
+reached full parity with the old app (every page ported, per `docs/page-mapping.md`), this was scoped as new
+analytics beyond the old app's feature set — narrowed via AskUserQuestion to team-level trends/rankings,
+season outlook/simulation, and betting/model performance, using only data already in the pipeline (no new
+ingestion). User picked 3 pages to build, ordered as a narrative arc (current state → trajectory → outlook), and
+deferred the betting page to `docs/FUTURE_DEVELOPMENT.md`.
+
+- **Shared prep**: `lib/logic/elo.ts` gained `scheduleToEloGames()` (schedule rows → chronological Elo game
+  records, now shared by `previews/engine.ts`'s `buildScheduleEloIndex` instead of a duplicated inline mapper)
+  and `buildEloRatingHistory()` (post-game rating per team per game — `buildEloIndex` only exposed pre-game
+  win probabilities, but the new pages need a team's *current* rating).
+- **Power Rankings** (`pages/game-analysis/PowerRankings.tsx`, `lib/logic/powerRankings.ts`): composite score =
+  mean of min-max-normalized {Elo rating as of the selected week, season-to-date avg Overall Grade, Pythagorean
+  win% from cumulative REG points for/against}, equal weights, missing signals skipped rather than zeroed (e.g.
+  week 1 has no grade yet). Any-week filter (not just current), movement vs. prior week, rank-trend chart per
+  team. Verified in pane on 2025 wk18 (fully completed season): rank 1 = Seahawks (composite 96.3, Elo 1707,
+  matches being the top Elo/grade/pyth team), ranks form a clean 1–32 permutation, movement arrows present from
+  week 2 onward.
+- **Team Trends** (`pages/game-analysis/TeamTrends.tsx`, `team-trends/shared.ts`): weekly line chart + table for
+  up to 3 teams, metric picker spanning `grades.json` (Overall/Offensive/Defensive Grade) and a curated
+  `team_week` subset (points, points allowed, point margin, total yards for/against, turnover margin, EPA
+  differential) — both sources already loaded elsewhere in the app, just never charted as a time series.
+  Verified: DAL vs. SF Overall Grade by week for 2025 renders correctly (including a real gap at DAL wk10 —
+  bye week, `—` not a bug).
+- **Season Outlook** (`pages/game-analysis/SeasonOutlook.tsx`, two tabs): **Strength of Schedule**
+  (`season-outlook/shared.ts`) — average opponent pre-game Elo, split played vs. remaining, using
+  `buildEloIndex`'s existing per-game entries directly (leak-free by construction, no new logic needed).
+  **Playoff Probability** (`lib/logic/playoffSim.ts`) — 2,000-iteration Monte Carlo, each remaining game's winner
+  drawn from Elo `pHome`; a documented **simplified tiebreaker** (win% → head-to-head when lopsided → conference
+  record → played-games point differential — not the full NFL rulebook: no strength of victory/schedule, no
+  common-games rule) determines division winners (seeds 1–4) and wildcards (seeds 5–7) per conference. Verified
+  in pane on 2025 (fully completed, so the sim is deterministic — 0 remaining games): 7-team playoff field per
+  conference, Seahawks/Patriots as the 1-seeds match Power Rankings' top teams, playoff % correctly 100/0 with
+  no in-between values (nothing left to simulate). Since no season in the dataset has games still remaining, the
+  "games remaining" code path was verified via unit tests instead (see below) rather than in the live pane.
+- **Tests**: new `lib/logic/newAnalytics.test.ts` (self-consistency checks, not golden fixtures — no Python
+  replica exists for genuinely new analytics) — Power Rankings produces a complete rank permutation and no
+  movement at week 1; Playoff Sim on a fully-played synthetic 8-team/4-division league deterministically seeds
+  all 4 division winners plus the 3 closest wildcard losers by point differential, excludes the blowout loser,
+  keeps every seed in 1–7, and (with one added unplayed game) produces genuine 0–1 probabilities instead of
+  crashing. 55/55 tests green, `npm run build` and `tsc --noEmit` clean.
+- New nav entries registered first in "Game Analysis" (Power Rankings, Team Trends, Season Outlook) ahead of the
+  existing pages, so the nav order itself reads current-state → trajectory → outlook.
+- Not committed/pushed at time of writing this entry.
 
 ### 2026-07-20 — Session 7 (cont.): Player Team Stats slider + leaderboard drill-down, Team Comparison zero-cue
 Four direct user requests:

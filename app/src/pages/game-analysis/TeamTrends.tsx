@@ -1,0 +1,145 @@
+// Team Trends — new analytics (not a port). The trajectory behind Power
+// Rankings: weekly grade/stat series for up to 3 teams across a season,
+// instead of the single-week snapshots every other page shows.
+import { useEffect, useMemo, useState } from "react";
+import type { EChartsOption } from "echarts";
+import { getSchedule, getGrades, getTeamWeek, type Row } from "../../lib/data/loader";
+import { getTeamMetaMap, type TeamMeta } from "../../lib/team/meta";
+import { METRICS, seriesFor } from "./team-trends/shared";
+import { Select } from "../../components/filters/Select";
+import { useECharts } from "../../components/charts/useECharts";
+import { Loading } from "../../components/Loading";
+import { usePageTitle } from "../../lib/hooks/usePageTitle";
+import { PageHeader, tableWrapCls, theadCls, trCls } from "../../components/ui";
+
+const NONE = "";
+const LINE_COLORS = ["#002f6c", "#E87722", "#3C9A5F"];
+
+export default function TeamTrends() {
+  const [schedule, setSchedule] = useState<Row[]>([]);
+  const [grades, setGrades] = useState<Row[]>([]);
+  const [teamWeek, setTeamWeek] = useState<Row[]>([]);
+  const [meta, setMeta] = useState<Map<string, TeamMeta> | null>(null);
+  const [season, setSeason] = useState("");
+  const [metricKey, setMetricKey] = useState(METRICS[0].key);
+  const [team1, setTeam1] = useState("DAL");
+  const [team2, setTeam2] = useState("SF");
+  const [team3, setTeam3] = useState(NONE);
+
+  usePageTitle(season ? `Team Trends — ${season}` : "Team Trends");
+
+  useEffect(() => {
+    Promise.all([getSchedule(), getTeamMetaMap()]).then(([s, m]) => {
+      setSchedule(s);
+      setMeta(m);
+      if (!season) {
+        const seasons = [...new Set(s.map((r) => Number(r.season)))].sort((a, b) => b - a);
+        if (seasons.length) setSeason(String(seasons[0]));
+      }
+    });
+    getGrades().then(setGrades);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!season) return;
+    getTeamWeek(Number(season)).then(setTeamWeek);
+  }, [season]);
+
+  const seasons = useMemo(() => [...new Set(schedule.map((r) => Number(r.season)))].sort((a, b) => b - a), [schedule]);
+  const teamOptions = useMemo(
+    () =>
+      [...new Set(schedule.filter((r) => String(r.season) === season).flatMap((r) => [String(r.home_team), String(r.away_team)]))]
+        .sort()
+        .map((t) => ({ value: t, label: meta?.get(t)?.name ?? t })),
+    [schedule, season, meta],
+  );
+
+  const metric = METRICS.find((m) => m.key === metricKey) ?? METRICS[0];
+  const teams = [team1, team2, team3].filter((t) => t !== NONE);
+
+  const seriesByTeam = useMemo(() => {
+    if (!season || !grades.length || !teamWeek.length) return new Map<string, { week: number; value: number }[]>();
+    const out = new Map<string, { week: number; value: number }[]>();
+    for (const t of teams) out.set(t, seriesFor(metric, t, Number(season), grades, teamWeek));
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [teams.join(","), metric, season, grades, teamWeek]);
+
+  const chartOption = useMemo<EChartsOption | null>(() => {
+    if (!teams.length) return null;
+    const allWeeks = [...new Set([...seriesByTeam.values()].flatMap((s) => s.map((p) => p.week)))].sort((a, b) => a - b);
+    if (!allWeeks.length) return null;
+    return {
+      grid: { left: 10, right: 20, top: 30, bottom: 10, containLabel: true },
+      xAxis: { type: "category", data: allWeeks.map((w) => `Wk ${w}`), axisLabel: { fontSize: 10 } },
+      yAxis: { type: "value", name: metric.label, axisLabel: { fontSize: 10 } },
+      tooltip: { trigger: "axis" },
+      legend: { top: 0, textStyle: { fontSize: 11 } },
+      series: teams.map((t, i) => {
+        const byWeek = new Map((seriesByTeam.get(t) ?? []).map((p) => [p.week, p.value]));
+        return {
+          name: meta?.get(t)?.name ?? t,
+          type: "line",
+          data: allWeeks.map((w) => byWeek.get(w) ?? null),
+          connectNulls: true,
+          symbol: "circle",
+          symbolSize: 6,
+          lineStyle: { color: LINE_COLORS[i], width: 2 },
+          itemStyle: { color: LINE_COLORS[i] },
+        };
+      }),
+    } as EChartsOption;
+  }, [teams, seriesByTeam, metric, meta]);
+  const chartRef = useECharts(chartOption);
+
+  if (!schedule.length || !grades.length || !meta) return <Loading label="Loading trends…" />;
+
+  return (
+    <div className="space-y-6">
+      <PageHeader title="Team Trends" subtitle="How each team got to where it is — weekly trajectory for up to 3 teams.">
+        <Select label="Season" value={season} onChange={setSeason} options={seasons.map((s) => ({ value: String(s), label: String(s) }))} />
+        <Select label="Metric" value={metricKey} onChange={setMetricKey} options={METRICS.map((m) => ({ value: m.key, label: m.label }))} />
+      </PageHeader>
+
+      <div className="flex flex-wrap items-end gap-3 rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3">
+        <Select label="Team 1" value={team1} onChange={setTeam1} options={teamOptions} />
+        <Select label="Team 2" value={team2} onChange={setTeam2} options={[{ value: NONE, label: "— none —" }, ...teamOptions]} />
+        <Select label="Team 3" value={team3} onChange={setTeam3} options={[{ value: NONE, label: "— none —" }, ...teamOptions]} />
+      </div>
+
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <h2 className="mb-2 text-sm font-semibold text-slate-700">{metric.label} by week — {season}</h2>
+        {chartOption ? <div ref={chartRef} className="h-80" /> : <div className="py-12 text-center text-sm text-slate-400">No data for the selected teams/metric.</div>}
+      </div>
+
+      <div className={tableWrapCls}>
+        <table className="w-full text-sm">
+          <thead className={theadCls}>
+            <tr>
+              <th className="px-3 py-2">Week</th>
+              {teams.map((t) => (
+                <th key={t} className="px-3 py-2">{meta.get(t)?.name ?? t}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {[...new Set([...seriesByTeam.values()].flatMap((s) => s.map((p) => p.week)))]
+              .sort((a, b) => a - b)
+              .map((w) => (
+                <tr key={w} className={trCls}>
+                  <td className="px-3 py-2 font-semibold text-slate-700">Wk {w}</td>
+                  {teams.map((t) => {
+                    const v = (seriesByTeam.get(t) ?? []).find((p) => p.week === w)?.value;
+                    return (
+                      <td key={t} className="px-3 py-2 text-slate-600">{v == null ? "—" : v.toFixed(1)}</td>
+                    );
+                  })}
+                </tr>
+              ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
