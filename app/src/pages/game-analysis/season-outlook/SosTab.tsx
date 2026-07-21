@@ -13,7 +13,10 @@ export default function SosTab({ schedule, season, week, meta }: { schedule: Row
     [schedule, season, week],
   );
 
-  const heatmap = useMemo(() => (season ? computeOpponentHeatmap(schedule, Number(season)) : null), [schedule, season]);
+  const heatmap = useMemo(
+    () => (season && week ? computeOpponentHeatmap(schedule, Number(season), Number(week)) : null),
+    [schedule, season, week],
+  );
 
   const chartOption = useMemo<EChartsOption | null>(() => {
     if (!rows.length) return null;
@@ -50,7 +53,7 @@ export default function SosTab({ schedule, season, week, meta }: { schedule: Row
       </p>
 
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <h2 className="mb-1 text-sm font-semibold text-slate-700">Opponent difficulty by week — hardest schedule first</h2>
+        <h2 className="mb-1 text-sm font-semibold text-slate-700">Opponent difficulty, week {week} onward — hardest remaining schedule first</h2>
         <p className="mb-2 text-[11px] text-slate-400">
           Each cell is that week's opponent — color and the small number are the opponent's pre-game Elo rating (redder = tougher).
         </p>

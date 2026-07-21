@@ -57,7 +57,7 @@ export function computeStrengthOfSchedule(schedule: Row[], season: number, throu
     .sort((a, b) => (b.remainingAvg ?? -Infinity) - (a.remainingAvg ?? -Infinity));
 }
 
-// ---------- opponent-difficulty heatmap (whole season, not throughWeek-scoped) ----------
+// ---------- opponent-difficulty heatmap (fromWeek onward — the road ahead) ----------
 
 export interface HeatmapCell {
   opponent: string;
@@ -73,19 +73,21 @@ export interface HeatmapRow {
 
 export interface HeatmapData {
   weeks: number[];
-  rows: HeatmapRow[]; // sorted hardest average schedule first
+  rows: HeatmapRow[]; // sorted hardest average schedule (over the shown weeks) first
   eloMin: number;
   eloMax: number;
 }
 
 /**
- * Every REG game's opponent for every team, for a teams x weeks grid.
- * Uses buildEloIndex's per-game pre-game ratings directly (leak-free by
- * construction — not throughWeek-scoped, this is a whole-season overview).
+ * Every REG game's opponent for every team from `fromWeek` onward — the
+ * "as of" week selector, so viewing week 10 shows week 10..end as the visible
+ * columns instead of the whole season (the road ahead, not what's already
+ * happened). Uses buildEloIndex's per-game pre-game ratings directly
+ * (leak-free by construction).
  */
-export function computeOpponentHeatmap(schedule: Row[], season: number): HeatmapData {
+export function computeOpponentHeatmap(schedule: Row[], season: number, fromWeek: number): HeatmapData {
   const eloIdx = buildEloIndex(scheduleToEloGames(schedule));
-  const games = schedule.filter((g) => Number(g.season) === season && g.game_type === "REG");
+  const games = schedule.filter((g) => Number(g.season) === season && g.game_type === "REG" && Number(g.week) >= fromWeek);
   const weeks = [...new Set(games.map((g) => Number(g.week)))].sort((a, b) => a - b);
   const teams = [...new Set(games.flatMap((g) => [String(g.home_team), String(g.away_team)]))].sort();
 

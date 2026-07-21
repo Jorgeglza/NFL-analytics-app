@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import type { EChartsOption } from "echarts";
-import type { TeamCompositeBreakdown, WeeklyGradeDetail, WeeklyPythDetail, WeeklyCompositeDetail } from "../../../lib/logic/powerRankings";
+import type { TeamCompositeBreakdown, WeeklyGradeDetail, WeeklyCompositeDetail } from "../../../lib/logic/powerRankings";
 import type { TeamMeta } from "../../../lib/team/meta";
 import { Modal } from "../../../components/Modal";
 import { useECharts } from "../../../components/charts/useECharts";
@@ -25,6 +25,27 @@ function gradeTooltip(g: WeeklyGradeDetail): string {
   return `Week ${g.week} ${vs}${score}<br/>Overall Grade: <b>${g.grade.toFixed(1)}</b>`;
 }
 
+/** Points-for-vs-against split bar, sized by the resulting Pythagorean win share — the raw score behind the number. */
+function PythSplitBar({ pf, pa, pythPct, color }: { pf: number; pa: number; pythPct: number | null; color: string }) {
+  const forPct = pythPct == null ? 50 : pythPct * 100;
+  return (
+    <div>
+      <div className="flex h-9 w-full overflow-hidden rounded-full ring-1 ring-inset ring-black/5">
+        <div className="flex items-center justify-center text-xs font-bold text-white" style={{ width: `${forPct}%`, background: color }} title={`Points for: ${pf}`}>
+          {pf}
+        </div>
+        <div className="flex items-center justify-center text-xs font-bold text-white" style={{ width: `${100 - forPct}%`, background: "#94a3b8" }} title={`Points against: ${pa}`}>
+          {pa}
+        </div>
+      </div>
+      <div className="mt-1 flex justify-between text-[10px] uppercase tracking-wider text-slate-400">
+        <span>Points for</span>
+        <span>Points against</span>
+      </div>
+    </div>
+  );
+}
+
 export default function DetailModal({
   breakdown,
   trend,
@@ -36,7 +57,7 @@ export default function DetailModal({
   meta: TeamMeta | undefined;
   onClose: () => void;
 }) {
-  const { eloGame, weeklyGrades, weeklyPyth, weeklyComposite } = breakdown;
+  const { eloGame, weeklyGrades, weeklyComposite } = breakdown;
   const accent = meta?.color ?? "#002f6c";
 
   const gradeOption = useMemo<EChartsOption | null>(() => {
@@ -59,34 +80,6 @@ export default function DetailModal({
     } as EChartsOption;
   }, [weeklyGrades]);
   const gradeRef = useECharts(gradeOption);
-
-  const pythOption = useMemo<EChartsOption | null>(() => {
-    if (!weeklyPyth.length) return null;
-    return {
-      grid: { left: 10, right: 10, top: 10, bottom: 10, containLabel: true },
-      xAxis: { type: "category", data: weeklyPyth.map((p) => `Wk${p.week}`), axisLabel: { fontSize: 10 } },
-      yAxis: { type: "value", min: 0, max: 100, axisLabel: { fontSize: 10, formatter: "{value}%" } },
-      tooltip: {
-        trigger: "item",
-        formatter: (p: unknown) => {
-          const d: WeeklyPythDetail = weeklyPyth[(p as { dataIndex: number }).dataIndex];
-          return `Week ${d.week} — cumulative<br/>Win share: <b>${pct(d.pythPct)}</b><br/>Points: ${d.pointsFor}–${d.pointsAgainst}`;
-        },
-      },
-      series: [
-        {
-          type: "line",
-          data: weeklyPyth.map((p) => (p.pythPct == null ? null : p.pythPct * 100)),
-          symbol: "circle",
-          symbolSize: 6,
-          lineStyle: { color: "#3C9A5F", width: 2 },
-          itemStyle: { color: "#3C9A5F" },
-          areaStyle: { color: "#3C9A5F", opacity: 0.08 },
-        },
-      ],
-    } as EChartsOption;
-  }, [weeklyPyth]);
-  const pythRef = useECharts(pythOption);
 
   const compositeOption = useMemo<EChartsOption | null>(() => {
     if (!weeklyComposite.length) return null;
@@ -194,10 +187,34 @@ export default function DetailModal({
             </div>
           </Card>
 
-          <Card title="Pythagorean win%" subtitle="Cumulative expected win share (exponent 2.37) — hover for the exact number each week" accent="#3C9A5F">
-            {pythOption ? <div ref={pythRef} className="h-40" /> : <div className="py-6 text-center text-xs text-slate-400">No games yet.</div>}
+          <Card title="Pythagorean win%" subtitle={`Score to date (${breakdown.weeklyPoints.length} games) and the win share it implies`} accent="#3C9A5F">
+            <div className="flex items-center gap-3">
+              <div className="flex-1">
+                <PythSplitBar pf={breakdown.pointsForTotal} pa={breakdown.pointsAgainstTotal} pythPct={breakdown.pythPct} color="#3C9A5F" />
+              </div>
+              <div className="shrink-0 rounded-xl bg-slate-50 px-3 py-1.5 text-center" title="Pythagorean expected win share">
+                <div className="text-lg font-extrabold text-slate-800">{pct(breakdown.pythPct)}</div>
+                <div className="text-[10px] uppercase tracking-wider text-slate-400">win share</div>
+              </div>
+            </div>
+            {weeklyGrades.length > 0 && (
+              <div className="mt-3 max-h-28 space-y-0.5 overflow-y-auto pr-1">
+                {weeklyGrades.map((g) => {
+                  const won = g.teamScore != null && g.opponentScore != null ? g.teamScore > g.opponentScore : null;
+                  return (
+                    <div key={g.week} className="flex items-center justify-between text-xs text-slate-500">
+                      <span>
+                        Wk{g.week} {g.home ? "vs" : "@"} {g.opponent ?? "—"}
+                      </span>
+                      <span className={won == null ? "text-slate-400" : won ? "text-[#3C9A5F] font-semibold" : "text-[#C8102E] font-semibold"}>
+                        {g.teamScore != null ? `${won ? "W" : "L"} ${g.teamScore}–${g.opponentScore}` : "—"}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
             <div className="mt-2 border-t border-slate-100 pt-2">
-              <MetricRow label={`Points for/against (${breakdown.weeklyPoints.length} games)`} value={`${breakdown.pointsForTotal}–${breakdown.pointsAgainstTotal}`} />
               <MetricRow
                 label={breakdown.pythRange ? `League range this week [${(breakdown.pythRange[0] * 100).toFixed(1)}% – ${(breakdown.pythRange[1] * 100).toFixed(1)}%]` : "League range"}
                 value={pct(breakdown.pythNorm)}

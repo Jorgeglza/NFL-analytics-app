@@ -173,13 +173,6 @@ export interface WeeklyGradeDetail {
   opponentScore: number | null;
 }
 
-export interface WeeklyPythDetail {
-  week: number;
-  pythPct: number | null;
-  pointsFor: number;
-  pointsAgainst: number;
-}
-
 export interface WeeklyCompositeDetail {
   week: number;
   composite: number;
@@ -200,7 +193,6 @@ export interface TeamCompositeBreakdown {
   gradeNorm: number | null;
   gradeRange: [number, number] | null;
   weeklyPoints: { week: number; pointsFor: number; pointsAgainst: number }[];
-  weeklyPyth: WeeklyPythDetail[];
   pointsForTotal: number;
   pointsAgainstTotal: number;
   pythPct: number | null;
@@ -328,15 +320,6 @@ export function computeTeamBreakdown(schedule: Row[], grades: Row[], season: num
   }
   weeklyPoints.sort((a, b) => a.week - b.week);
 
-  const weeklyPyth: WeeklyPythDetail[] = [];
-  let cumPf = 0;
-  let cumPa = 0;
-  for (const p of weeklyPoints) {
-    cumPf += p.pointsFor;
-    cumPa += p.pointsAgainst;
-    weeklyPyth.push({ week: p.week, pythPct: pythWinPct(cumPf, cumPa), pointsFor: cumPf, pointsAgainst: cumPa });
-  }
-
   const seasonWeeksThrough = [
     ...new Set(schedule.filter((r) => Number(r.season) === season && r.game_type === "REG" && Number(r.week) <= week).map((r) => Number(r.week))),
   ].sort((a, b) => a - b);
@@ -364,7 +347,6 @@ export function computeTeamBreakdown(schedule: Row[], grades: Row[], season: num
     gradeNorm: normOf(row.grade, gradeRange),
     gradeRange,
     weeklyPoints,
-    weeklyPyth,
     pointsForTotal: weeklyPoints.reduce((s, p) => s + p.pointsFor, 0),
     pointsAgainstTotal: weeklyPoints.reduce((s, p) => s + p.pointsAgainst, 0),
     pythPct: row.pythPct,

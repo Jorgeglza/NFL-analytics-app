@@ -64,6 +64,30 @@ Per page: run old app side-by-side (`pda-ie` env), match tables/KPIs/chart serie
 
 ## Session notes (newest first)
 
+### 2026-07-20 — Session 8 (cont.): Pythagorean split-bar, heatmap now starts at the selected week
+Two direct follow-up requests:
+
+- **Pythagorean section — split bar instead of a line chart**: the cumulative win% line chart didn't add much
+  (the number was already shown elsewhere and the trend wasn't the point). Replaced with a
+  `PythSplitBar` — a two-segment pill sized by `pythPct` (points-for side vs. points-against side, each
+  labeled with the actual cumulative score), a "win share" badge, and a compact scrollable per-week game log
+  (opponent, home/away, W/L, score) below it, reusing the `weeklyGrades` opponent/score fields already computed
+  for the Grade card rather than adding new data. This directly answers "what's the score to date that produces
+  this number" instead of a trend nobody asked for. Removed the now-unused `weeklyPyth`
+  cumulative-per-week array and its `WeeklyPythDetail` type from `lib/logic/powerRankings.ts` — nothing else
+  consumed it. Verified in pane: Rams wk10 shows 251/153 split, 76.4% win share (matches the table), and a
+  9-row game log (Wk1 vs HOU W 14–9 … Wk10 @ SF W 42–26) that sums to the same 251/153.
+- **Season Outlook heatmap — starts at the "as of" week, not week 1**: `computeOpponentHeatmap()` gained a
+  `fromWeek` param and now filters games to `week >= fromWeek` before building the grid, so viewing week 10
+  shows week 10 onward as the first column (the road ahead, matching the "Remaining strength of schedule"
+  section right below it) instead of the whole season. Row sort (hardest first) is now based on the average
+  over just the visible/filtered weeks rather than the full season. Heading updated to "Opponent difficulty,
+  week {week} onward." Verified in pane at week 10 (heading correctly reads "week 10 onward") and at the
+  week-18 edge case (single remaining column, no crash, no console errors).
+- Tests unaffected (58/58 still green — this round was UI/derivation-parameter changes, not new pure-logic
+  branches needing new tests). `npm run build` and `tsc --noEmit` clean.
+- Not committed/pushed at time of writing this entry — commit only when the user asks.
+
 ### 2026-07-20 — Session 8 (cont.): Popup charts, opponent heatmap, nav reorder for storytelling
 Follow-up round of direct user requests on the pages from earlier this session.
 
