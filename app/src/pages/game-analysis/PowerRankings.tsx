@@ -82,7 +82,7 @@ export default function PowerRankings() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Power Rankings" subtitle="Composite team strength — Elo, season-to-date grade, and Pythagorean win% blended for any week. Click a team for the full breakdown.">
+      <PageHeader title="Power Rankings" subtitle="Composite team strength — Elo, season-to-date grade, and Pythagorean win% blended for any week. Click a team for the full breakdown, or compare two for a tough call.">
         <Select label="Season" value={season} onChange={setSeason} options={seasons.map((s) => ({ value: String(s), label: String(s) }))} />
         <div className="flex items-end gap-1.5">
           <Select label="Week" value={week} onChange={setWeek} options={weeks.map((w) => ({ value: String(w), label: `Week ${w}` }))} />

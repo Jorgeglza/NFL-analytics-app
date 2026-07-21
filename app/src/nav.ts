@@ -11,22 +11,17 @@ export interface NavGroup {
   pages: NavPage[];
 }
 
+// Game Analysis order tells a story: make the pick (Game Picks) -> see how
+// that kind of result plays out generally (Win Types) -> see what the model
+// itself recommends (Matchup Previews) -> zoom out to season-long team
+// strength (Power Rankings) -> drill into a specific hard call (Team
+// Comparison) -> the full detail behind one team (Team Scorecard) -> another
+// statistical lens on the same question (Spread Win Percentage) -> the
+// season-long payoff (Season Outlook).
 export const NAV_GROUPS: NavGroup[] = [
   {
     label: "Game Analysis",
     pages: [
-      {
-        label: "Power Rankings",
-        path: "/game_analysis/power_rankings",
-        description: "Composite team strength for any week — Elo, season-to-date grade and Pythagorean win%, with movement",
-        implemented: true,
-      },
-      {
-        label: "Season Outlook",
-        path: "/game_analysis/season_outlook",
-        description: "Strength of schedule and playoff probability — where the road ahead gets harder or easier",
-        implemented: true,
-      },
       {
         label: "Game Picks",
         path: "/game_analysis/game_picks",
@@ -40,13 +35,25 @@ export const NAV_GROUPS: NavGroup[] = [
         implemented: true,
       },
       {
+        label: "Matchup Previews",
+        path: "/game_analysis/matchup_previews",
+        description: "Game previews with spread pick engine, trend edges and model accuracy",
+        implemented: true,
+      },
+      {
+        label: "Power Rankings",
+        path: "/game_analysis/power_rankings",
+        description: "Composite team strength for any week — Elo, season-to-date grade and Pythagorean win%, with movement",
+        implemented: true,
+      },
+      {
         label: "Team Comparison",
         path: "/game_analysis/team_comparison",
         description: "Head-to-head stat comparison with ranks, grades and trend charts",
         implemented: true,
       },
       {
-        label: "Scorecards Teams",
+        label: "Team Scorecard",
         path: "/game_analysis/scorecards_teams",
         description: "Team playstyle dashboard — pass/rush splits and stat sparklines",
         implemented: true,
@@ -58,9 +65,9 @@ export const NAV_GROUPS: NavGroup[] = [
         implemented: true,
       },
       {
-        label: "Matchup Previews",
-        path: "/game_analysis/matchup_previews",
-        description: "Game previews with spread pick engine, trend edges and model accuracy",
+        label: "Season Outlook",
+        path: "/game_analysis/season_outlook",
+        description: "Strength of schedule and playoff probability — where the road ahead gets harder or easier",
         implemented: true,
       },
     ],

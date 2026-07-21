@@ -6,6 +6,7 @@ import { useSearchParams } from "react-router-dom";
 import type { EChartsOption } from "echarts";
 import { getSchedule, getGrades, getTeamWeek, type Row } from "../../lib/data/loader";
 import { getTeamMetaMap, type TeamMeta } from "../../lib/team/meta";
+import { computePowerRankings, type PowerRankingRow } from "../../lib/logic/powerRankings";
 import { METRICS, seriesFor } from "./team-trends/shared";
 import { Select } from "../../components/filters/Select";
 import { useECharts } from "../../components/charts/useECharts";
@@ -75,17 +76,30 @@ export default function TeamTrends() {
         .map((t) => ({ value: t, label: meta?.get(t)?.name ?? t })),
     [schedule, season, meta],
   );
+  const seasonWeeks = useMemo(
+    () => [...new Set(schedule.filter((r) => String(r.season) === season && r.game_type === "REG").map((r) => Number(r.week)))].sort((a, b) => a - b),
+    [schedule, season],
+  );
 
   const metric = METRICS.find((m) => m.key === metricKey) ?? METRICS[0];
   const teams = [team1, team2, team3].filter((t) => t !== NONE);
 
+  // Composite/Elo/Pythagorean metrics (the Power Rankings signals) aren't
+  // columns in any loaded frame — precompute them once per season so
+  // switching the metric or teams doesn't re-run the ranking for every week.
+  const powerRankingsByWeek = useMemo(() => {
+    if (!season || !grades.length || !seasonWeeks.length) return new Map<number, PowerRankingRow[]>();
+    return new Map(seasonWeeks.map((w) => [w, computePowerRankings(schedule, grades, Number(season), w)]));
+  }, [schedule, grades, season, seasonWeeks]);
+
   const seriesByTeam = useMemo(() => {
-    if (!season || !grades.length || !teamWeek.length) return new Map<string, { week: number; value: number }[]>();
+    if (!season || !grades.length) return new Map<string, { week: number; value: number }[]>();
+    if (metric.source === "team_week" && !teamWeek.length) return new Map<string, { week: number; value: number }[]>();
     const out = new Map<string, { week: number; value: number }[]>();
-    for (const t of teams) out.set(t, seriesFor(metric, t, Number(season), grades, teamWeek));
+    for (const t of teams) out.set(t, seriesFor(metric, t, Number(season), grades, teamWeek, powerRankingsByWeek));
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [teams.join(","), metric, season, grades, teamWeek]);
+  }, [teams.join(","), metric, season, grades, teamWeek, powerRankingsByWeek]);
 
   const chartOption = useMemo<EChartsOption | null>(() => {
     if (!teams.length) return null;

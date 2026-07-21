@@ -216,7 +216,7 @@ export default function Scorecards() {
   const [ranks, setRanks] = useState<Row[]>([]);
   const [grades, setGrades] = useState<Row[]>([]);
 
-  usePageTitle(`Scorecards: ${team}`);
+  usePageTitle(`Team Scorecard: ${team}`);
 
   useEffect(() => {
     Promise.all([getTeamMetaMap(), getMeta(), getGrades()]).then(([m, mt, g]) => {
@@ -394,7 +394,7 @@ export default function Scorecards() {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-4">
-        <h1 className="flex items-center gap-2.5 text-2xl font-extrabold tracking-tight text-[#002f6c]"><span className="h-6 w-1.5 rounded-full bg-gradient-to-b from-[#002f6c] to-[#164a9c]" />Scorecards — Teams</h1>
+        <h1 title="For a league-wide statistical view, see Spread Win Percentage." className="flex items-center gap-2.5 text-2xl font-extrabold tracking-tight text-[#002f6c]"><span className="h-6 w-1.5 rounded-full bg-gradient-to-b from-[#002f6c] to-[#164a9c]" />Team Scorecard</h1>
         <div className="flex gap-4">
           <Select label="Season" value={season} onChange={setSeason} options={seasons.map((s) => ({ value: String(s), label: String(s) }))} />
           <Select label="Team" value={team} onChange={setTeam} options={teams.map((t) => ({ value: t, label: meta.get(t)?.name ?? t }))} />

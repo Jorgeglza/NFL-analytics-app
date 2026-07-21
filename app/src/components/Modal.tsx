@@ -3,7 +3,22 @@
 // fixed positioning + a high z-index is sufficient for a single-level dialog.
 import { useEffect, type ReactNode } from "react";
 
-export function Modal({ title, subtitle, onClose, children }: { title: ReactNode; subtitle?: string; onClose: () => void; children: ReactNode }) {
+// `wide` grows the panel with the viewport (up to a cap) instead of a fixed
+// max-width, for content that benefits from using spare horizontal space
+// (e.g. side-by-side charts) rather than a narrow single column.
+export function Modal({
+  title,
+  subtitle,
+  onClose,
+  wide = false,
+  children,
+}: {
+  title: ReactNode;
+  subtitle?: string;
+  onClose: () => void;
+  wide?: boolean;
+  children: ReactNode;
+}) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -15,7 +30,7 @@ export function Modal({ title, subtitle, onClose, children }: { title: ReactNode
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/50 px-4 py-8" onClick={onClose}>
       <div
-        className="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white shadow-xl"
+        className={`w-full rounded-2xl border border-slate-200 bg-white shadow-xl ${wide ? "max-w-2xl lg:max-w-4xl xl:max-w-6xl" : "max-w-2xl"}`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 pb-3 pt-4">

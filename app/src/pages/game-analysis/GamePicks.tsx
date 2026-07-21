@@ -208,7 +208,7 @@ export default function GamePicks() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end gap-4">
-        <h1 className="mr-auto flex items-center gap-2.5 text-2xl font-extrabold tracking-tight text-[#002f6c]"><span className="h-6 w-1.5 rounded-full bg-gradient-to-b from-[#002f6c] to-[#164a9c]" />Game Picks</h1>
+        <h1 title="Once you've made your picks, see how these win types trend across a season on Win Types." className="mr-auto flex items-center gap-2.5 text-2xl font-extrabold tracking-tight text-[#002f6c]"><span className="h-6 w-1.5 rounded-full bg-gradient-to-b from-[#002f6c] to-[#164a9c]" />Game Picks</h1>
         {pickRecord.any && (
           <div className="flex items-center gap-1.5 self-center rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold shadow-sm" title="Your manual picks vs. final results for this week">
             <span className="uppercase tracking-wider text-slate-400">Your picks</span>

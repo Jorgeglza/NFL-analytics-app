@@ -164,6 +164,28 @@ export interface EloGameDetail {
   postGameElo: number;
 }
 
+export interface WeeklyGradeDetail {
+  week: number;
+  grade: number;
+  opponent: string | null;
+  home: boolean | null;
+  teamScore: number | null;
+  opponentScore: number | null;
+}
+
+export interface WeeklyPythDetail {
+  week: number;
+  pythPct: number | null;
+  pointsFor: number;
+  pointsAgainst: number;
+}
+
+export interface WeeklyCompositeDetail {
+  week: number;
+  composite: number;
+  leagueAvg: number;
+}
+
 export interface TeamCompositeBreakdown {
   team: string;
   season: number;
@@ -173,16 +195,18 @@ export interface TeamCompositeBreakdown {
   eloGame: EloGameDetail;
   eloNorm: number | null;
   eloRange: [number, number];
-  weeklyGrades: { week: number; grade: number }[];
+  weeklyGrades: WeeklyGradeDetail[];
   gradeAvg: number | null;
   gradeNorm: number | null;
   gradeRange: [number, number] | null;
   weeklyPoints: { week: number; pointsFor: number; pointsAgainst: number }[];
+  weeklyPyth: WeeklyPythDetail[];
   pointsForTotal: number;
   pointsAgainstTotal: number;
   pythPct: number | null;
   pythNorm: number | null;
   pythRange: [number, number] | null;
+  weeklyComposite: WeeklyCompositeDetail[];
 }
 
 /**
@@ -270,9 +294,29 @@ export function computeTeamBreakdown(schedule: Row[], grades: Row[], season: num
     };
   }
 
-  const weeklyGrades = grades
+  const gameByWeek = new Map<number, Row>();
+  for (const g of schedule) {
+    if (Number(g.season) !== season || g.game_type !== "REG") continue;
+    if (String(g.home_team) === team || String(g.away_team) === team) gameByWeek.set(Number(g.week), g);
+  }
+
+  const weeklyGrades: WeeklyGradeDetail[] = grades
     .filter((r) => String(r.Team) === team && Number(r.Season) === season && Number(r.Week) <= week && r["Overall Grade"] != null)
-    .map((r) => ({ week: Number(r.Week), grade: Number(r["Overall Grade"]) }))
+    .map((r) => {
+      const w = Number(r.Week);
+      const g = gameByWeek.get(w);
+      const isHome = g ? String(g.home_team) === team : null;
+      const opponent = g ? (isHome ? String(g.away_team) : String(g.home_team)) : null;
+      const played = !!g && g.home_score != null && g.away_score != null;
+      return {
+        week: w,
+        grade: Number(r["Overall Grade"]),
+        opponent,
+        home: isHome,
+        teamScore: played ? (isHome ? Number(g!.home_score) : Number(g!.away_score)) : null,
+        opponentScore: played ? (isHome ? Number(g!.away_score) : Number(g!.home_score)) : null,
+      };
+    })
     .sort((a, b) => a.week - b.week);
 
   const weeklyPoints: { week: number; pointsFor: number; pointsAgainst: number }[] = [];
@@ -283,6 +327,28 @@ export function computeTeamBreakdown(schedule: Row[], grades: Row[], season: num
     else if (g.away_team === team) weeklyPoints.push({ week: Number(g.week), pointsFor: Number(g.away_score), pointsAgainst: Number(g.home_score) });
   }
   weeklyPoints.sort((a, b) => a.week - b.week);
+
+  const weeklyPyth: WeeklyPythDetail[] = [];
+  let cumPf = 0;
+  let cumPa = 0;
+  for (const p of weeklyPoints) {
+    cumPf += p.pointsFor;
+    cumPa += p.pointsAgainst;
+    weeklyPyth.push({ week: p.week, pythPct: pythWinPct(cumPf, cumPa), pointsFor: cumPf, pointsAgainst: cumPa });
+  }
+
+  const seasonWeeksThrough = [
+    ...new Set(schedule.filter((r) => Number(r.season) === season && r.game_type === "REG" && Number(r.week) <= week).map((r) => Number(r.week))),
+  ].sort((a, b) => a - b);
+  const weeklyComposite: WeeklyCompositeDetail[] = seasonWeeksThrough
+    .map((w) => {
+      const wkRankings = computePowerRankings(schedule, grades, season, w);
+      const teamRow = wkRankings.find((r) => r.team === team);
+      if (!teamRow) return null;
+      const leagueAvg = wkRankings.reduce((s, r) => s + r.composite, 0) / wkRankings.length;
+      return { week: w, composite: teamRow.composite, leagueAvg };
+    })
+    .filter((p): p is WeeklyCompositeDetail => p != null);
 
   return {
     team,
@@ -298,11 +364,13 @@ export function computeTeamBreakdown(schedule: Row[], grades: Row[], season: num
     gradeNorm: normOf(row.grade, gradeRange),
     gradeRange,
     weeklyPoints,
+    weeklyPyth,
     pointsForTotal: weeklyPoints.reduce((s, p) => s + p.pointsFor, 0),
     pointsAgainstTotal: weeklyPoints.reduce((s, p) => s + p.pointsAgainst, 0),
     pythPct: row.pythPct,
     pythNorm: normOf(row.pythPct, pythRange),
     pythRange,
+    weeklyComposite,
   };
 }
 

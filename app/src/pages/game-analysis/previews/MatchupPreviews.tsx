@@ -63,7 +63,7 @@ export default function MatchupPreviews() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-4">
-        <h1 className="mr-auto flex items-center gap-2.5 text-2xl font-extrabold tracking-tight text-[#002f6c]"><span className="h-6 w-1.5 rounded-full bg-gradient-to-b from-[#002f6c] to-[#164a9c]" />Matchup Previews</h1>
+        <h1 title="Zoom out to see how every team stacks up all season on Power Rankings." className="mr-auto flex items-center gap-2.5 text-2xl font-extrabold tracking-tight text-[#002f6c]"><span className="h-6 w-1.5 rounded-full bg-gradient-to-b from-[#002f6c] to-[#164a9c]" />Matchup Previews</h1>
         <a href="#/game_analysis/models_guide" className="rounded-full border border-[#002f6c]/25 px-3 py-1.5 text-xs font-semibold text-[#002f6c] transition-colors hover:bg-[#002f6c]/5">
           📖 How the models work →
         </a>

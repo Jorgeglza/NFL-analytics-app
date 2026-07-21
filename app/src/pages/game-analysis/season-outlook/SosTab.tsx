@@ -2,7 +2,8 @@ import { useMemo } from "react";
 import type { EChartsOption } from "echarts";
 import type { Row } from "../../../lib/data/loader";
 import type { TeamMeta } from "../../../lib/team/meta";
-import { computeStrengthOfSchedule } from "./shared";
+import { computeStrengthOfSchedule, computeOpponentHeatmap } from "./shared";
+import HeatmapChart from "./HeatmapChart";
 import { useECharts } from "../../../components/charts/useECharts";
 import { tableWrapCls, theadCls, trCls } from "../../../components/ui";
 
@@ -11,6 +12,8 @@ export default function SosTab({ schedule, season, week, meta }: { schedule: Row
     () => (season && week ? computeStrengthOfSchedule(schedule, Number(season), Number(week)) : []),
     [schedule, season, week],
   );
+
+  const heatmap = useMemo(() => (season ? computeOpponentHeatmap(schedule, Number(season)) : null), [schedule, season]);
 
   const chartOption = useMemo<EChartsOption | null>(() => {
     if (!rows.length) return null;
@@ -29,7 +32,10 @@ export default function SosTab({ schedule, season, week, meta }: { schedule: Row
         {
           type: "bar",
           barMaxWidth: 12,
-          data: sorted.map((r) => ({ value: r.remainingAvg == null ? 0 : Math.round(r.remainingAvg), itemStyle: { color: "#002f6c" } })),
+          data: sorted.map((r) => ({
+            value: r.remainingAvg == null ? 0 : Math.round(r.remainingAvg),
+            itemStyle: { color: meta.get(r.team)?.color ?? "#002f6c" },
+          })),
         },
       ],
     } as EChartsOption;
@@ -42,6 +48,14 @@ export default function SosTab({ schedule, season, week, meta }: { schedule: Row
         Average pre-game Elo rating of a team's opponents (higher = harder), split into games at/before week {week} vs. games after it — pick a past
         week above to backtest what the remaining-schedule outlook looked like at that point in the season.
       </p>
+
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <h2 className="mb-1 text-sm font-semibold text-slate-700">Opponent difficulty by week — hardest schedule first</h2>
+        <p className="mb-2 text-[11px] text-slate-400">
+          Each cell is that week's opponent — color and the small number are the opponent's pre-game Elo rating (redder = tougher).
+        </p>
+        {heatmap ? <HeatmapChart data={heatmap} meta={meta} /> : <div className="py-8 text-center text-sm text-slate-400">No schedule data yet.</div>}
+      </div>
 
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <h2 className="mb-2 text-sm font-semibold text-slate-700">Remaining strength of schedule — hardest first</h2>

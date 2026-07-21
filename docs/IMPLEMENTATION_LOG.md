@@ -64,6 +64,56 @@ Per page: run old app side-by-side (`pda-ie` env), match tables/KPIs/chart serie
 
 ## Session notes (newest first)
 
+### 2026-07-20 — Session 8 (cont.): Popup charts, opponent heatmap, nav reorder for storytelling
+Follow-up round of direct user requests on the pages from earlier this session.
+
+- **Power Rankings popup — charts + responsive width**: `components/Modal.tsx` gained a `wide` prop (grows up to
+  `xl:max-w-6xl` instead of a fixed width) so the popup can lay out 2 columns on large screens. `DetailModal.tsx`
+  now renders 4 ECharts instances instead of static text: a per-week Grade bar chart (tooltip shows that week's
+  opponent/home-away/score alongside the grade), a cumulative Pythagorean win% line (tooltip shows the exact win
+  share and points), and a Composite line comparing the team against the **league average** each week, plus the
+  existing rank-evolution chart. `lib/logic/powerRankings.ts`'s `computeTeamBreakdown()` gained
+  `weeklyGrades[].opponent/home/teamScore/opponentScore`, `weeklyPyth[]` (cumulative win share per week), and
+  `weeklyComposite[]` (`{week, composite, leagueAvg}`, the league average computed the same way
+  `computeTeamRankTrend` already recomputes rankings per week). Verified in pane: modal width 1152px on a
+  1280px viewport (vs. previously fixed at ~672px), 4 canvases render, all breakdown numbers still match the
+  table exactly (Rams wk10: composite 96.5, Elo 1650, grade 64.4 avg of 9 weeks, pyth 76.4% from 251–153).
+- **Team Trends — Composite/Elo/Pyth metrics**: `team-trends/shared.ts` added a `power` metric source
+  (composite/elo/pythPct, not real frame columns — computed via `computePowerRankings` per week and passed in as
+  a precomputed `Map<week, PowerRankingRow[]>` so switching teams/metric doesn't re-run the ranking) and put
+  these 3 metrics first in `METRICS`, making Composite Score the default metric everywhere (satisfies "default
+  on composite" without needing a separate deep-link special case). `composite`/`pythPct` are stored 0-1 in
+  `PowerRankingRow`, so `MetricDef` gained an optional `scale` (100 for those two) for readable axis values.
+  Verified: Compare-ing the Rams from Power Rankings lands on Team Trends already showing Composite Score,
+  values matching Power Rankings exactly week by week (wk10: 96.5).
+- **Season Outlook — opponent-difficulty heatmap**: new first chart in the Strength of Schedule tab, above the
+  existing remaining-SOS bar (which now colors each bar by the team's own color instead of flat navy).
+  `season-outlook/shared.ts`'s `computeOpponentHeatmap()` builds a teams × weeks grid (rows sorted hardest
+  average schedule first) directly from `buildEloIndex`'s per-game pre-game ratings (whole-season view,
+  intentionally not `throughWeek`-scoped, unlike the SOS table below it). `HeatmapChart.tsx` is a new ECharts
+  `custom` series (a plain `heatmap` series can't draw a logo per cell) — each cell renders a colored rect
+  (green→yellow→red by opponent Elo), the opponent's logo centered, and the opponent's Elo rating as a small
+  number in the bottom-right corner. Verified in pane: heatmap renders above the SOS bar chart with the stated
+  caption; confirmed the canvas actually drew the cross-origin logo images (not just left them blank) via the
+  browser correctly throwing a `SecurityError: canvas tainted by cross-origin data` on a pixel-readback probe —
+  that error can only happen if an image was actually drawn to the canvas.
+- **Game Analysis reorder + rename**: `nav.ts` reordered to tell a story — Game Picks → Win Types → Matchup
+  Previews → Power Rankings → Team Comparison → Team Scorecard → Spread Win Percentage → Season Outlook (was
+  previously Power-Rankings/Season-Outlook-first from when those were freshly added, then the original 6 ported
+  pages). "Scorecards Teams" renamed to "Team Scorecard" (nav label + page `<h1>` + tab title; route/path left
+  as `/game_analysis/scorecards_teams` since `TeamComparison.tsx` links to it directly). Added a one-line
+  flow hint to each page: for the 6 pages that only ever had a bare `<h1>` (Game Picks, Win Types, Matchup
+  Previews, Team Comparison, Team Scorecard, Spread Win Percentage) the hint is a `title` attribute on the
+  heading — a native hover tooltip, deliberately invisible until hovered per the ask for "nothing obvious;" for
+  Power Rankings and Season Outlook, which already had a visible `PageHeader` subtitle, a short clause was
+  appended to the existing subtitle instead. No existing explanatory copy was rewritten. Verified: nav/Home show
+  the new order (8/8 available), `Team Scorecard` label everywhere, and each page's `<h1 title="...">` hover
+  text confirmed present in the DOM.
+- **Tests**: no new pure-logic behavior needing golden/self-consistency tests beyond what Session 8's earlier
+  entry already added — this round was UI/chart/ordering work. 58/58 tests still green, `npm run build` and
+  `tsc --noEmit` clean.
+- Not committed/pushed at time of writing this entry — commit only when the user asks.
+
 ### 2026-07-20 — Session 8 (cont.): Power Rankings team popup, Team Trends → Compare-only, Season Outlook backtesting
 Three direct user requests on the pages just shipped:
 

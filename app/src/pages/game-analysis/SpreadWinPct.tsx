@@ -494,7 +494,7 @@ export default function SpreadWinPct() {
 
   return (
     <div className="space-y-4">
-      <h1 className="flex items-center gap-2.5 text-2xl font-extrabold tracking-tight text-[#002f6c]"><span className="h-6 w-1.5 rounded-full bg-gradient-to-b from-[#002f6c] to-[#164a9c]" />Win % by Win Type &amp; Spread</h1>
+      <h1 title="For the season's full outlook, see Season Outlook." className="flex items-center gap-2.5 text-2xl font-extrabold tracking-tight text-[#002f6c]"><span className="h-6 w-1.5 rounded-full bg-gradient-to-b from-[#002f6c] to-[#164a9c]" />Win % by Win Type &amp; Spread</h1>
 
       {/* Controls */}
       <div className="flex flex-wrap items-end gap-4 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
