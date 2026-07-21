@@ -13,6 +13,7 @@ import { gradeModelProb, blendProbs, MIN_N_BUCKET } from "../../../lib/logic/pro
 import { edgeComposite, EDGE_WEIGHTS } from "../../../lib/logic/edgeComposite";
 import { impliedProb, fairProbs } from "../../../lib/logic/moneyline";
 import { opponentLabel } from "../../grading-model/shared";
+import { usePageTitle } from "../../../lib/hooks/usePageTitle";
 import {
   favoriteSide,
   bucketLabel,
@@ -121,6 +122,8 @@ export default function MatchupTab({
   const away = selGame ? String(selGame.away_team) : "";
   const home = selGame ? String(selGame.home_team) : "";
   const [stat, setStat] = useState("points_margin");
+
+  usePageTitle(away && home ? `${away} @ ${home} — Matchup Previews` : "Matchup Previews — Matchup");
 
   const recordOf = (team: string): string => {
     const rows = twIdx.rowsFor(team, s).filter((r) => Number(r.week) <= w && r.win != null);

@@ -1,9 +1,27 @@
 import { Suspense, lazy, type ComponentType, type LazyExoticComponent } from "react";
-import { Route, Routes } from "react-router-dom";
+import { Route, Routes, useLocation } from "react-router-dom";
 import Navbar from "./components/Navbar";
 import { Loading } from "./components/Loading";
 import Home from "./pages/Home";
 import { NAV_GROUPS } from "./nav";
+import { usePageTitle } from "./lib/hooks/usePageTitle";
+
+// Default tab title per route (page-specific overrides live inside the page
+// components themselves, e.g. Team Comparison reflects the selected teams).
+const TITLE_OVERRIDES: Record<string, string> = {
+  "/": "NFL Analytics",
+  "/glossary": "Glossary",
+  "/game_analysis/models_guide": "Models Guide",
+};
+const PAGE_TITLES: Record<string, string> = Object.fromEntries(
+  NAV_GROUPS.flatMap((g) => g.pages).map((p) => [p.path, p.label]),
+);
+
+function RouteTitle() {
+  const { pathname } = useLocation();
+  usePageTitle(TITLE_OVERRIDES[pathname] ?? PAGE_TITLES[pathname] ?? "NFL Analytics");
+  return null;
+}
 
 // Pages are lazy-loaded so ECharts-heavy routes don't bloat the initial bundle (M4).
 const IMPLEMENTED: Record<string, LazyExoticComponent<ComponentType>> = {
@@ -40,6 +58,7 @@ export default function App() {
   return (
     <div className="min-h-screen">
       <Navbar />
+      <RouteTitle />
       <main className="mx-auto max-w-screen-2xl px-4 py-6">
         <Suspense fallback={<Loading />}>
           <Routes>

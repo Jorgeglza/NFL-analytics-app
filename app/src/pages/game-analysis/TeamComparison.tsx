@@ -10,6 +10,7 @@ import { useECharts } from "../../components/charts/useECharts";
 import { Loading } from "../../components/Loading";
 import { opponentLabel } from "../grading-model/shared";
 import { currentWeek } from "../../lib/logic/defaultWeek";
+import { usePageTitle } from "../../lib/hooks/usePageTitle";
 
 const STAT_LIST = ["points", "total_yards", "total_tds", "passing_yards", "rushing_yards", "turnovers"];
 const STAT_HIERARCHY: Record<string, string[]> = {
@@ -56,6 +57,8 @@ export default function TeamComparison() {
   const [selectedStat, setSelectedStat] = useState("points_margin");
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [schedule, setSchedule] = useState<Row[]>([]);
+
+  usePageTitle(`Team Comparison: ${team1} vs ${team2}`);
 
   // Default season/week comes from grades' season list (below); a pending
   // week from the random-matchup effect below (or a deep-linked ?week=) is

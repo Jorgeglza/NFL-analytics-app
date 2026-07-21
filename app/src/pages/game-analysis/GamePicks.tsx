@@ -9,6 +9,7 @@ import { Select } from "../../components/filters/Select";
 import { useECharts } from "../../components/charts/useECharts";
 import { Loading } from "../../components/Loading";
 import { currentWeek } from "../../lib/logic/defaultWeek";
+import { usePageTitle } from "../../lib/hooks/usePageTitle";
 
 const LABEL_FOR_NONE = "No result yet";
 const COLORS: Record<string, string> = {
@@ -42,6 +43,8 @@ export default function GamePicks() {
   const [week, setWeek] = useState(searchParams.get("week") ?? "");
   const [manual, setManual] = useState<string[]>(loadManual);
   const [spreadSort, setSpreadSort] = useState<"time" | "spread">("time");
+
+  usePageTitle(season && week ? `Game Picks — Wk ${week}, ${season}` : "Game Picks");
 
   useEffect(() => {
     localStorage.setItem(LS_KEY, JSON.stringify(manual));

@@ -13,6 +13,7 @@ import { useECharts } from "../../components/charts/useECharts";
 import { Loading } from "../../components/Loading";
 import { Card } from "../../components/ui";
 import { opponentLabel } from "../grading-model/shared";
+import { usePageTitle } from "../../lib/hooks/usePageTitle";
 
 const OFF_ACCENT = "#c0392b";
 const DEF_ACCENT = "#2980b9";
@@ -213,6 +214,8 @@ export default function Scorecards() {
   const [teamWeek, setTeamWeek] = useState<Row[]>([]);
   const [ranks, setRanks] = useState<Row[]>([]);
   const [grades, setGrades] = useState<Row[]>([]);
+
+  usePageTitle(`Scorecards: ${team}`);
 
   useEffect(() => {
     Promise.all([getTeamMetaMap(), getMeta(), getGrades()]).then(([m, mt, g]) => {

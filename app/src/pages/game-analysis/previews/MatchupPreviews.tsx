@@ -7,6 +7,7 @@ import { getSchedule, getGrades, getTeamWeek, getTeamWeekRanks, getMeta, type Ro
 import { getTeamMetaMap, type TeamMeta } from "../../../lib/team/meta";
 import { buildHist, buildGradesIndex, buildTeamWeekIndex, buildScheduleEloIndex } from "./engine";
 import { Loading } from "../../../components/Loading";
+import { usePageTitle } from "../../../lib/hooks/usePageTitle";
 import WeekPreviewTab from "./WeekPreviewTab";
 import MatchupTab from "./MatchupTab";
 import ModelOverviewTab from "./ModelOverviewTab";
@@ -27,6 +28,10 @@ export default function MatchupPreviews() {
   const [meta, setMeta] = useState<Map<string, TeamMeta> | null>(null);
   const [teamWeekBySeason, setTeamWeekBySeason] = useState<Map<number, Row[]> | null>(null);
   const [ranksBySeason, setRanksBySeason] = useState<Map<number, Row[]>>(new Map());
+
+  // MatchupTab sets its own (game-specific) title while active — skip here to
+  // avoid a parent/child effect-ordering race clobbering it.
+  usePageTitle(tab === "Matchup" ? undefined : `Matchup Previews — ${tab}`);
 
   useEffect(() => {
     (async () => {

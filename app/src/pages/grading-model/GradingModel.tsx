@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { getGrades, getFeatureImportance, getSchedule, getContribParams, type Row, type ContribParams } from "../../lib/data/loader";
 import { getTeamMetaMap, type TeamMeta } from "../../lib/team/meta";
 import { Loading } from "../../components/Loading";
+import { usePageTitle } from "../../lib/hooks/usePageTitle";
 import SeasonTab from "./SeasonTab";
 import TeamsTab from "./TeamsTab";
 import WeeklyTab from "./WeeklyTab";
@@ -33,6 +34,8 @@ export default function GradingModel() {
     setTeamsSeason(season);
     setTab("Teams");
   };
+
+  usePageTitle(tab === "Teams" ? `Grading Model — Teams: ${teamsTeam}` : `Grading Model — ${tab}`);
 
   useEffect(() => {
     Promise.all([getGrades(), getFeatureImportance(), getSchedule(), getTeamMetaMap(), getContribParams()]).then(
