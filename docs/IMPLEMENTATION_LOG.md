@@ -58,6 +58,16 @@ Per page: run old app side-by-side (`pda-ie` env), match tables/KPIs/chart serie
 
 ## Session notes (newest first)
 
+### 2026-07-20 — Session 7 (cont.): Game Picks cross-links, PropBets defense-stat fix, Parlay reset fix, Home glossary link
+Four direct user requests, all verified in pane:
+
+- **Game Picks cross-links**: new "Zoom in" table column, two small circular icon links per row — ⚔️ to Matchup Previews' Matchup tab (`?tab=matchup&season=&week=&game=`) and 🆚 to Team Comparison (`?season=&week=&team1=<away>&team2=<home>`). Team Comparison gained incoming `team1`/`team2`/`season`/`week` URL param support (mirrors the existing `pendingWeekRef` pattern; skips its own random-matchup effect entirely when deep-linked with explicit teams). Verified: link hrefs correct per row, clicking through lands Team Comparison on the exact season/week/teams from the row.
+- **Prop Bets — random defense stat on first click only**: new `randomDefenseStat()` in `statPicker.ts`; a `defenseRandomizedRef` (one-shot per page load) fires only the *first* time the Defense toggle is clicked, picking a random curated defense stat instead of falling through to whatever column happens to sort first. Toggling back to Offense and then Defense again does not re-randomize (verified: same stat, "Def QB Hits", on both visits).
+- **Parlay Builder — reset now re-randomizes the team**: root cause was that `LegCard`'s one-shot team-randomization ref survives across a reset (same React key ⇒ same component instance ⇒ ref already fired), so reset silently fell back to the alphabetically-first team. Fixed by keying `LegCard` on `${resetGen}-${i}` and bumping `resetGen` on every reset, forcing a real remount. Verified: three consecutive resets produced three different teams (HOU → JAX → CIN).
+- **Home page glossary link**: new standalone `/glossary` route (`pages/GlossaryPage.tsx`, not in the navbar — same "hidden route" pattern as Models Guide) rendering the full shared glossary. Footer link added to the bottom of Home ("📖 Glossary — win types, stats & betting terms explained").
+- Build green, 49/49 tests green throughout.
+- Not committed/pushed at time of writing this entry — committed separately, see below.
+
 ### 2026-07-20 — Session 7 (cont.): ties get their own category (Win Types + Spread Win %)
 User feedback on last session's tie fix: don't count ties as a favorite loss — give them their own category and exclude them entirely from every win-rate percentage on both pages. Confirmed via AskUserQuestion: exclude ties from the denominator (not just relabel), applied to both Win Types and Spread Win %.
 

@@ -7,6 +7,7 @@ import { NAV_GROUPS } from "./nav";
 
 // Pages are lazy-loaded so ECharts-heavy routes don't bloat the initial bundle (M4).
 const IMPLEMENTED: Record<string, LazyExoticComponent<ComponentType>> = {
+  "/glossary": lazy(() => import("./pages/GlossaryPage")),
   "/game_analysis/game_picks": lazy(() => import("./pages/game-analysis/GamePicks")),
   "/game_analysis/win_types": lazy(() => import("./pages/game-analysis/WinTypes")),
   "/game_analysis/spread_win_percentage": lazy(() => import("./pages/game-analysis/SpreadWinPct")),
@@ -43,6 +44,11 @@ export default function App() {
         <Suspense fallback={<Loading />}>
           <Routes>
             <Route path="/" element={<Home />} />
+            {/* Not in the navbar — reached from Home's footer link */}
+            {(() => {
+              const GlossaryPage = IMPLEMENTED["/glossary"];
+              return <Route path="/glossary" element={<GlossaryPage />} />;
+            })()}
             {/* Not in the navbar — reached from the Matchup Previews header link */}
             {(() => {
               const Guide = IMPLEMENTED["/game_analysis/models_guide"];

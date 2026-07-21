@@ -2,7 +2,7 @@
 // checkboxes for unplayed games (persisted in localStorage), win-type counts
 // bar, and a spread-by-game bar chart (sortable by kickoff time or spread).
 import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import type { EChartsOption } from "echarts";
 import { getSchedule, type Row } from "../../lib/data/loader";
 import { Select } from "../../components/filters/Select";
@@ -240,7 +240,7 @@ export default function GamePicks() {
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">
             <tr>
-              {["Date", "Away", "A Score", "H Score", "Home", "Spread", "Win Type"].map((h) => (
+              {["Date", "Away", "A Score", "H Score", "Home", "Spread", "Win Type", "Zoom in"].map((h) => (
                 <th key={h} className="px-3 py-2">{h}</th>
               ))}
             </tr>
@@ -280,6 +280,24 @@ export default function GamePicks() {
                   ) : (
                     <span className="text-xs text-slate-400">{LABEL_FOR_NONE}</span>
                   )}
+                </td>
+                <td className="px-3 py-2">
+                  <div className="flex items-center gap-1.5">
+                    <Link
+                      to={`/game_analysis/matchup_previews?tab=matchup&season=${season}&week=${week}&game=${gid}`}
+                      className="grid h-7 w-7 place-items-center rounded-full border border-slate-200 bg-white text-sm shadow-sm transition-all hover:-translate-y-0.5 hover:border-[#002f6c]/50 hover:shadow"
+                      title={`Open Matchup Preview — ${g.away_team} @ ${g.home_team}`}
+                    >
+                      ⚔️
+                    </Link>
+                    <Link
+                      to={`/game_analysis/team_comparison?season=${season}&week=${week}&team1=${g.away_team}&team2=${g.home_team}`}
+                      className="grid h-7 w-7 place-items-center rounded-full border border-slate-200 bg-white text-sm shadow-sm transition-all hover:-translate-y-0.5 hover:border-[#002f6c]/50 hover:shadow"
+                      title={`Compare ${g.away_team} vs ${g.home_team}`}
+                    >
+                      🆚
+                    </Link>
+                  </div>
                 </td>
               </tr>
             ))}

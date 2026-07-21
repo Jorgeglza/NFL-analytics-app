@@ -9,7 +9,7 @@ import { Select } from "../../components/filters/Select";
 import { useECharts } from "../../components/charts/useECharts";
 import { opponentLabel } from "../grading-model/shared";
 import { Loading } from "../../components/Loading";
-import { buildStatGroups, statLabel, americanOdds, headshotCrop, randomItem, randomPassRushRecStat, HIT_COLOR, MISS_COLOR, NEUTRAL_COLOR } from "./statPicker";
+import { buildStatGroups, statLabel, americanOdds, headshotCrop, randomItem, randomPassRushRecStat, randomDefenseStat, HIT_COLOR, MISS_COLOR, NEUTRAL_COLOR } from "./statPicker";
 
 const EXCLUDE = new Set([
   "season", "week", "team", "opponent_team", "gameday", "game_id",
@@ -48,6 +48,16 @@ export default function PropBets() {
   const [seasonType, setSeasonType] = useState("REG");
   const [team, setTeam] = useState(searchParams.get("team") ?? "");
   const [side, setSide] = useState<"offense" | "defense">("offense");
+  // First switch to Defense each page load gets a random defense stat instead
+  // of falling back to whatever stat happens to be first alphabetically.
+  const defenseRandomizedRef = useRef(false);
+  const pickSide = (sd: "offense" | "defense") => {
+    setSide(sd);
+    if (sd === "defense" && !defenseRandomizedRef.current) {
+      defenseRandomizedRef.current = true;
+      setStat(randomDefenseStat());
+    }
+  };
   // Random starting stat (Passing/Rushing/Receiving) unless deep-linked (audit
   // request: give every fresh visit a different starting point instead of
   // always opening on Passing Yards).
@@ -255,7 +265,7 @@ export default function PropBets() {
           Side
           <div className="flex gap-2">
             {(["offense", "defense"] as const).map((sd) => (
-              <button key={sd} onClick={() => setSide(sd)} className={`rounded-full px-3 py-1.5 text-sm normal-case tracking-normal capitalize ${side === sd ? "bg-[#002f6c] text-white shadow-sm" : "bg-slate-100 text-slate-600 hover:text-slate-900"}`}>
+              <button key={sd} onClick={() => pickSide(sd)} className={`rounded-full px-3 py-1.5 text-sm normal-case tracking-normal capitalize ${side === sd ? "bg-[#002f6c] text-white shadow-sm" : "bg-slate-100 text-slate-600 hover:text-slate-900"}`}>
                 {sd}
               </button>
             ))}

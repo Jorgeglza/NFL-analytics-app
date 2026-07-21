@@ -1,7 +1,7 @@
 // Port of team_comparison_page_3.py — 3-column head-to-head comparison with
 // rank bars, expandable substats, grades boxes and side trend/matchup charts.
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import type { EChartsOption } from "echarts";
 import { getTeamWeek, getTeamWeekRanks, getGrades, getSchedule, type Row } from "../../lib/data/loader";
 import { getTeamMetaMap, type TeamMeta } from "../../lib/team/meta";
@@ -43,25 +43,28 @@ interface StatSummary {
 }
 
 export default function TeamComparison() {
+  const [searchParams] = useSearchParams();
   const [meta, setMeta] = useState<Map<string, TeamMeta> | null>(null);
   const [grades, setGrades] = useState<Row[]>([]);
   const [seasons, setSeasons] = useState<number[]>([]);
-  const [season, setSeason] = useState("");
+  const [season, setSeason] = useState(searchParams.get("season") ?? "");
   const [teamWeek, setTeamWeek] = useState<Row[]>([]);
   const [ranks, setRanks] = useState<Row[]>([]);
-  const [week, setWeek] = useState("");
-  const [team1, setTeam1] = useState("SF");
-  const [team2, setTeam2] = useState("CIN");
+  const [week, setWeek] = useState(searchParams.get("week") ?? "");
+  const [team1, setTeam1] = useState(searchParams.get("team1") ?? "SF");
+  const [team2, setTeam2] = useState(searchParams.get("team2") ?? "CIN");
   const [selectedStat, setSelectedStat] = useState("points_margin");
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [schedule, setSchedule] = useState<Row[]>([]);
 
   // Default season/week comes from grades' season list (below); a pending
-  // week from the random-matchup effect below is consumed here once that
-  // season's weeks are known, so it isn't clobbered by the usual
-  // "default to the last available week" behavior.
-  const pendingWeekRef = useRef<number | null>(null);
-  const randomizedRef = useRef(false);
+  // week from the random-matchup effect below (or a deep-linked ?week=) is
+  // consumed here once that season's weeks are known, so it isn't clobbered
+  // by the usual "default to the last available week" behavior.
+  const pendingWeekRef = useRef<number | null>(searchParams.get("week") ? Number(searchParams.get("week")) : null);
+  // Skip randomization entirely when arriving via a deep link (e.g. from Game
+  // Picks) that already specifies the teams.
+  const randomizedRef = useRef(!!searchParams.get("team1"));
 
   useEffect(() => {
     Promise.all([getTeamMetaMap(), getGrades()]).then(([m, g]) => {
@@ -69,13 +72,15 @@ export default function TeamComparison() {
       setGrades(g);
       const ss = [...new Set(g.map((r) => Number(r.Season)))].sort((a, b) => b - a);
       setSeasons(ss);
-      if (ss.length) setSeason(String(ss[0]));
+      if (ss.length && !searchParams.get("season")) setSeason(String(ss[0]));
     });
     getSchedule().then(setSchedule);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Default to a random current-week matchup (away = team1, home = team2),
-  // re-randomized every time the page is opened fresh (not persisted).
+  // re-randomized every time the page is opened fresh (not persisted, and
+  // skipped entirely when deep-linked with explicit teams).
   useEffect(() => {
     if (randomizedRef.current || !schedule.length) return;
     const cw = currentWeek(schedule);

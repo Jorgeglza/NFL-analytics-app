@@ -83,6 +83,13 @@ export function randomPassRushRecStat(): string {
   return randomItem(PASS_RUSH_REC_STATS) ?? "passing_yards";
 }
 
+const DEFENSE_STATS = PROP_MARKET_SECTIONS.defense.flatMap((s) => s.stats);
+
+/** Random starting stat from the curated Defense list. */
+export function randomDefenseStat(): string {
+  return randomItem(DEFENSE_STATS) ?? "def_sacks";
+}
+
 export const HIT_COLOR = "#059669";
 export const MISS_COLOR = "#dc2626";
 export const NEUTRAL_COLOR = "#002f6c";

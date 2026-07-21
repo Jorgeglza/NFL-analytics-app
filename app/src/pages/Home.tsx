@@ -147,6 +147,14 @@ export default function Home() {
             </div>
           </div>
         ))}
+        <div className="mt-2 flex justify-center border-t border-slate-100 pt-6">
+          <Link
+            to="/glossary"
+            className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-[#002f6c] shadow-sm transition-colors hover:border-[#002f6c]/40 hover:bg-[#002f6c]/5"
+          >
+            📖 Glossary — win types, stats & betting terms explained
+          </Link>
+        </div>
       </section>
     </div>
   );

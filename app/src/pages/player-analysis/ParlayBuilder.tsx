@@ -282,6 +282,11 @@ export default function ParlayBuilder() {
   const [seasons, setSeasons] = useState<number[]>([]);
   const [legs, setLegs] = useState<Leg[]>([]);
   const [pcts, setPcts] = useState<Record<number, number | null>>({});
+  // Bumped on every reset so LegCard remounts (fresh key) instead of reusing
+  // the same instance — otherwise its one-shot team-randomization ref has
+  // already fired and reset would land on the first team alphabetically
+  // instead of a new random one.
+  const [resetGen, setResetGen] = useState(0);
 
   useEffect(() => {
     getMeta().then((m) => {
@@ -294,6 +299,7 @@ export default function ParlayBuilder() {
   const resetParlay = () => {
     setLegs([defaultLeg(seasons[0] ?? new Date().getFullYear())]);
     setPcts({});
+    setResetGen((g) => g + 1);
   };
 
   const probs = legs.map((_, i) => pcts[i]).filter((p): p is number => p != null).map((p) => p / 100);
@@ -328,7 +334,7 @@ export default function ParlayBuilder() {
 
       {legs.map((leg, i) => (
         <LegCard
-          key={i}
+          key={`${resetGen}-${i}`}
           leg={leg}
           seasons={seasons}
           onChange={(l) => setLegs((cur) => cur.map((x, j) => (j === i ? l : x)))}
