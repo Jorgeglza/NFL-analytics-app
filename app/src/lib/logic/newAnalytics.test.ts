@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import type { Row } from "../data/loader";
 import { computePowerRankings } from "./powerRankings";
 import { simulatePlayoffs, type TeamConfDiv } from "./playoffSim";
+import { computeStrengthOfSchedule } from "../../pages/game-analysis/season-outlook/shared";
 
 function game(
   gid: string,
@@ -118,5 +119,52 @@ describe("simulatePlayoffs", () => {
     expect(a2.playoffPct).toBeLessThan(1);
     expect(d2.playoffPct).toBeGreaterThan(0);
     expect(d2.playoffPct).toBeLessThan(1);
+  });
+
+  describe("throughWeek backtesting", () => {
+    // Week 2 is ACTUALLY completed in the data (A2 beats D2 outright), but a
+    // backtest "as of week 1" should ignore that known result and simulate
+    // it instead — otherwise picking a past week wouldn't be a real backtest.
+    const withWeek2: Row[] = [...schedule, game("d5", 2099, 2, "A2", "D2", 20, 0)];
+
+    it("ignores actually-played games after throughWeek and simulates them instead", () => {
+      const results = simulatePlayoffs(withWeek2, 2099, teamMeta, 500, 1);
+      const a2 = results.find((r) => r.team === "A2")!;
+      const d2 = results.find((r) => r.team === "D2")!;
+      // If week 2's real result were used, A2 would be 1-0 (guaranteed in) and
+      // D2 would be 0-2 (guaranteed out). Backtesting at week 1 must instead
+      // draw a random winner, softening both away from 0/1.
+      expect(a2.playoffPct).toBeGreaterThan(0);
+      expect(a2.playoffPct).toBeLessThan(1);
+      expect(d2.playoffPct).toBeGreaterThan(0);
+      expect(d2.playoffPct).toBeLessThan(1);
+    });
+
+    it("uses the actual result once throughWeek reaches it", () => {
+      const results = simulatePlayoffs(withWeek2, 2099, teamMeta, 5, 2);
+      const a2 = results.find((r) => r.team === "A2")!;
+      const d2 = results.find((r) => r.team === "D2")!;
+      expect(a2.avgWins).toBe(1); // A1 win + A2 win over D2
+      expect(d2.avgWins).toBe(0); // D1 loss (wk1) + D2 loss (wk2)
+    });
+  });
+});
+
+describe("computeStrengthOfSchedule throughWeek", () => {
+  const schedule: Row[] = [
+    game("s1", 2099, 1, "AA", "BB", 10, 20),
+    game("s2", 2099, 2, "AA", "CC", 10, 20),
+  ];
+
+  it("moves a game from remaining to played once throughWeek reaches its week", () => {
+    const atWeek1 = computeStrengthOfSchedule(schedule, 2099, 1);
+    const aa1 = atWeek1.find((r) => r.team === "AA")!;
+    expect(aa1.playedN).toBe(1);
+    expect(aa1.remainingN).toBe(1);
+
+    const atWeek2 = computeStrengthOfSchedule(schedule, 2099, 2);
+    const aa2 = atWeek2.find((r) => r.team === "AA")!;
+    expect(aa2.playedN).toBe(2);
+    expect(aa2.remainingN).toBe(0);
   });
 });

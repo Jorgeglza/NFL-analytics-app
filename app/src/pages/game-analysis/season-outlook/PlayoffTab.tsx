@@ -7,12 +7,12 @@ import { tableWrapCls, theadCls, trCls } from "../../../components/ui";
 
 const ITERATIONS = 2000;
 
-export default function PlayoffTab({ schedule, season, meta }: { schedule: Row[]; season: string; meta: Map<string, TeamMeta> }) {
+export default function PlayoffTab({ schedule, season, week, meta }: { schedule: Row[]; season: string; week: string; meta: Map<string, TeamMeta> }) {
   const [results, setResults] = useState<PlayoffSimResult[] | null>(null);
   const [computing, setComputing] = useState(false);
 
   useEffect(() => {
-    if (!season || !meta.size) return;
+    if (!season || !week || !meta.size) return;
     setComputing(true);
     setResults(null);
     // Defer to the next tick so the "computing" spinner actually paints
@@ -21,11 +21,11 @@ export default function PlayoffTab({ schedule, season, meta }: { schedule: Row[]
     const id = setTimeout(() => {
       const teamMeta = new Map<string, TeamConfDiv>();
       for (const [abbr, m] of meta) if (m.conference && m.division) teamMeta.set(abbr, { conference: m.conference, division: m.division });
-      setResults(simulatePlayoffs(schedule, Number(season), teamMeta, ITERATIONS));
+      setResults(simulatePlayoffs(schedule, Number(season), teamMeta, ITERATIONS, Number(week)));
       setComputing(false);
     }, 0);
     return () => clearTimeout(id);
-  }, [schedule, season, meta]);
+  }, [schedule, season, week, meta]);
 
   if (computing || !results) return <Loading label={`Simulating ${ITERATIONS.toLocaleString()} seasons…`} />;
 
@@ -38,8 +38,9 @@ export default function PlayoffTab({ schedule, season, meta }: { schedule: Row[]
   return (
     <div className="space-y-6">
       <p className="text-xs text-slate-500">
-        {ITERATIONS.toLocaleString()} simulated seasons — each remaining game's winner is drawn from the Elo win probability. Standings ties use a
-        simplified tiebreaker (head-to-head, then conference record, then played-game point differential) — not the full NFL rulebook (no strength of
+        {ITERATIONS.toLocaleString()} simulated seasons as of week {week} — standings lock in every result through week {week}, then each remaining
+        game's winner is drawn from the two teams' Elo rating as of week {week} (frozen for the simulation). Standings ties use a simplified
+        tiebreaker (head-to-head, then conference record, then point differential through week {week}) — not the full NFL rulebook (no strength of
         victory/schedule, no common-games rule).
       </p>
 

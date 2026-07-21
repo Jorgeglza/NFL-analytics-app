@@ -22,12 +22,6 @@ export const NAV_GROUPS: NavGroup[] = [
         implemented: true,
       },
       {
-        label: "Team Trends",
-        path: "/game_analysis/team_trends",
-        description: "Weekly grade and stat trajectories per team across a season — up to 3 teams compared",
-        implemented: true,
-      },
-      {
         label: "Season Outlook",
         path: "/game_analysis/season_outlook",
         description: "Strength of schedule and playoff probability — where the road ahead gets harder or easier",

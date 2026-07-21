@@ -64,6 +64,54 @@ Per page: run old app side-by-side (`pda-ie` env), match tables/KPIs/chart serie
 
 ## Session notes (newest first)
 
+### 2026-07-20 — Session 8 (cont.): Power Rankings team popup, Team Trends → Compare-only, Season Outlook backtesting
+Three direct user requests on the pages just shipped:
+
+- **Power Rankings — team detail popup**: clicking any row opens a new `components/Modal.tsx` (first modal in the
+  app — overlay + scrollable panel matching the `ui.tsx` card language, Esc/backdrop close) showing
+  `power-rankings/DetailModal.tsx`. `lib/logic/powerRankings.ts` gained `computeTeamBreakdown()` (that week's
+  actual game score, both teams' pre-game Elo, HFA/K/MOV-multiplier/rating-delta, the full weekly-grade list
+  feeding the season-to-date average, cumulative points for/against feeding the Pythagorean win%, and the
+  min-max normalization range/value for all three signals) and `computeTeamRankTrend()` (the rank-evolution
+  chart, now inside the popup instead of a separate always-visible section). The breakdown reuses
+  `computePowerRankings`'s own row for the final composite/elo/grade/pyth numbers rather than recomputing them,
+  so the popup can never disagree with the table. Verified in pane on Seattle 2025 wk18: Elo pre-game 1686 →
+  post-game 1707 (matches table), grade average 62.5 over 17 weeks (wk8 correctly missing — bye week), points
+  483 for/292 against → 76.7% Pythagorean (matches table), normalized (100%, 88.9%, 100%) average = 96.3 =
+  displayed composite exactly.
+- **Team Trends — Compare-only access**: removed from `nav.ts` (`NAV_GROUPS`) entirely (so it's off both the
+  navbar and Home's launchpad, per the ask), route kept alive in `App.tsx` as a hidden `<Route>` (same pattern as
+  Glossary/Models Guide/Matchup Bets). Power Rankings gained a small "Compare" link per row
+  (`?team1=<team>`), and `TeamTrends.tsx` now reads `team1`/`team2`/`team3` from the URL once on mount — fixed a
+  bug where only passing `team1` still fell back to the DAL/SF defaults for team2 (the `deepLinkApplied` ref was
+  wrongly pre-seeded from `searchParams` before the effect ran); now team2/team3 correctly default to "— none —"
+  unless also present in the URL. Team line colors now use each team's real color (`meta.color`) instead of a
+  fixed 3-color palette, with a small ECharts scatter series per team (`symbol: image://<logo>`, silent, no
+  legend/tooltip) placing that team's logo at the last plotted week. Verified: Power Rankings → Compare on
+  Seattle lands on Team Trends with only SEA selected (not SEA+SF).
+- **Season Outlook — backtestable week selector**: page now uses the shared `useSeasonWeek()` context for both
+  season and week (defaults to the current week app-wide) instead of a season-only local state, with the same
+  Week selector + prev/next steppers as Power Rankings. Both tabs take a `throughWeek` and split games by
+  `week <= throughWeek` (backtest "as of") rather than by whether a score happens to be present — critical
+  because the underlying data has every 2025 game already played, so a naive played/unplayed split couldn't
+  backtest anything. Discovered and fixed a leakage bug while doing this: naively reusing `buildEloIndex`'s
+  chronological per-game ratings for "remaining" games after `throughWeek` would silently incorporate real
+  results from games between `throughWeek` and that game (since the index is built over the *entire* real
+  schedule) — fixed by freezing every team's Elo rating *as of `throughWeek`* (`eloAsOf` from `powerRankings.ts`,
+  now also imported by `playoffSim.ts` and `season-outlook/shared.ts`) and using that frozen rating for every
+  remaining-game win probability, documented as a simplification (a team's strength doesn't evolve mid-sim; true
+  week-by-week Elo update during the Monte Carlo loop would be more accurate but is out of scope). Verified in
+  pane: backtesting 2025 at week 10 (vs. the actual week-18 finish) produces genuine probabilistic playoff odds
+  (e.g. Eagles 99.8%, Vikings 13.5%, not the deterministic 100/0% seen when backtesting at the actual final
+  week) and correct played/remaining SOS splits (9-10 played / 7-8 remaining per team at week 10 vs. 17/0 at
+  week 18).
+- **Tests**: `newAnalytics.test.ts` gained a `throughWeek backtesting` block — confirms a game that's actually
+  completed in the data but falls after `throughWeek` gets simulated (not read from its real score), and that
+  the real result is used once `throughWeek` reaches it; plus a `computeStrengthOfSchedule throughWeek` test
+  confirming a game moves from remaining to played as `throughWeek` advances past its week. 58/58 tests green,
+  `npm run build` and `tsc --noEmit` clean.
+- Not committed/pushed at time of writing this entry.
+
 ### 2026-07-20 — Session 8: Power Rankings, Team Trends, Season Outlook (new analytics, not ports)
 User asked what's missing from the rebuild for a more complete/robust analysis app. Since the rebuild had already
 reached full parity with the old app (every page ported, per `docs/page-mapping.md`), this was scoped as new

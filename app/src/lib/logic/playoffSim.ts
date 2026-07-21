@@ -1,17 +1,23 @@
 // Playoff probability Monte Carlo simulation — new analytics (not a port).
-// For each remaining game, samples a winner from the Elo win probability
-// (lib/logic/elo.ts) and re-derives standings, repeated N times.
+// `throughWeek` is the "as of" week: games at or before it use their actual
+// result (even if more of the season has since been played in the data —
+// this is what makes the page backtestable at any past week), games after it
+// are simulated by drawing a winner from each team's Elo rating AS OF
+// throughWeek (frozen for the rest of the sim — a team's strength doesn't
+// evolve mid-simulation; a true week-by-week Elo update during the Monte
+// Carlo loop would be more accurate but is out of scope here).
 //
 // Tiebreaker is a SIMPLIFIED approximation of the real NFL rulebook, not a
 // full implementation: win% -> head-to-head (only when the two teams' games
-// against each other are lopsided one way) -> conference record -> season
-// point differential from games already played (not simulated, since the
+// against each other are lopsided one way) -> conference record -> point
+// differential from games at/before throughWeek (not simulated, since the
 // sim only draws winners, not margins). Real playoff seeding also weighs
 // strength of victory/schedule, common-games records, and net points within
 // the conference/overall — deliberately out of scope here; documented in
 // docs/IMPLEMENTATION_LOG.md and the page's own UI copy.
 import type { Row } from "../data/loader";
-import { buildEloIndex, scheduleToEloGames } from "./elo";
+import { eloPHome, scheduleToEloGames, buildEloRatingHistory, ELO_INIT } from "./elo";
+import { indexEloHistoryByTeam, eloAsOf } from "./powerRankings";
 
 export interface TeamConfDiv {
   conference: string;
@@ -45,15 +51,21 @@ export function simulatePlayoffs(
   season: number,
   teamMeta: Map<string, TeamConfDiv>,
   iterations = 2000,
+  throughWeek: number = Infinity,
 ): PlayoffSimResult[] {
-  const eloIdx = buildEloIndex(scheduleToEloGames(schedule));
   const games = schedule.filter(
     (g) => Number(g.season) === season && g.game_type === "REG" && teamMeta.has(String(g.home_team)) && teamMeta.has(String(g.away_team)),
   );
-  const played = games.filter((g) => g.home_score != null && g.away_score != null);
-  const remaining = games.filter((g) => g.home_score == null || g.away_score == null);
+  const played = games.filter((g) => Number(g.week) <= throughWeek && g.home_score != null && g.away_score != null);
+  const remaining = games.filter((g) => Number(g.week) > throughWeek || g.home_score == null || g.away_score == null);
   const teams = [...teamMeta.keys()].filter((t) => games.some((g) => String(g.home_team) === t || String(g.away_team) === t));
   if (!teams.length) return [];
+
+  // Frozen "as of throughWeek" Elo rating per team, used for every remaining
+  // game's win probability (see header comment on why this is frozen, not
+  // re-derived from the schedule's actual later results).
+  const eloByTeam = indexEloHistoryByTeam(buildEloRatingHistory(scheduleToEloGames(schedule)));
+  const frozenElo = new Map<string, number>(teams.map((t) => [t, eloAsOf(eloByTeam, t, season, throughWeek)]));
 
   const base = new Map<string, TeamState>(teams.map((t) => [t, { w: 0, l: 0, t: 0, confW: 0, confL: 0, confT: 0, pd: 0 }]));
   const h2hBase = new Map<string, number>(); // `${winner}|${loser}` -> wins, played games only
@@ -115,7 +127,7 @@ export function simulatePlayoffs(
     for (const g of remaining) {
       const ht = String(g.home_team);
       const at = String(g.away_team);
-      const pHome = eloIdx.get(String(g.game_id))?.pHome ?? 0.5;
+      const pHome = eloPHome(frozenElo.get(at) ?? ELO_INIT, frozenElo.get(ht) ?? ELO_INIT);
       const homeWins = Math.random() < pHome;
       const sameConf = teamMeta.get(ht)!.conference === teamMeta.get(at)!.conference;
       const hs = state.get(ht)!;

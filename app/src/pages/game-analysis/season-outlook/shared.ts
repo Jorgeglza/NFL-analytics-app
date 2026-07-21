@@ -1,10 +1,14 @@
 // Strength of schedule — new analytics (not a port). Average opponent Elo
-// rating, split into games already played vs. games remaining. Uses
-// buildEloIndex's pre-game ratings directly (leak-free by construction: the
-// entry for a given game already stores each side's rating as it stood
-// before that game, whether played or not).
+// rating, split into games at/before `throughWeek` (the backtest "as of"
+// week — defaults to the current week) vs. games after it. Played games use
+// the opponent's actual pre-game rating (leak-free by construction, from
+// buildEloIndex's per-game entries). Games after throughWeek use the
+// opponent's rating AS OF throughWeek instead — otherwise a later "remaining"
+// game's opponent strength would already reflect real results the backtest
+// is supposed to not know about yet (same reasoning as playoffSim.ts).
 import type { Row } from "../../../lib/data/loader";
-import { buildEloIndex, scheduleToEloGames } from "../../../lib/logic/elo";
+import { buildEloIndex, buildEloRatingHistory, scheduleToEloGames } from "../../../lib/logic/elo";
+import { indexEloHistoryByTeam, eloAsOf } from "../../../lib/logic/powerRankings";
 
 export interface SosRow {
   team: string;
@@ -14,8 +18,9 @@ export interface SosRow {
   remainingN: number;
 }
 
-export function computeStrengthOfSchedule(schedule: Row[], season: number): SosRow[] {
+export function computeStrengthOfSchedule(schedule: Row[], season: number, throughWeek: number): SosRow[] {
   const eloIdx = buildEloIndex(scheduleToEloGames(schedule));
+  const eloByTeam = indexEloHistoryByTeam(buildEloRatingHistory(scheduleToEloGames(schedule)));
   const games = schedule.filter((g) => Number(g.season) === season && g.game_type === "REG");
 
   const byTeam = new Map<string, { played: number[]; remaining: number[] }>();
@@ -26,11 +31,18 @@ export function computeStrengthOfSchedule(schedule: Row[], season: number): SosR
   };
 
   for (const g of games) {
-    const entry = eloIdx.get(String(g.game_id));
-    if (!entry) continue;
-    const played = g.home_score != null && g.away_score != null;
-    bump(String(g.home_team), entry.eloAway, played);
-    bump(String(g.away_team), entry.eloHome, played);
+    const week = Number(g.week);
+    const home = String(g.home_team);
+    const away = String(g.away_team);
+    if (week <= throughWeek) {
+      const entry = eloIdx.get(String(g.game_id));
+      if (!entry) continue;
+      bump(home, entry.eloAway, true);
+      bump(away, entry.eloHome, true);
+    } else {
+      bump(home, eloAsOf(eloByTeam, away, season, throughWeek), false);
+      bump(away, eloAsOf(eloByTeam, home, season, throughWeek), false);
+    }
   }
 
   const avg = (vals: number[]) => (vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null);

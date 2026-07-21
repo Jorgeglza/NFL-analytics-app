@@ -5,7 +5,7 @@
 // a team missing one signal, e.g. week 1 with no grade yet, is averaged over
 // whatever signals it has rather than penalized to 0).
 import type { Row } from "../data/loader";
-import { buildEloRatingHistory, scheduleToEloGames, ELO_INIT, type EloRatingPoint } from "./elo";
+import { buildEloRatingHistory, scheduleToEloGames, eloPHome, eloMovMultiplier, ELO_INIT, ELO_HFA, ELO_K, type EloRatingPoint } from "./elo";
 import { pythWinPct } from "./pythagorean";
 
 export interface PowerRankingRow {
@@ -145,4 +145,173 @@ export function computePowerRankings(schedule: Row[], grades: Row[], season: num
       };
     })
     .sort((a, b) => a.rank - b.rank);
+}
+
+// ---------- per-team "how did we get this number" breakdown, for the Power Rankings detail popup ----------
+
+export interface EloGameDetail {
+  played: boolean;
+  opponent: string | null;
+  home: boolean | null;
+  teamScore: number | null;
+  opponentScore: number | null;
+  preGameElo: number;
+  opponentPreGameElo: number;
+  hfa: number;
+  k: number;
+  movMultiplier: number | null;
+  delta: number | null;
+  postGameElo: number;
+}
+
+export interface TeamCompositeBreakdown {
+  team: string;
+  season: number;
+  week: number;
+  composite: number;
+  rank: number;
+  eloGame: EloGameDetail;
+  eloNorm: number | null;
+  eloRange: [number, number];
+  weeklyGrades: { week: number; grade: number }[];
+  gradeAvg: number | null;
+  gradeNorm: number | null;
+  gradeRange: [number, number] | null;
+  weeklyPoints: { week: number; pointsFor: number; pointsAgainst: number }[];
+  pointsForTotal: number;
+  pointsAgainstTotal: number;
+  pythPct: number | null;
+  pythNorm: number | null;
+  pythRange: [number, number] | null;
+}
+
+/**
+ * Reuses computePowerRankings for the final composite/elo/grade/pyth values
+ * (so the popup can never disagree with the table), then adds the raw
+ * per-week inputs and normalization ranges that explain how those numbers
+ * were reached.
+ */
+export function computeTeamBreakdown(schedule: Row[], grades: Row[], season: number, week: number, team: string): TeamCompositeBreakdown | null {
+  const rankings = computePowerRankings(schedule, grades, season, week);
+  const row = rankings.find((r) => r.team === team);
+  if (!row) return null;
+
+  const elos = rankings.map((r) => r.elo);
+  const gradeVals = rankings.map((r) => r.grade).filter((v): v is number => v != null);
+  const pythVals = rankings.map((r) => r.pythPct).filter((v): v is number => v != null);
+  const eloRange: [number, number] = [Math.min(...elos), Math.max(...elos)];
+  const gradeRange: [number, number] | null = gradeVals.length ? [Math.min(...gradeVals), Math.max(...gradeVals)] : null;
+  const pythRange: [number, number] | null = pythVals.length ? [Math.min(...pythVals), Math.max(...pythVals)] : null;
+  const normOf = (v: number | null, range: [number, number] | null) =>
+    v == null || range == null ? null : range[1] === range[0] ? 0.5 : (v - range[0]) / (range[1] - range[0]);
+
+  const byTeam = indexEloHistoryByTeam(buildEloRatingHistory(scheduleToEloGames(schedule)));
+  const game = schedule.find(
+    (g) => Number(g.season) === season && Number(g.week) === week && g.game_type === "REG" && (String(g.home_team) === team || String(g.away_team) === team),
+  );
+
+  let eloGame: EloGameDetail;
+  if (!game) {
+    const rating = eloAsOf(byTeam, team, season, week);
+    eloGame = {
+      played: false,
+      opponent: null,
+      home: null,
+      teamScore: null,
+      opponentScore: null,
+      preGameElo: rating,
+      opponentPreGameElo: rating,
+      hfa: ELO_HFA,
+      k: ELO_K,
+      movMultiplier: null,
+      delta: null,
+      postGameElo: rating,
+    };
+  } else {
+    const homeTeam = String(game.home_team);
+    const awayTeam = String(game.away_team);
+    const eloHomePre = eloAsOf(byTeam, homeTeam, season, week - 1);
+    const eloAwayPre = eloAsOf(byTeam, awayTeam, season, week - 1);
+    const played = game.home_score != null && game.away_score != null;
+    const teamIsHome = team === homeTeam;
+    const opponent = teamIsHome ? awayTeam : homeTeam;
+    let movMultiplier: number | null = null;
+    let delta: number | null = null;
+    let teamScore: number | null = null;
+    let opponentScore: number | null = null;
+    let postGameElo = teamIsHome ? eloHomePre : eloAwayPre;
+    if (played) {
+      const hs = Number(game.home_score);
+      const as_ = Number(game.away_score);
+      const marginHome = hs - as_;
+      const pHome = eloPHome(eloAwayPre, eloHomePre);
+      const actualHome = marginHome > 0 ? 1 : marginHome < 0 ? 0 : 0.5;
+      const diffWinner = marginHome >= 0 ? eloHomePre + ELO_HFA - eloAwayPre : eloAwayPre - (eloHomePre + ELO_HFA);
+      movMultiplier = marginHome === 0 ? 1 : eloMovMultiplier(marginHome, diffWinner);
+      const homeDelta = ELO_K * movMultiplier * (actualHome - pHome);
+      delta = teamIsHome ? homeDelta : -homeDelta;
+      postGameElo = (teamIsHome ? eloHomePre : eloAwayPre) + delta;
+      teamScore = teamIsHome ? hs : as_;
+      opponentScore = teamIsHome ? as_ : hs;
+    }
+    eloGame = {
+      played,
+      opponent,
+      home: teamIsHome,
+      teamScore,
+      opponentScore,
+      preGameElo: teamIsHome ? eloHomePre : eloAwayPre,
+      opponentPreGameElo: teamIsHome ? eloAwayPre : eloHomePre,
+      hfa: ELO_HFA,
+      k: ELO_K,
+      movMultiplier,
+      delta,
+      postGameElo,
+    };
+  }
+
+  const weeklyGrades = grades
+    .filter((r) => String(r.Team) === team && Number(r.Season) === season && Number(r.Week) <= week && r["Overall Grade"] != null)
+    .map((r) => ({ week: Number(r.Week), grade: Number(r["Overall Grade"]) }))
+    .sort((a, b) => a.week - b.week);
+
+  const weeklyPoints: { week: number; pointsFor: number; pointsAgainst: number }[] = [];
+  for (const g of schedule) {
+    if (Number(g.season) !== season || g.game_type !== "REG" || Number(g.week) > week) continue;
+    if (g.home_score == null || g.away_score == null) continue;
+    if (g.home_team === team) weeklyPoints.push({ week: Number(g.week), pointsFor: Number(g.home_score), pointsAgainst: Number(g.away_score) });
+    else if (g.away_team === team) weeklyPoints.push({ week: Number(g.week), pointsFor: Number(g.away_score), pointsAgainst: Number(g.home_score) });
+  }
+  weeklyPoints.sort((a, b) => a.week - b.week);
+
+  return {
+    team,
+    season,
+    week,
+    composite: row.composite,
+    rank: row.rank,
+    eloGame,
+    eloNorm: normOf(row.elo, eloRange),
+    eloRange,
+    weeklyGrades,
+    gradeAvg: row.grade,
+    gradeNorm: normOf(row.grade, gradeRange),
+    gradeRange,
+    weeklyPoints,
+    pointsForTotal: weeklyPoints.reduce((s, p) => s + p.pointsFor, 0),
+    pointsAgainstTotal: weeklyPoints.reduce((s, p) => s + p.pointsAgainst, 0),
+    pythPct: row.pythPct,
+    pythNorm: normOf(row.pythPct, pythRange),
+    pythRange,
+  };
+}
+
+/** Rank-only trend for one team across every week of the season (for the detail popup's chart). */
+export function computeTeamRankTrend(schedule: Row[], grades: Row[], season: number, team: string, weeks: number[]): { week: number; rank: number }[] {
+  return weeks
+    .map((w) => {
+      const row = computePowerRankings(schedule, grades, season, w).find((r) => r.team === team);
+      return row ? { week: w, rank: row.rank } : null;
+    })
+    .filter((p): p is { week: number; rank: number } => p != null);
 }

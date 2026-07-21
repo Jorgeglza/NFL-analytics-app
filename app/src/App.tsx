@@ -83,6 +83,11 @@ export default function App() {
                 const Matchup = IMPLEMENTED["/player_analysis/matchup_bets"];
                 return <Route path="/player_analysis/matchup_bets" element={<Matchup />} />;
               })()}
+              {/* Not in the navbar/Home — reached via the "Compare" button on each Power Rankings row */}
+              {(() => {
+                const Trends = IMPLEMENTED["/game_analysis/team_trends"];
+                return <Route path="/game_analysis/team_trends" element={<Trends />} />;
+              })()}
               {NAV_GROUPS.flatMap((g) => g.pages).map((page) => {
                 const Impl = IMPLEMENTED[page.path];
                 return (

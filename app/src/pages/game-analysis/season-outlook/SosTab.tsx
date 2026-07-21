@@ -6,8 +6,11 @@ import { computeStrengthOfSchedule } from "./shared";
 import { useECharts } from "../../../components/charts/useECharts";
 import { tableWrapCls, theadCls, trCls } from "../../../components/ui";
 
-export default function SosTab({ schedule, season, meta }: { schedule: Row[]; season: string; meta: Map<string, TeamMeta> }) {
-  const rows = useMemo(() => (season ? computeStrengthOfSchedule(schedule, Number(season)) : []), [schedule, season]);
+export default function SosTab({ schedule, season, week, meta }: { schedule: Row[]; season: string; week: string; meta: Map<string, TeamMeta> }) {
+  const rows = useMemo(
+    () => (season && week ? computeStrengthOfSchedule(schedule, Number(season), Number(week)) : []),
+    [schedule, season, week],
+  );
 
   const chartOption = useMemo<EChartsOption | null>(() => {
     if (!rows.length) return null;
@@ -36,7 +39,8 @@ export default function SosTab({ schedule, season, meta }: { schedule: Row[]; se
   return (
     <div className="space-y-6">
       <p className="text-xs text-slate-500">
-        Average pre-game Elo rating of a team's opponents (higher = harder), split into games already played vs. games remaining this season.
+        Average pre-game Elo rating of a team's opponents (higher = harder), split into games at/before week {week} vs. games after it — pick a past
+        week above to backtest what the remaining-schedule outlook looked like at that point in the season.
       </p>
 
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">

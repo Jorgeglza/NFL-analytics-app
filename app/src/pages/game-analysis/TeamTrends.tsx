@@ -1,7 +1,8 @@
 // Team Trends — new analytics (not a port). The trajectory behind Power
 // Rankings: weekly grade/stat series for up to 3 teams across a season,
 // instead of the single-week snapshots every other page shows.
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import type { EChartsOption } from "echarts";
 import { getSchedule, getGrades, getTeamWeek, type Row } from "../../lib/data/loader";
 import { getTeamMetaMap, type TeamMeta } from "../../lib/team/meta";
@@ -13,9 +14,11 @@ import { usePageTitle } from "../../lib/hooks/usePageTitle";
 import { PageHeader, tableWrapCls, theadCls, trCls } from "../../components/ui";
 
 const NONE = "";
-const LINE_COLORS = ["#002f6c", "#E87722", "#3C9A5F"];
+// Fallback only — real team colors (meta.color) are used whenever available.
+const FALLBACK_COLORS = ["#002f6c", "#E87722", "#3C9A5F"];
 
 export default function TeamTrends() {
+  const [searchParams] = useSearchParams();
   const [schedule, setSchedule] = useState<Row[]>([]);
   const [grades, setGrades] = useState<Row[]>([]);
   const [teamWeek, setTeamWeek] = useState<Row[]>([]);
@@ -25,8 +28,26 @@ export default function TeamTrends() {
   const [team1, setTeam1] = useState("DAL");
   const [team2, setTeam2] = useState("SF");
   const [team3, setTeam3] = useState(NONE);
+  const deepLinkApplied = useRef(false);
 
   usePageTitle(season ? `Team Trends — ${season}` : "Team Trends");
+
+  // Deep-linked from Power Rankings' "Compare" button (?team1=<team>) — applied
+  // once per mount, same pattern as Game Picks/Team Comparison's URL params.
+  // Only team2/team3 default to NONE here (not their usual DAL/SF preset) so
+  // a Compare click starts on just the clicked team, letting the user pick
+  // who to compare it against.
+  useEffect(() => {
+    if (deepLinkApplied.current) return;
+    const t1 = searchParams.get("team1");
+    if (t1) {
+      deepLinkApplied.current = true;
+      setTeam1(t1);
+      setTeam2(searchParams.get("team2") ?? NONE);
+      setTeam3(searchParams.get("team3") ?? NONE);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   useEffect(() => {
     Promise.all([getSchedule(), getTeamMetaMap()]).then(([s, m]) => {
@@ -70,25 +91,54 @@ export default function TeamTrends() {
     if (!teams.length) return null;
     const allWeeks = [...new Set([...seriesByTeam.values()].flatMap((s) => s.map((p) => p.week)))].sort((a, b) => a - b);
     if (!allWeeks.length) return null;
+
+    const lineSeries = teams.map((t, i) => {
+      const color = meta?.get(t)?.color ?? FALLBACK_COLORS[i % FALLBACK_COLORS.length];
+      const byWeek = new Map((seriesByTeam.get(t) ?? []).map((p) => [p.week, p.value]));
+      return {
+        name: meta?.get(t)?.name ?? t,
+        type: "line" as const,
+        data: allWeeks.map((w) => byWeek.get(w) ?? null),
+        connectNulls: true,
+        symbol: "circle",
+        symbolSize: 6,
+        lineStyle: { color, width: 2 },
+        itemStyle: { color },
+      };
+    });
+
+    // Team logo at the last plotted point of each line — a small marker
+    // series (categorical x-axis, null everywhere except the last index a
+    // team has data), not part of the legend.
+    const logoSeries = teams.flatMap((t) => {
+      const logo = meta?.get(t)?.logo;
+      if (!logo) return [];
+      const byWeek = new Map((seriesByTeam.get(t) ?? []).map((p) => [p.week, p.value]));
+      let lastIdx = -1;
+      for (let i = 0; i < allWeeks.length; i++) if (byWeek.has(allWeeks[i])) lastIdx = i;
+      if (lastIdx < 0) return [];
+      return [
+        {
+          name: `${t}-logo`,
+          type: "scatter" as const,
+          data: allWeeks.map((w, i) => (i === lastIdx ? byWeek.get(w)! : null)),
+          symbol: `image://${logo}`,
+          symbolSize: 20,
+          silent: true,
+          legendHoverLink: false,
+          tooltip: { show: false },
+          z: 10,
+        },
+      ];
+    });
+
     return {
-      grid: { left: 10, right: 20, top: 30, bottom: 10, containLabel: true },
+      grid: { left: 10, right: 30, top: 30, bottom: 10, containLabel: true },
       xAxis: { type: "category", data: allWeeks.map((w) => `Wk ${w}`), axisLabel: { fontSize: 10 } },
       yAxis: { type: "value", name: metric.label, axisLabel: { fontSize: 10 } },
       tooltip: { trigger: "axis" },
-      legend: { top: 0, textStyle: { fontSize: 11 } },
-      series: teams.map((t, i) => {
-        const byWeek = new Map((seriesByTeam.get(t) ?? []).map((p) => [p.week, p.value]));
-        return {
-          name: meta?.get(t)?.name ?? t,
-          type: "line",
-          data: allWeeks.map((w) => byWeek.get(w) ?? null),
-          connectNulls: true,
-          symbol: "circle",
-          symbolSize: 6,
-          lineStyle: { color: LINE_COLORS[i], width: 2 },
-          itemStyle: { color: LINE_COLORS[i] },
-        };
-      }),
+      legend: { top: 0, textStyle: { fontSize: 11 }, data: teams.map((t) => meta?.get(t)?.name ?? t) },
+      series: [...lineSeries, ...logoSeries],
     } as EChartsOption;
   }, [teams, seriesByTeam, metric, meta]);
   const chartRef = useECharts(chartOption);
