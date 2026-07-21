@@ -1,6 +1,7 @@
 // Port of matchup_previews_tab.py — single-game deep dive: snapshot, moneyline,
 // spread pick engine, trend edge predictor, trends, recent form, H2H.
 import { useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import type { EChartsOption } from "echarts";
 import type { Row } from "../../../lib/data/loader";
 import type { TeamMeta } from "../../../lib/team/meta";
@@ -92,16 +93,17 @@ export default function MatchupTab({
   twIdx: TeamWeekIndex;
   eloIdx: EloIndex;
 }) {
+  const [searchParams] = useSearchParams();
   const reg = useMemo(() => schedule.filter((r) => r.game_type === "REG"), [schedule]);
   const seasons = useMemo(() => [...new Set(reg.map((r) => Number(r.season)))].sort((a, b) => b - a), [reg]);
-  const [season, setSeason] = useState("");
+  const [season, setSeason] = useState(searchParams.get("season") ?? "");
   const sel = season || String(seasons[0] ?? "");
   const s = Number(sel);
   const weeks = useMemo(
     () => [...new Set(reg.filter((r) => Number(r.season) === s).map((r) => Number(r.week)))].sort((a, b) => a - b),
     [reg, s],
   );
-  const [week, setWeek] = useState("");
+  const [week, setWeek] = useState(searchParams.get("week") ?? "");
   const defWeek = useMemo(() => defaultWeekNearToday(reg, s) ?? weeks[weeks.length - 1], [reg, s, weeks]);
   const selWeek = weeks.map(String).includes(week) ? week : String(defWeek ?? "");
   const w = Number(selWeek);
@@ -114,7 +116,7 @@ export default function MatchupTab({
         .sort((a, b) => kickoffMs(a) - kickoffMs(b) || String(a.game_id).localeCompare(String(b.game_id))),
     [reg, s, w],
   );
-  const [gameId, setGameId] = useState("");
+  const [gameId, setGameId] = useState(searchParams.get("game") ?? "");
   const selGame = games.find((g) => String(g.game_id) === gameId) ?? games[0];
   const away = selGame ? String(selGame.away_team) : "";
   const home = selGame ? String(selGame.home_team) : "";

@@ -5,8 +5,10 @@
 // instead of ~22 always-rendered charts; win-type glossary added.
 // Quirks preserved from the old page (do not "fix" before parity):
 //  - played pick'em games (spread 0 / null spread => Favorite "none") classify as Underdog
-//  - played ties (Winner null) fall into the "(No Score)" / "No Favorite" buckets
-//  - Favorite Win % / Home Win % denominators include played ties
+// Deviation from the old page (explicit user request, 2026-07-20): ties now get
+// their own "Tie" category (previously lumped into the "(No Score)" buckets
+// alongside unplayed games) and are excluded entirely from the Favorite Win % /
+// Home Win % denominators (previously counted as a favorite loss).
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { EChartsOption } from "echarts";
 import { getSchedule, type Row } from "../../lib/data/loader";
@@ -14,12 +16,15 @@ import { useECharts } from "../../components/charts/useECharts";
 import { Loading } from "../../components/Loading";
 import { Card, Segmented } from "../../components/ui";
 import { LazyMount } from "../../components/LazyMount";
+import { Glossary } from "../../components/Glossary";
+import { GLOSSARY_SECTIONS } from "../../lib/glossary";
 
 type Category =
   | "Favorite home"
   | "Favorite away"
   | "Underdog home"
   | "Underdog away"
+  | "Tie"
   | "Favorite Home (No Score)"
   | "Favorite Away (No Score)"
   | "No Favorite";
@@ -29,6 +34,7 @@ const CATEGORY_COLORS: Record<Category, string> = {
   "Favorite away": "#2459A7",
   "Underdog home": "#E87722",
   "Underdog away": "#C8102E",
+  Tie: "#9333ea",
   "Favorite Home (No Score)": "#D4AF37",
   "Favorite Away (No Score)": "#8B4513",
   "No Favorite": "#e0e0e0",
@@ -39,19 +45,10 @@ const CATEGORY_ORDER: Category[] = [
   "Underdog away",
   "Favorite away",
   "Underdog home",
+  "Tie",
   "Favorite Home (No Score)",
   "Favorite Away (No Score)",
   "No Favorite",
-];
-
-const GLOSSARY: { cat: Category; desc: string }[] = [
-  { cat: "Favorite home", desc: "The favorite won and was the home team." },
-  { cat: "Favorite away", desc: "The favorite won on the road." },
-  { cat: "Underdog home", desc: "The underdog won at home. Also covers pick'em games (no favorite) won by the home team." },
-  { cat: "Underdog away", desc: "The underdog won on the road. Also covers pick'em games won by the away team." },
-  { cat: "Favorite Home (No Score)", desc: "No winner yet (unplayed game or tie) and the favorite is the home team." },
-  { cat: "Favorite Away (No Score)", desc: "No winner yet (unplayed game or tie) and the favorite is the away team." },
-  { cat: "No Favorite", desc: "No winner yet and no favorite (pick'em or missing spread)." },
 ];
 
 const KPI_DEFS = [
@@ -86,12 +83,17 @@ function classify(r: Row, xKey: "week" | "season"): Game {
   const hs = r.home_score == null ? null : Number(r.home_score);
   const as_ = r.away_score == null ? null : Number(r.away_score);
   const played = hs != null && as_ != null;
-  const winner = !played ? null : hs! > as_! ? "home" : as_! > hs! ? "away" : null;
+  const tie = played && hs === as_;
+  const winner = !played || tie ? null : hs! > as_! ? "home" : as_! > hs! ? "away" : null;
 
-  // old determine_win_type: only Winner null short-circuits (Favorite is never NaN),
-  // so Favorite "none" with a winner falls to the Underdog branch.
+  // Tie gets its own category (not lumped into "(No Score)" with unplayed
+  // games). Everything else: old determine_win_type — only Winner null
+  // short-circuits (Favorite is never NaN), so Favorite "none" with a winner
+  // falls to the Underdog branch.
   let category: Category;
-  if (winner != null) {
+  if (tie) {
+    category = "Tie";
+  } else if (winner != null) {
     if (winner === favorite) category = winner === "home" ? "Favorite home" : "Favorite away";
     else category = winner === "home" ? "Underdog home" : "Underdog away";
   } else {
@@ -115,9 +117,10 @@ function classify(r: Row, xKey: "week" | "season"): Game {
   };
 }
 
-/** The three block KPIs, same denominators as the old page (ties included). */
+/** The three block KPIs. Favorite Win % / Home Win % exclude ties entirely
+ *  (2026-07-20: ties are their own category now, not a favorite loss). */
 function kpis(games: Game[]): Record<KpiKey, number | null> {
-  const played = games.filter((g) => g.played);
+  const played = games.filter((g) => g.played && g.category !== "Tie");
   return {
     favHomePct: games.length ? (games.filter((g) => g.favorite === "home").length / games.length) * 100 : null,
     favWinPct: played.length
@@ -127,11 +130,11 @@ function kpis(games: Game[]): Record<KpiKey, number | null> {
   };
 }
 
-/** Favorite Win % split by where the favorite played. Played games only; ties
- *  stay in the denominators (same convention as kpis()); pick'ems excluded. */
+/** Favorite Win % split by where the favorite played. Played, non-tie games
+ *  only (same convention as kpis()); pick'ems excluded. */
 function splitKpis(games: Game[]): Record<SplitKey, number | null> {
   const rate = (side: "home" | "away") => {
-    const pool = games.filter((g) => g.played && g.favorite === side);
+    const pool = games.filter((g) => g.played && g.category !== "Tie" && g.favorite === side);
     return pool.length ? (pool.filter((g) => g.winner === g.favorite).length / pool.length) * 100 : null;
   };
   return { homeFavWinPct: rate("home"), awayFavWinPct: rate("away") };
@@ -481,7 +484,7 @@ export default function WinTypes() {
           onClick={() => setGlossaryOpen((o) => !o)}
           className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm transition-colors hover:text-slate-900"
         >
-          {glossaryOpen ? "Hide glossary" : "What are win types?"}
+          {glossaryOpen ? "Hide glossary" : "What do these terms mean?"}
         </button>
         <Segmented
           label="Group by"
@@ -495,21 +498,11 @@ export default function WinTypes() {
       </div>
 
       {glossaryOpen && (
-        <Card title="Win-type glossary" subtitle="How each game is categorized (regular-season games only).">
-          <div className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
-            {GLOSSARY.map(({ cat, desc }) => (
-              <div key={cat} className="flex items-start gap-2 text-sm">
-                <span className="mt-1 h-3 w-3 shrink-0 rounded-full border border-slate-200" style={{ background: CATEGORY_COLORS[cat] }} />
-                <div>
-                  <span className="font-semibold text-slate-800">{cat}</span>
-                  <span className="text-slate-500"> — {desc}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-          <p className="mt-3 text-xs text-slate-400">
-            Edge cases inherited from the original app: a played pick'em counts as an Underdog win, and played ties stay in the "(No Score)"
-            buckets while still counting in the Favorite/Home Win % denominators.
+        <Card title="App glossary" subtitle="Win types, stat definitions, and betting/model terms used throughout the app — same content as the Grading Model's Features tab.">
+          <Glossary sections={GLOSSARY_SECTIONS} />
+          <p className="mt-4 text-xs text-slate-400">
+            Edge case inherited from the original app: a played pick'em counts as an Underdog win. Ties get their own "Tie" category and are
+            excluded entirely from the Favorite Win % / Home Win % percentages — the "(No Score)" buckets now mean unplayed only.
           </p>
         </Card>
       )}
@@ -539,7 +532,7 @@ export default function WinTypes() {
 
           <Card
             title="Favorite Win % — home vs away favorites"
-            subtitle="Splits the Favorite Win % KPI by where the favorite played. Played games only; ties count in the denominators; pick'em games (no favorite) excluded. A shrinking gap between the lines means home-field advantage is eroding. Click a point to jump to its block."
+            subtitle="Splits the Favorite Win % KPI by where the favorite played. Played, non-tie games only; pick'em games (no favorite) excluded. A shrinking gap between the lines means home-field advantage is eroding. Click a point to jump to its block."
           >
             <TrendChart
               groups={splitGroups}

@@ -1,13 +1,15 @@
 // Port of team_comparison_page_3.py — 3-column head-to-head comparison with
 // rank bars, expandable substats, grades boxes and side trend/matchup charts.
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import type { EChartsOption } from "echarts";
-import { getTeamWeek, getTeamWeekRanks, getGrades, type Row } from "../../lib/data/loader";
+import { getTeamWeek, getTeamWeekRanks, getGrades, getSchedule, type Row } from "../../lib/data/loader";
 import { getTeamMetaMap, type TeamMeta } from "../../lib/team/meta";
 import { Select } from "../../components/filters/Select";
 import { useECharts } from "../../components/charts/useECharts";
 import { Loading } from "../../components/Loading";
 import { opponentLabel } from "../grading-model/shared";
+import { currentWeek } from "../../lib/logic/defaultWeek";
 
 const STAT_LIST = ["points", "total_yards", "total_tds", "passing_yards", "rushing_yards", "turnovers"];
 const STAT_HIERARCHY: Record<string, string[]> = {
@@ -52,6 +54,14 @@ export default function TeamComparison() {
   const [team2, setTeam2] = useState("CIN");
   const [selectedStat, setSelectedStat] = useState("points_margin");
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [schedule, setSchedule] = useState<Row[]>([]);
+
+  // Default season/week comes from grades' season list (below); a pending
+  // week from the random-matchup effect below is consumed here once that
+  // season's weeks are known, so it isn't clobbered by the usual
+  // "default to the last available week" behavior.
+  const pendingWeekRef = useRef<number | null>(null);
+  const randomizedRef = useRef(false);
 
   useEffect(() => {
     Promise.all([getTeamMetaMap(), getGrades()]).then(([m, g]) => {
@@ -61,7 +71,22 @@ export default function TeamComparison() {
       setSeasons(ss);
       if (ss.length) setSeason(String(ss[0]));
     });
+    getSchedule().then(setSchedule);
   }, []);
+
+  // Default to a random current-week matchup (away = team1, home = team2),
+  // re-randomized every time the page is opened fresh (not persisted).
+  useEffect(() => {
+    if (randomizedRef.current || !schedule.length) return;
+    const cw = currentWeek(schedule);
+    if (!cw || !cw.games.length) return;
+    randomizedRef.current = true;
+    const g = cw.games[Math.floor(Math.random() * cw.games.length)];
+    setTeam1(String(g.away_team));
+    setTeam2(String(g.home_team));
+    pendingWeekRef.current = cw.week;
+    setSeason(String(cw.season));
+  }, [schedule]);
 
   useEffect(() => {
     if (!season) return;
@@ -70,7 +95,13 @@ export default function TeamComparison() {
       setTeamWeek(reg);
       setRanks(rk);
       const wks = [...new Set(reg.map((r) => Number(r.week)))].sort((a, b) => a - b);
-      if (wks.length) setWeek(String(wks[wks.length - 1]));
+      const pending = pendingWeekRef.current;
+      if (pending != null && wks.includes(pending)) {
+        setWeek(String(pending));
+        pendingWeekRef.current = null;
+      } else if (wks.length) {
+        setWeek(String(wks[wks.length - 1]));
+      }
     });
   }, [season]);
 
@@ -88,6 +119,13 @@ export default function TeamComparison() {
     for (const rows of m.values()) rows.sort((a, b) => Number(a.week) - Number(b.week));
     return m;
   }, [teamWeek]);
+
+  // Selected week's game_id for a team (for cross-links) — audit's "no direct
+  // link to the corresponding Matchup Preview / Scorecards" gap.
+  const gameIdOf = (team: string): string | null => {
+    const row = (teamRows.get(team) ?? []).find((r) => Number(r.week) === wk);
+    return row?.game_id != null ? String(row.game_id) : null;
+  };
 
   const rankOf = (team: string, col: string): number | null => {
     const row = ranks.find((r) => String(r.team) === team && Number(r.week) === wk);
@@ -444,6 +482,24 @@ export default function TeamComparison() {
       // "Team N" heading — vertical budget goes to keeping both charts visible.
       <div className="w-full lg:sticky lg:top-[128px] lg:w-1/4 lg:self-start" aria-label={label}>
         <Select label="" value={team} onChange={setTeam} options={teams.map((t) => ({ value: t, label: meta!.get(t)?.name ?? t }))} />
+        <div className="mt-1.5 flex gap-1.5 text-[11px]">
+          {gameIdOf(team) && (
+            <Link
+              to={`/game_analysis/matchup_previews?tab=matchup&season=${season}&week=${week}&game=${gameIdOf(team)}`}
+              className="flex-1 rounded-full border border-slate-200 bg-white px-2 py-1 text-center font-medium text-[#002f6c] shadow-sm transition-colors hover:border-[#002f6c]/50"
+              title={`Open this week's Matchup Preview for ${team}`}
+            >
+              Matchup preview →
+            </Link>
+          )}
+          <Link
+            to={`/game_analysis/scorecards_teams?season=${season}&team=${team}`}
+            className="flex-1 rounded-full border border-slate-200 bg-white px-2 py-1 text-center font-medium text-[#002f6c] shadow-sm transition-colors hover:border-[#002f6c]/50"
+            title={`Open ${team}'s season scorecard`}
+          >
+            Scorecard →
+          </Link>
+        </div>
         <div className="mt-2">{GradesBox({ team })}</div>
         <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
           <div className="mb-1 text-xs font-semibold text-slate-500">{title(selectedStat)} by week</div>

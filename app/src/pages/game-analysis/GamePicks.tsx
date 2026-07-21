@@ -2,11 +2,13 @@
 // checkboxes for unplayed games (persisted in localStorage), win-type counts
 // bar, and a spread-by-game bar chart (sortable by kickoff time or spread).
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import type { EChartsOption } from "echarts";
 import { getSchedule, type Row } from "../../lib/data/loader";
 import { Select } from "../../components/filters/Select";
 import { useECharts } from "../../components/charts/useECharts";
 import { Loading } from "../../components/Loading";
+import { currentWeek } from "../../lib/logic/defaultWeek";
 
 const LABEL_FOR_NONE = "No result yet";
 const COLORS: Record<string, string> = {
@@ -34,9 +36,10 @@ function loadManual(): string[] {
 }
 
 export default function GamePicks() {
+  const [searchParams] = useSearchParams();
   const [schedule, setSchedule] = useState<Row[]>([]);
-  const [season, setSeason] = useState("");
-  const [week, setWeek] = useState("");
+  const [season, setSeason] = useState(searchParams.get("season") ?? "");
+  const [week, setWeek] = useState(searchParams.get("week") ?? "");
   const [manual, setManual] = useState<string[]>(loadManual);
   const [spreadSort, setSpreadSort] = useState<"time" | "spread">("time");
 
@@ -47,19 +50,19 @@ export default function GamePicks() {
   useEffect(() => {
     getSchedule().then((rows) => {
       setSchedule(rows);
-      const seasons = [...new Set(rows.map((r) => Number(r.season)))].sort((a, b) => b - a);
-      if (seasons.length) {
-        const s = seasons[0];
-        setSeason(String(s));
-        // Default week (audit §2): the current in-progress week while the season
-        // is live; once it's over, the last completed regular-season week — not
-        // the Super Bowl's 1-row table.
-        const cur = rows.filter((r) => Number(r.season) === s);
-        const unplayed = cur.filter((r) => r.home_score == null).map((r) => Number(r.week));
-        const playedReg = cur.filter((r) => r.home_score != null && r.game_type === "REG").map((r) => Number(r.week));
-        setWeek(String(unplayed.length ? Math.min(...unplayed) : playedReg.length ? Math.max(...playedReg) : 1));
+      // Deep-linked from Home's "this week" launchpad — trust the params, no
+      // need to recompute the default.
+      if (searchParams.get("season") && searchParams.get("week")) return;
+      // Default week (audit §2): the current in-progress week while the season
+      // is live; once it's over, the last completed regular-season week — not
+      // the Super Bowl's 1-row table.
+      const cw = currentWeek(rows);
+      if (cw) {
+        setSeason(String(cw.season));
+        setWeek(String(cw.week));
       }
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const seasons = useMemo(() => [...new Set(schedule.map((r) => Number(r.season)))].sort((a, b) => b - a), [schedule]);

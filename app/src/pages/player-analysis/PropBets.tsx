@@ -1,14 +1,15 @@
 // Port of prop_bets_players_page_1.py — player-week pivot vs a prop line,
 // with per-player bar + made/below donut.
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import type { EChartsOption } from "echarts";
 import { getPlayerWeek, getMeta, type Row } from "../../lib/data/loader";
+import { getTeamMetaMap, type TeamMeta } from "../../lib/team/meta";
 import { Select } from "../../components/filters/Select";
 import { useECharts } from "../../components/charts/useECharts";
 import { opponentLabel } from "../grading-model/shared";
 import { Loading } from "../../components/Loading";
-import { buildStatGroups, statLabel, americanOdds, headshotCrop, HIT_COLOR, MISS_COLOR, NEUTRAL_COLOR } from "./statPicker";
+import { buildStatGroups, statLabel, americanOdds, headshotCrop, randomItem, randomPassRushRecStat, HIT_COLOR, MISS_COLOR, NEUTRAL_COLOR } from "./statPicker";
 
 const EXCLUDE = new Set([
   "season", "week", "team", "opponent_team", "gameday", "game_id",
@@ -43,10 +44,14 @@ export default function PropBets() {
   const [seasons, setSeasons] = useState<number[]>([]);
   const [season, setSeason] = useState(searchParams.get("season") ?? "");
   const [rows, setRows] = useState<Row[]>([]);
+  const [teamMeta, setTeamMeta] = useState<Map<string, TeamMeta> | null>(null);
   const [seasonType, setSeasonType] = useState("REG");
   const [team, setTeam] = useState(searchParams.get("team") ?? "");
   const [side, setSide] = useState<"offense" | "defense">("offense");
-  const [stat, setStat] = useState(searchParams.get("stat") ?? "passing_yards");
+  // Random starting stat (Passing/Rushing/Receiving) unless deep-linked (audit
+  // request: give every fresh visit a different starting point instead of
+  // always opening on Passing Yards).
+  const [stat, setStat] = useState(searchParams.get("stat") ?? randomPassRushRecStat());
   const [setLine, setSetLine] = useState<string>("");
   const [selectedPlayer, setSelectedPlayer] = useState<string | null>(searchParams.get("player"));
 
@@ -56,6 +61,7 @@ export default function PropBets() {
       setSeasons(ss);
       if (ss.length && !season) setSeason(String(ss[0]));
     });
+    getTeamMetaMap().then(setTeamMeta);
   }, []);
   useEffect(() => {
     if (season) getPlayerWeek(Number(season)).then(setRows);
@@ -68,6 +74,27 @@ export default function PropBets() {
   );
   const teams = useMemo(() => [...new Set(filteredType.map((r) => String(r.team)))].sort(), [filteredType]);
   const selTeam = teams.includes(team) ? team : teams[0] ?? "";
+
+  // Random starting team (unless deep-linked), picked once teams are known.
+  const teamRandomizedRef = useRef(false);
+  useEffect(() => {
+    if (teamRandomizedRef.current || team || !teams.length) return;
+    teamRandomizedRef.current = true;
+    const t = randomItem(teams);
+    if (t) setTeam(t);
+  }, [teams, team]);
+
+  // Reset the player selection to the top player whenever team/stat changes,
+  // so "top player of the given stat" stays the default (skips the initial
+  // mount so a deep-linked ?player= isn't immediately cleared).
+  const skipResetRef = useRef(true);
+  useEffect(() => {
+    if (skipResetRef.current) {
+      skipResetRef.current = false;
+      return;
+    }
+    setSelectedPlayer(null);
+  }, [selTeam, stat]);
 
   const numericCols = useMemo(() => {
     if (!rows.length) return [];
@@ -223,7 +250,7 @@ export default function PropBets() {
         <h1 className="mr-auto flex items-center gap-2.5 text-2xl font-extrabold tracking-tight text-[#002f6c]"><span className="h-6 w-1.5 rounded-full bg-gradient-to-b from-[#002f6c] to-[#164a9c]" />Prop Bets — Players</h1>
         <Select label="Season Type" value={seasonType} onChange={setSeasonType} options={(seasonTypes.length ? seasonTypes : ["REG"]).map((t) => ({ value: t, label: t }))} />
         <Select label="Season" value={season} onChange={setSeason} options={seasons.map((s) => ({ value: String(s), label: String(s) }))} />
-        <Select label="Team" value={selTeam} onChange={setTeam} options={teams.map((t) => ({ value: t, label: t }))} />
+        <Select label="Team" value={selTeam} onChange={setTeam} options={teams.map((t) => ({ value: t, label: teamMeta?.get(t)?.name ?? t }))} />
         <div className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
           Side
           <div className="flex gap-2">

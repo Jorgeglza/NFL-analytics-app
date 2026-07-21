@@ -69,6 +69,20 @@ export function buildMismatchStatGroups(cols: string[]) {
   ];
 }
 
+/** A random element of `arr`, or undefined if empty. */
+export function randomItem<T>(arr: T[]): T | undefined {
+  return arr.length ? arr[Math.floor(Math.random() * arr.length)] : undefined;
+}
+
+const PASS_RUSH_REC_STATS = PROP_MARKET_SECTIONS.offense
+  .filter((s) => s.label !== "Fantasy")
+  .flatMap((s) => s.stats);
+
+/** Random starting stat from Passing/Rushing/Receiving (excludes Fantasy). */
+export function randomPassRushRecStat(): string {
+  return randomItem(PASS_RUSH_REC_STATS) ?? "passing_yards";
+}
+
 export const HIT_COLOR = "#059669";
 export const MISS_COLOR = "#dc2626";
 export const NEUTRAL_COLOR = "#002f6c";

@@ -4,6 +4,7 @@
 // season-journey chart (weekly margin + grade evolution). Data unchanged:
 // team_week + team_week_ranks + grades.json, regular season only.
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import type { EChartsOption } from "echarts";
 import { getTeamWeek, getTeamWeekRanks, getGrades, getMeta, type Row } from "../../lib/data/loader";
 import { getTeamMetaMap, type TeamMeta } from "../../lib/team/meta";
@@ -204,10 +205,11 @@ function SplitBar({
 }
 
 export default function Scorecards() {
+  const [searchParams] = useSearchParams();
   const [meta, setMeta] = useState<Map<string, TeamMeta> | null>(null);
   const [seasons, setSeasons] = useState<number[]>([]);
-  const [season, setSeason] = useState("");
-  const [team, setTeam] = useState("DAL");
+  const [season, setSeason] = useState(searchParams.get("season") ?? "");
+  const [team, setTeam] = useState(searchParams.get("team") ?? "DAL");
   const [teamWeek, setTeamWeek] = useState<Row[]>([]);
   const [ranks, setRanks] = useState<Row[]>([]);
   const [grades, setGrades] = useState<Row[]>([]);
@@ -218,8 +220,9 @@ export default function Scorecards() {
       setGrades(g);
       const ss = [...mt.seasons].sort((a, b) => b - a);
       setSeasons(ss);
-      if (ss.length) setSeason(String(ss[0]));
+      if (ss.length && !searchParams.get("season")) setSeason(String(ss[0]));
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {

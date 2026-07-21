@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { getMeta, type Meta } from "../lib/data/loader";
+import { getMeta, getSchedule, type Meta, type Row } from "../lib/data/loader";
 import { NAV_GROUPS } from "../nav";
+import { currentWeek, type CurrentWeek } from "../lib/logic/defaultWeek";
 
 const GROUP_ICONS: Record<string, string> = {
   "Game Analysis": "🎯",
@@ -18,10 +19,59 @@ function StatChip({ label, value }: { label: string; value: string }) {
   );
 }
 
+function gameLabel(g: Row): string {
+  return `${g.away_team} @ ${g.home_team}`;
+}
+
+/** "This week" launchpad (audit §1: Home had no current-week entry point). */
+function ThisWeek({ cw }: { cw: CurrentWeek }) {
+  const played = cw.games.filter((g) => g.home_score != null).length;
+  const days = [...new Set(cw.games.map((g) => String(g.gameday ?? "")).filter(Boolean))].sort();
+  const dateRange =
+    days.length > 1
+      ? `${new Date(days[0]).toLocaleDateString(undefined, { month: "short", day: "numeric" })} – ${new Date(days[days.length - 1]).toLocaleDateString(undefined, { month: "short", day: "numeric" })}`
+      : days[0]
+        ? new Date(days[0]).toLocaleDateString(undefined, { month: "short", day: "numeric" })
+        : null;
+
+  return (
+    <div className="mt-8 max-w-2xl rounded-2xl border border-white/15 bg-white/10 p-5 backdrop-blur">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div className="text-[11px] font-semibold uppercase tracking-wider text-white/60">This week</div>
+          <div className="mt-0.5 text-lg font-bold">
+            Week {cw.week}, {cw.season} — {cw.games.length} game{cw.games.length === 1 ? "" : "s"}
+            {dateRange && <span className="font-normal text-white/60"> · {dateRange}</span>}
+          </div>
+          {played > 0 && played < cw.games.length && (
+            <div className="mt-0.5 text-xs text-white/60">{played} of {cw.games.length} played so far</div>
+          )}
+        </div>
+        <Link
+          to={`/game_analysis/game_picks?season=${cw.season}&week=${cw.week}`}
+          className="whitespace-nowrap rounded-full bg-white px-4 py-2 text-sm font-semibold text-[#002f6c] shadow-sm transition-transform hover:-translate-y-0.5"
+        >
+          See this week's picks →
+        </Link>
+      </div>
+      {cw.games.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-white/60">
+          {cw.games.slice(0, 6).map((g) => (
+            <span key={String(g.game_id)}>{gameLabel(g)}</span>
+          ))}
+          {cw.games.length > 6 && <span>+{cw.games.length - 6} more</span>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Home() {
   const [meta, setMeta] = useState<Meta | null>(null);
+  const [cw, setCw] = useState<CurrentWeek | null>(null);
   useEffect(() => {
     getMeta().then(setMeta).catch(() => setMeta(null));
+    getSchedule().then((rows) => setCw(currentWeek(rows))).catch(() => setCw(null));
   }, []);
 
   const fmt = (n?: number) => (n == null ? "—" : n.toLocaleString());
@@ -48,6 +98,7 @@ export default function Home() {
               Data updated {new Date(meta.generated_at).toLocaleDateString(undefined, { dateStyle: "medium" })} · refreshed automatically every week
             </p>
           )}
+          {cw && <ThisWeek cw={cw} />}
           </div>
           <img
             src={`${import.meta.env.BASE_URL}branding/jga-badge.png`}

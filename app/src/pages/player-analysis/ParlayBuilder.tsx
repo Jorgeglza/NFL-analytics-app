@@ -1,14 +1,16 @@
 // Port of build_parlay_page_2.py — multi-leg parlay builder.
-// Quirks preserved: the Week dropdown exists but does not filter the bar/%
-// (old callback ignored it); the player list ignores season_type.
-import { useEffect, useMemo, useState } from "react";
+// Quirks preserved: the player list ignores season_type. The old page's inert
+// Week dropdown (displayed but never used in the calc) has been removed
+// rather than kept as a non-functional control.
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { EChartsOption } from "echarts";
 import { getPlayerWeek, getMeta, type Row } from "../../lib/data/loader";
+import { getTeamMetaMap, type TeamMeta } from "../../lib/team/meta";
 import { Select } from "../../components/filters/Select";
 import { useECharts } from "../../components/charts/useECharts";
 import { opponentLabel } from "../grading-model/shared";
 import { Loading } from "../../components/Loading";
-import { buildStatGroups, statLabel, americanOdds, headshotCrop, HIT_COLOR, MISS_COLOR, NEUTRAL_COLOR } from "./statPicker";
+import { buildStatGroups, statLabel, americanOdds, headshotCrop, randomItem, randomPassRushRecStat, HIT_COLOR, MISS_COLOR, NEUTRAL_COLOR } from "./statPicker";
 
 const EXCLUDE = new Set([
   "season", "week", "team", "opponent_team", "gameday", "game_id",
@@ -32,7 +34,6 @@ const DEFENSE_KW = [
 interface Leg {
   season: string;
   seasonType: string;
-  week: string; // display only (old page quirk: unused in calc)
   team: string;
   side: "offense" | "defense";
   stat: string;
@@ -64,18 +65,31 @@ function LegCard({
   onPct: (pct: number | null) => void;
 }) {
   const [rows, setRows] = useState<Row[]>([]);
+  const [teamMeta, setTeamMeta] = useState<Map<string, TeamMeta> | null>(null);
   useEffect(() => {
     if (leg.season) loadSeason(Number(leg.season)).then(setRows);
   }, [leg.season]);
+  useEffect(() => {
+    getTeamMetaMap().then(setTeamMeta);
+  }, []);
 
   const seasonTypes = useMemo(() => [...new Set(rows.map((r) => String(r.season_type)))].sort(), [rows]);
   const typed = useMemo(() => rows.filter((r) => !leg.seasonType || String(r.season_type) === leg.seasonType), [rows, leg.seasonType]);
   const teams = useMemo(() => [...new Set(typed.map((r) => String(r.team)))].sort(), [typed]);
   const team = teams.includes(leg.team) ? leg.team : teams[0] ?? "";
-  const weeks = useMemo(
-    () => [...new Set(typed.filter((r) => String(r.team) === team).map((r) => Number(r.week)))].sort((a, b) => a - b),
-    [typed, team],
-  );
+
+  // Random starting team for this leg (unless already set), picked once its
+  // teams list is known — applies both to the initial leg and any new leg
+  // added via "+" (which starts with team: "").
+  const teamRandomizedRef = useRef(false);
+  useEffect(() => {
+    if (teamRandomizedRef.current || leg.team || !teams.length) return;
+    teamRandomizedRef.current = true;
+    const t = randomItem(teams);
+    if (t) onChange({ ...leg, team: t });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [teams]);
+
   const numericCols = useMemo(() => {
     if (!rows.length) return [];
     return Object.keys(rows[0]).filter((c) => !EXCLUDE.has(c) && rows.some((r) => typeof r[c] === "number"));
@@ -182,8 +196,7 @@ function LegCard({
         <div className="flex flex-wrap items-end gap-2">
           <Select label="Season" value={leg.season} onChange={(v) => set({ season: v })} options={seasons.map((s) => ({ value: String(s), label: String(s) }))} />
           <Select label="Season Type" value={leg.seasonType} onChange={(v) => set({ seasonType: v })} options={(seasonTypes.length ? seasonTypes : ["REG"]).map((t) => ({ value: t, label: t }))} />
-          <Select label="Week" value={leg.week} onChange={(v) => set({ week: v })} options={weeks.map((w) => ({ value: String(w), label: `W${w}` }))} />
-          <Select label="Team" value={team} onChange={(v) => set({ team: v })} options={teams.map((t) => ({ value: t, label: t }))} />
+          <Select label="Team" value={team} onChange={(v) => set({ team: v })} options={teams.map((t) => ({ value: t, label: teamMeta?.get(t)?.name ?? t }))} />
           <div className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
             Stat Type
             <div className="flex gap-1">
@@ -259,6 +272,12 @@ function LegCard({
   );
 }
 
+// team/player are left blank — LegCard randomizes the team once its data
+// loads, and defaults the player to the stat's top player automatically.
+const defaultLeg = (season: number): Leg => ({
+  season: String(season), seasonType: "REG", team: "", side: "offense", stat: randomPassRushRecStat(), player: "", line: "",
+});
+
 export default function ParlayBuilder() {
   const [seasons, setSeasons] = useState<number[]>([]);
   const [legs, setLegs] = useState<Leg[]>([]);
@@ -268,9 +287,14 @@ export default function ParlayBuilder() {
     getMeta().then((m) => {
       const ss = [...m.seasons].sort((a, b) => b - a);
       setSeasons(ss);
-      if (ss.length) setLegs([{ season: String(ss[0]), seasonType: "REG", week: "", team: "", side: "offense", stat: "passing_yards", player: "", line: "" }]);
+      if (ss.length) setLegs([defaultLeg(ss[0])]);
     });
   }, []);
+
+  const resetParlay = () => {
+    setLegs([defaultLeg(seasons[0] ?? new Date().getFullYear())]);
+    setPcts({});
+  };
 
   const probs = legs.map((_, i) => pcts[i]).filter((p): p is number => p != null).map((p) => p / 100);
   const expectedProb = probs.length ? probs.reduce((a, b) => a * b, 1) : null;
@@ -282,7 +306,7 @@ export default function ParlayBuilder() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <h1 className="flex items-center gap-2.5 text-2xl font-extrabold tracking-tight text-[#002f6c]"><span className="h-6 w-1.5 rounded-full bg-gradient-to-b from-[#002f6c] to-[#164a9c]" />Parlay Builder</h1>
-        <div className="flex gap-3">
+        <div className="flex items-center gap-3">
           {[
             ["Expected Probability", expectedProb == null ? "—" : `${(expectedProb * 100).toFixed(2)}%`],
             ["Expected Odds", expectedOdds == null ? "—" : expectedOdds.toFixed(2)],
@@ -292,6 +316,13 @@ export default function ParlayBuilder() {
               <div className="mt-0.5 text-2xl font-bold">{v}</div>
             </div>
           ))}
+          <button
+            onClick={resetParlay}
+            className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm transition-colors hover:text-slate-900"
+            title="Clear all legs and start over"
+          >
+            Reset
+          </button>
         </div>
       </div>
 
@@ -301,7 +332,15 @@ export default function ParlayBuilder() {
           leg={leg}
           seasons={seasons}
           onChange={(l) => setLegs((cur) => cur.map((x, j) => (j === i ? l : x)))}
-          onAdd={() => setLegs((cur) => [...cur.slice(0, i + 1), { ...leg }, ...cur.slice(i + 1)])}
+          // A new leg starts fresh (random team + random pass/rush/rec stat,
+          // blank player) rather than duplicating the leg it was added from.
+          onAdd={() =>
+            setLegs((cur) => [
+              ...cur.slice(0, i + 1),
+              { season: leg.season, seasonType: leg.seasonType, team: "", side: "offense", stat: randomPassRushRecStat(), player: "", line: "" },
+              ...cur.slice(i + 1),
+            ])
+          }
           onRemove={() => {
             setLegs((cur) => cur.filter((_, j) => j !== i));
             setPcts({});

@@ -1,7 +1,10 @@
 // Port of spread_win_percentage_page_6.py — favorite win rates by spread bucket,
 // calibration / stacked / heatmap / lift charts, details table and Weekly Picks.
-// Quirks preserved: pick'em games (spread 0) have no Favorite; ties count as
-// favorite losses in win-% denominators.
+// Quirks preserved: pick'em games (spread 0) have no Favorite.
+// Deviation from the old page (explicit user request, 2026-07-20, matching the
+// Win Types change): ties are excluded entirely from every rate on this page —
+// headline KPIs, verdict tiers, category charts/bucket table, and Weekly
+// Picks' historical rate all share the same population (`df`/`g.winType != null`).
 import { useEffect, useMemo, useState } from "react";
 import { getSchedule, type Row } from "../../lib/data/loader";
 import { Select } from "../../components/filters/Select";
@@ -23,8 +26,7 @@ interface Game {
   spread: number;
   favorite: "home" | "away" | null; // null on pick'em, like the old page
   winner: "home" | "away" | null;
-  played: boolean;
-  scored: boolean; // both scores present (ties included) — used by Weekly Picks history
+  played: boolean; // both scores present (ties included — excluded downstream via winType == null)
   winType: WinType | null;
   favWin: boolean;
   absSpread: number;
@@ -52,8 +54,7 @@ function toGame(r: Row): Game | null {
     spread,
     favorite,
     winner,
-    played: winner != null, // old page: "played" means a non-tie winner exists
-    scored: hs != null && as_ != null,
+    played: hs != null && as_ != null,
     winType,
     favWin: winner != null && winner === favorite,
     absSpread: Math.abs(spread),
@@ -175,7 +176,11 @@ export default function SpreadWinPct() {
     return reg.filter((g) => ss.includes(g.season) && ws.includes(g.week));
   }, [reg, seasonsSel, weeksSel, allSeasons, allWeeks]);
 
-  // df = played games with selected win types
+  // df = played games with a real win-type category (excludes ties and
+  // pick'ems, which have no category) — feeds both the category-based charts
+  // (calibration/heatmap/stacked/lift, bucket table) and the headline KPIs.
+  // 2026-07-20: ties get their own category on Win Types and are excluded
+  // entirely from every rate here (previously counted as a favorite loss).
   const df = useMemo(() => {
     const wts = winTypes.length ? winTypes : WIN_TYPE_CATS;
     return base.filter((g) => g.played && g.winType != null && wts.includes(g.winType));
@@ -184,8 +189,8 @@ export default function SpreadWinPct() {
   const k = useMemo(() => kpis(df.length ? df : base), [df, base]);
 
   // ---------- verdict: tiered spread trend + plain-language recommendation ----------
-  // Uses all played games in the season/week selection (ignores the win-type
-  // filter so the verdict always reflects the full slate).
+  // Uses all played, non-tie, non-pick'em games in the season/week selection —
+  // ignores the win-type filter so the verdict always reflects the full slate.
   const verdict = useMemo(() => {
     const played = base.filter((g) => g.played && g.winType != null);
     if (played.length < 30) return null;
@@ -380,8 +385,10 @@ export default function SpreadWinPct() {
     const weekGames = reg.filter((g) => g.season === rs && g.week === rw);
     if (!weekGames.length) return null;
 
-    // history: all REG games with scores except the selected week (ties kept = favorite losses)
-    const histPlayed = reg.filter((g) => !(g.season === rs && g.week === rw) && g.scored);
+    // history: all REG games with scores except the selected week, ties and
+    // pick'ems excluded — same population as `df`/the headline KPIs above, so
+    // Weekly Picks' implied rate always matches what the KPIs show for that bucket.
+    const histPlayed = reg.filter((g) => !(g.season === rs && g.week === rw) && g.played && g.winType != null);
 
     // p̂ per (bucket, favSide) with Wilson center; side-wide fallback
     const rateKey = (b: string, side: string) => `${b}|${side}`;

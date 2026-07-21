@@ -1,6 +1,8 @@
 // Port of matchup_bets_page_4.py — single-game player pivots, stat mismatches
 // and opponent-allowed trends. (Deviation: browser-local time instead of
-// hardcoded America/Monterrey for the default week.)
+// hardcoded America/Monterrey for the default week — correct by design, the
+// viewer's own "now" rather than one fixed region; uses the same shared
+// defaultWeekNearToday() as Matchup Previews/Models Guide.)
 // UX audit §11: this page is now the single-game drill-down reached by
 // "zoom in" from Value Bets (audit's "two-step journey" recommendation) —
 // no longer in the navbar (see App.tsx); season/week/game/stat/player are
@@ -15,6 +17,7 @@ import { useECharts } from "../../components/charts/useECharts";
 import { opponentLabel } from "../grading-model/shared";
 import { Loading } from "../../components/Loading";
 import { buildMismatchStatGroups, statLabel } from "./statPicker";
+import { defaultWeekNearToday } from "../game-analysis/previews/engine";
 
 const CATEGORY_ORDER = ["Passing", "Rushing", "Receiving", "Other"] as const;
 const PASSING_EXTRA = new Set(["completions", "attempts", "interceptions", "pacr", "dakota", "sack_fumbles", "sack_fumbles_lost", "sack_yards_lost", "sacks_suffered"]);
@@ -87,21 +90,8 @@ export default function MatchupBets() {
   const regSched = useMemo(() => schedule.filter((g) => Number(g.season) === s && g.game_type === "REG"), [schedule, s]);
   const weeks = useMemo(() => [...new Set(regSched.map((g) => Number(g.week)))].sort((a, b) => a - b), [regSched]);
 
-  // default week = gameday closest to today
-  const defaultWeek = useMemo(() => {
-    let best: number | null = null;
-    let bestD = Infinity;
-    const today = Date.now();
-    for (const g of regSched) {
-      if (g.gameday == null) continue;
-      const d = Math.abs(Date.parse(String(g.gameday)) - today);
-      if (d < bestD) {
-        bestD = d;
-        best = Number(g.week);
-      }
-    }
-    return best ?? weeks[0];
-  }, [regSched, weeks]);
+  // default week = gameday closest to today (shared with Matchup Previews/Models Guide)
+  const defaultWeek = useMemo(() => defaultWeekNearToday(regSched, s) ?? weeks[0], [regSched, s, weeks]);
   const selWeek = weeks.map(String).includes(week) ? week : String(defaultWeek ?? "");
   const w = Number(selWeek);
 

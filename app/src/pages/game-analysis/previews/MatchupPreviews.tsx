@@ -2,6 +2,7 @@
 // Loads all seasons' team_week data once so the shared engine can compute
 // trend features and grades for any game.
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { getSchedule, getGrades, getTeamWeek, getTeamWeekRanks, getMeta, type Row } from "../../../lib/data/loader";
 import { getTeamMetaMap, type TeamMeta } from "../../../lib/team/meta";
 import { buildHist, buildGradesIndex, buildTeamWeekIndex, buildScheduleEloIndex } from "./engine";
@@ -16,9 +17,11 @@ const TABS = [
   ["Model Overview", "🎯", "Historical accuracy of every model"],
 ] as const;
 type Tab = (typeof TABS)[number][0];
+const TAB_SLUGS: Record<string, Tab> = { matchup: "Matchup", week: "Week Preview", overview: "Model Overview" };
 
 export default function MatchupPreviews() {
-  const [tab, setTab] = useState<Tab>("Week Preview");
+  const [searchParams] = useSearchParams();
+  const [tab, setTab] = useState<Tab>(TAB_SLUGS[searchParams.get("tab") ?? ""] ?? "Week Preview");
   const [schedule, setSchedule] = useState<Row[]>([]);
   const [grades, setGrades] = useState<Row[]>([]);
   const [meta, setMeta] = useState<Map<string, TeamMeta> | null>(null);
