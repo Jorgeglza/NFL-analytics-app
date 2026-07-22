@@ -291,14 +291,14 @@ export default function GamePicks() {
                       className="grid h-7 w-7 place-items-center rounded-full border border-slate-200 bg-white text-sm shadow-sm transition-all hover:-translate-y-0.5 hover:border-[#002f6c]/50 hover:shadow"
                       title={`Open Matchup Preview — ${g.away_team} @ ${g.home_team}`}
                     >
-                      ⚔️
+                      🧭
                     </Link>
                     <Link
                       to={`/game_analysis/team_comparison?season=${season}&week=${week}&team1=${g.away_team}&team2=${g.home_team}`}
                       className="grid h-7 w-7 place-items-center rounded-full border border-slate-200 bg-white text-sm shadow-sm transition-all hover:-translate-y-0.5 hover:border-[#002f6c]/50 hover:shadow"
                       title={`Compare ${g.away_team} vs ${g.home_team}`}
                     >
-                      🆚
+                      ⚖️
                     </Link>
                   </div>
                 </td>

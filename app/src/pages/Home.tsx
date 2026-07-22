@@ -51,7 +51,7 @@ function ThisWeek({ cw }: { cw: CurrentWeek }) {
           to={`/game_analysis/game_picks?season=${cw.season}&week=${cw.week}`}
           className="whitespace-nowrap rounded-full bg-white px-4 py-2 text-sm font-semibold text-[#002f6c] shadow-sm transition-transform hover:-translate-y-0.5"
         >
-          See this week's picks →
+          {played >= cw.games.length && cw.games.length > 0 ? "See week results →" : "Make this week's picks →"}
         </Link>
       </div>
       {cw.games.length > 0 && (
