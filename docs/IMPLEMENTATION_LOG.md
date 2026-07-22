@@ -434,6 +434,9 @@ Verified in pane (TB@ATL wk1 2025, receiving_yards): KPI header renders logos/ga
 - Gotcha: long-running Vite dev server failed to emit new Tailwind arbitrary-value utilities (`top-[53px]` etc.) via HMR — classes present in DOM but `top: auto`. Restarting the dev server fixed it; production build unaffected.
 - Tests 42/42, build green; sticky + badges + rank chips verified in the browser pane.
 
+### 2026-07-21 — Season-range cutoff moved to August
+- `config.current_season()` rollover moved from September 1 to August 1 (user request): the new season's schedule is published by nflverse well before kickoff (verified live: 2026 schedule, 272 games, already present via `nfl_data_py.import_schedules([2026])` in July 2026), so the new season can enter the app a month earlier as schedule-only data. No scores/stats until games are actually played — same "unplayed game" code path already used for in-season future weeks. Updated docstring, `SEASONS` comment, and `docs/pipeline-runbook.md`.
+
 ### 2026-07-17 — Session 6: M5 backend automation (weekly refresh + rolling seasons)
 - `config.py`: `SEASONS` now `range(FIRST_SEASON=2015, current_season()+1)`; `current_season()` = calendar year from September, else previous year. `fetch_weekly` skips only the *newest* season (warning) if both loaders fail (early-September grace); other failures stay fatal. `validate` additionally asserts meta seasons start 2015 and newest ≥ current−1.
 - `weekly-refresh.yml`: added `actions: write` + explicit `gh workflow run deploy.yml` after the auto-commit (only if `changes_detected`) — commits pushed with the default `GITHUB_TOKEN` do **not** trigger `deploy.yml`'s push event, so the Pages site would never update otherwise. Pins already matched requirements.lock.txt. Runbook updated (season rule, CI flow, 60-day cron-pause note).

@@ -7,15 +7,16 @@ FIRST_SEASON = 2015
 def current_season(today: "_dt.date | None" = None) -> int:
     """Latest NFL season expected to have data on nflverse.
 
-    A season starts in September of its calendar year; before September, the
-    previous calendar year's season is the newest one available.
+    The new season's schedule is published well before kickoff (typically
+    mid-May); from August onward the new calendar year's season is the
+    newest one available (schedule only, until games are actually played).
     """
     today = today or _dt.date.today()
-    return today.year if today.month >= 9 else today.year - 1
+    return today.year if today.month >= 8 else today.year - 1
 
 
 # Seasons included in the app (mirrors old settings.json season_range,
-# rolling forward automatically each September)
+# rolling forward automatically each August)
 SEASONS = list(range(FIRST_SEASON, current_season() + 1))
 
 REPO_ROOT = Path(__file__).resolve().parents[2]

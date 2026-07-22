@@ -29,10 +29,12 @@ git add data/nfl.sqlite app/public/data && git commit -m "data: weekly refresh"
 
 ## Season range (automatic)
 `SEASONS` in `pipeline/nfl_pipeline/config.py` is `range(FIRST_SEASON, current_season()+1)`:
-`current_season()` = calendar year from September onward, else the previous year.
-No manual edit needed when a new season starts. If the newest season isn't published
-on nflverse yet (early September), `fetch_weekly` skips it with a warning instead of
-failing; `validate` tolerates being at most one season behind.
+`current_season()` = calendar year from August onward, else the previous year (the
+new season's schedule is typically published by nflverse in mid-May, well before
+the August cutoff, so the new season enters with schedule-only data — no scores/stats
+until games are actually played). No manual edit needed when a new season starts.
+If weekly player stats aren't published yet, `fetch_weekly` skips that season with a
+warning instead of failing; `validate` tolerates being at most one season behind.
 
 ## Automated weekly refresh (CI)
 `.github/workflows/weekly-refresh.yml` runs every Tuesday 12:00 UTC (and via
