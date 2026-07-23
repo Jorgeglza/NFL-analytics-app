@@ -498,44 +498,6 @@ export default function SpreadWinPct() {
     return computeWeekPicks(reg, Number(recoSeason), Number(recoWeek), binSize, signed, df, minN);
   }, [reg, recoSeason, recoWeek, binSize, signed, df, minN]);
 
-  // This week's recommended composition, in raw game counts (not %) — built
-  // straight from the selected week's own spreads via reco.chips.
-  const weekCompositionOption = useMemo(() => {
-    if (!reco?.chips) return null;
-    return {
-      grid: { left: 10, right: 10, top: 30, bottom: 10, containLabel: true },
-      tooltip: {
-        trigger: "axis" as const,
-        formatter: (params: unknown) => {
-          const p = (params as { name: string; value: number }[])[0];
-          const c = reco.chips!.find((x) => x.label === p.name);
-          return `${p.name}<br/>${p.value} game${p.value === 1 ? "" : "s"} (${c ? c.pct.toFixed(0) : 0}%)`;
-        },
-      },
-      xAxis: { type: "category" as const, data: WIN_TYPE_CATS, axisLabel: { fontSize: 11, interval: 0 } },
-      yAxis: { type: "value" as const, name: "Games", minInterval: 1 },
-      series: [
-        {
-          name: "Recommended (this week)",
-          type: "bar" as const,
-          data: reco.chips.map((c) => ({ value: c.count, itemStyle: { color: WIN_TYPE_COLORS[c.label as WinType] } })),
-          barMaxWidth: 60,
-          label: {
-            show: true,
-            position: "top" as const,
-            fontSize: 12,
-            fontWeight: "bold" as const,
-            color: "#334155",
-            formatter: (p: { value?: unknown; dataIndex: number }) => {
-              const c = reco.chips![p.dataIndex];
-              return `${p.value}\n${c.pct.toFixed(0)}%`;
-            },
-          },
-        },
-      ],
-    };
-  }, [reco]);
-
   // ============ Backtest: recommended vs actual vs historic composition ============
   // Rolling window: every REG week up to and including the selected Season/Week
   // (crossing season boundaries), each graded against its own final results.
@@ -588,39 +550,36 @@ export default function SpreadWinPct() {
   const backtestOption = useMemo(() => {
     if (!backtest) return null;
     return {
-      grid: { left: 10, right: 10, top: 40, bottom: 30, containLabel: true },
-      legend: { top: 0 },
+      grid: { left: 8, right: 8, top: 26, bottom: 8, containLabel: true },
+      legend: { top: 0, itemWidth: 12, itemHeight: 10, textStyle: { fontSize: 11 } },
       tooltip: { trigger: "axis" as const, valueFormatter: (v: unknown) => `${Number(v).toFixed(1)}%` },
       xAxis: {
         type: "category" as const,
         data: WIN_TYPE_CATS,
-        name: "Win type",
-        nameLocation: "middle" as const,
-        nameGap: 30,
-        axisLabel: { fontSize: 11, interval: 0 },
+        axisLabel: { fontSize: 10, interval: 0 },
       },
-      yAxis: { type: "value" as const, min: 0, max: 100, name: "% of week's games" },
+      yAxis: { type: "value" as const, min: 0, max: 100, name: "% of games", nameTextStyle: { fontSize: 10 }, axisLabel: { fontSize: 10 } },
       series: [
         {
           name: "Recommended",
           type: "bar" as const,
           data: backtest.series.recommended.map((v) => +v.toFixed(1)),
           itemStyle: { color: "#2459A7" },
-          label: { show: true, position: "top" as const, fontSize: 10, formatter: (p: { value?: unknown }) => `${Number(p.value).toFixed(0)}%` },
+          label: { show: true, position: "top" as const, fontSize: 9, formatter: (p: { value?: unknown }) => `${Number(p.value).toFixed(0)}%` },
         },
         {
           name: "Actual",
           type: "bar" as const,
           data: backtest.series.actual.map((v) => +v.toFixed(1)),
           itemStyle: { color: "#3C9A5F" },
-          label: { show: true, position: "top" as const, fontSize: 10, formatter: (p: { value?: unknown }) => `${Number(p.value).toFixed(0)}%` },
+          label: { show: true, position: "top" as const, fontSize: 9, formatter: (p: { value?: unknown }) => `${Number(p.value).toFixed(0)}%` },
         },
         {
           name: "Historic baseline",
           type: "bar" as const,
           data: backtest.series.historic.map((v) => +v.toFixed(1)),
           itemStyle: { color: "rgba(100,100,100,0.55)" },
-          label: { show: true, position: "top" as const, fontSize: 10, formatter: (p: { value?: unknown }) => `${Number(p.value).toFixed(0)}%` },
+          label: { show: true, position: "top" as const, fontSize: 9, formatter: (p: { value?: unknown }) => `${Number(p.value).toFixed(0)}%` },
         },
       ],
     };
@@ -630,7 +589,6 @@ export default function SpreadWinPct() {
   const stackedRef = useECharts(stackedOption as EChartsOption | null);
   const heatRef = useECharts(heatOption as EChartsOption | null);
   const liftRef = useECharts(liftOption);
-  const weekCompositionRef = useECharts(weekCompositionOption);
   const backtestRef = useECharts(backtestOption);
 
   if (!schedule.length) return <Loading label="Loading schedule…" />;
@@ -816,26 +774,37 @@ export default function SpreadWinPct() {
             )}
           </div>
           {reco?.chips && (
-            <div className="flex flex-wrap gap-2">
-              {reco.chips.map((c) => (
-                <div key={c.label} className="min-w-32 rounded-2xl px-3 py-2 text-white shadow-sm" style={{ background: WIN_TYPE_COLORS[c.label as WinType] }}>
-                  <div className="text-[11px] opacity-90">{c.label}</div>
-                  <div className="text-lg font-bold leading-none">{c.count}</div>
-                  <div className="text-[11px] opacity-90">{c.pct.toFixed(0)}%</div>
-                </div>
-              ))}
+            <div className="flex flex-col items-start gap-1">
+              <div className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Recommended distribution</div>
+              <div className="flex flex-wrap gap-2">
+                {reco.chips.map((c) => (
+                  <div key={c.label} className="min-w-32 rounded-2xl px-3 py-2 text-white shadow-sm" style={{ background: WIN_TYPE_COLORS[c.label as WinType] }}>
+                    <div className="text-[11px] opacity-90">{c.label}</div>
+                    <div className="text-lg font-bold leading-none">{c.count}</div>
+                    <div className="text-[11px] opacity-90">{c.pct.toFixed(0)}%</div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>
         {reco?.summary && <div className="mb-2 text-xs text-slate-600">{reco.summary}</div>}
-        {weekCompositionOption && (
-          <div className="mb-4 rounded-xl border border-slate-100 bg-slate-50/50 p-3">
-            <div className="mb-1 text-xs font-semibold text-slate-600">
-              Recommended composition — Week {recoWeek}, {recoSeason} ({reco?.chips?.reduce((s, c) => s + c.count, 0) ?? 0} games, from this week's own spreads)
-            </div>
-            <div ref={weekCompositionRef} className="h-[220px]" />
+
+        {/* Backtest: recommended vs actual vs historic composition */}
+        <div className="mb-4 rounded-xl border border-slate-100 bg-slate-50/50 p-3">
+          <div className="mb-1 flex items-baseline justify-between gap-2">
+            <div className="text-xs font-semibold text-slate-600">Recommended vs Actual vs Historic (through Week {recoWeek}, {recoSeason})</div>
+            {backtest && (
+              <div className="text-[11px] text-slate-400">{backtest.weeksIncluded} week{backtest.weeksIncluded === 1 ? "" : "s"} graded</div>
+            )}
           </div>
-        )}
+          {backtestOption ? (
+            <div ref={backtestRef} className="h-[220px]" />
+          ) : (
+            <div className="grid h-[220px] place-items-center text-sm text-slate-400">No graded weeks in range yet</div>
+          )}
+        </div>
+
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead className="bg-slate-50 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">
@@ -876,27 +845,6 @@ export default function SpreadWinPct() {
             </tbody>
           </table>
         </div>
-      </Box>
-
-      {/* Backtest: recommended vs actual vs historic composition */}
-      <Box title={`Recommended vs Actual vs Historic — composition backtest (through Week ${recoWeek}, ${recoSeason})`}>
-        <p className="mb-3 text-xs text-slate-500">
-          Replays the same Weekly Picks logic for every graded week up to and including the week selected above (each
-          week's own history is excluded from its own rates, same as Weekly Picks), then compares the average
-          <span className="font-semibold"> recommended</span> mix to what
-          <span className="font-semibold"> actually</span> happened, against the
-          <span className="font-semibold"> historic baseline</span> from the current top-of-page filters.
-        </p>
-        {backtestOption ? (
-          <>
-            <div ref={backtestRef} className="h-[380px]" />
-            <div className="mt-2 text-xs text-slate-400">
-              {backtest!.weeksIncluded} graded week{backtest!.weeksIncluded === 1 ? "" : "s"} included · {backtest!.recoTotal} recommended picks · {backtest!.actualTotal} actual outcomes
-            </div>
-          </>
-        ) : (
-          <div className="grid h-[380px] place-items-center text-sm text-slate-400">No graded weeks in range yet</div>
-        )}
       </Box>
       </div>
     </div>
