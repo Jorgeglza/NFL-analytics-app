@@ -552,11 +552,84 @@ export default function SpreadWinPct() {
     };
   }, [backtest]);
 
+  // ============ Recommendation accuracy trend — this season vs last ============
+  // How well would "follow the recommendation" have done, week by week, so far
+  // this season, compared to the same weeks last season — a track record to
+  // judge how much to trust taking the pick 1:1 going forward.
+  const seasonTrend = useMemo(() => {
+    if (!recoSeason || !reg.length) return null;
+    const rs = Number(recoSeason);
+    const prevSeason = rs - 1;
+
+    const weeklyAccuracy = (season: number) => {
+      const weeks = [...new Set(reg.filter((g) => g.season === season).map((g) => g.week))].sort((a, b) => a - b);
+      return weeks.map((w) => {
+        const picks = computeWeekPicks(reg, season, w, binSize, signed, df, minN);
+        return { week: w, pct: picks?.record?.pct ?? null };
+      });
+    };
+
+    const thisSeason = weeklyAccuracy(rs);
+    const hasPrev = reg.some((g) => g.season === prevSeason);
+    const lastSeason = hasPrev ? weeklyAccuracy(prevSeason) : null;
+    if (!thisSeason.some((w) => w.pct != null) && !lastSeason?.some((w) => w.pct != null)) return null;
+
+    return { thisSeason, lastSeason, rs, prevSeason };
+  }, [reg, recoSeason, binSize, signed, df, minN]);
+
+  const seasonTrendOption = useMemo(() => {
+    if (!seasonTrend) return null;
+    const maxWeek = Math.max(
+      seasonTrend.thisSeason.length ? seasonTrend.thisSeason[seasonTrend.thisSeason.length - 1].week : 0,
+      seasonTrend.lastSeason?.length ? seasonTrend.lastSeason[seasonTrend.lastSeason.length - 1].week : 0,
+    );
+    const weeks = Array.from({ length: maxWeek }, (_, i) => i + 1);
+    const byWeek = (arr: { week: number; pct: number | null }[]) => weeks.map((w) => arr.find((x) => x.week === w)?.pct ?? null);
+
+    const series = [
+      {
+        name: `${seasonTrend.rs} (this season)`,
+        type: "line" as const,
+        data: byWeek(seasonTrend.thisSeason),
+        connectNulls: false,
+        symbolSize: 6,
+        itemStyle: { color: "#2459A7" },
+        lineStyle: { width: 2 },
+      },
+      ...(seasonTrend.lastSeason
+        ? [
+            {
+              name: `${seasonTrend.prevSeason} (last season)`,
+              type: "line" as const,
+              data: byWeek(seasonTrend.lastSeason),
+              connectNulls: false,
+              symbolSize: 6,
+              itemStyle: { color: "rgba(100,100,100,0.7)" },
+              lineStyle: { width: 2, type: "dashed" as const },
+            },
+          ]
+        : []),
+    ];
+
+    return {
+      grid: { left: 8, right: 8, top: 30, bottom: 8, containLabel: true },
+      legend: { top: 0, textStyle: { fontSize: 11 } },
+      tooltip: {
+        trigger: "axis" as const,
+        valueFormatter: (v: unknown) => (v == null ? "no graded games" : `${Number(v).toFixed(0)}%`),
+      },
+      xAxis: { type: "category" as const, data: weeks.map(String), name: "Week", nameLocation: "middle" as const, nameGap: 24, axisLabel: { fontSize: 10 } },
+      yAxis: { type: "value" as const, min: 0, max: 100, name: "Pick accuracy %", nameTextStyle: { fontSize: 10 }, axisLabel: { fontSize: 10 } },
+      series,
+    };
+  }, [seasonTrend]);
+
   const calRef = useECharts(calOption);
   const stackedRef = useECharts(stackedOption as EChartsOption | null);
   const heatRef = useECharts(heatOption as EChartsOption | null);
   const liftRef = useECharts(liftOption);
   const backtestRef = useECharts(backtestOption);
+  const seasonTrendRef = useECharts(seasonTrendOption);
 
   if (!schedule.length) return <Loading label="Loading schedule…" />;
 
@@ -816,6 +889,18 @@ export default function SpreadWinPct() {
         </div>
       </Box>
       </div>
+
+      {/* Recommendation accuracy trend — track record for trusting the pick 1:1 */}
+      <Box title="Recommendation accuracy by week">
+        <p className="mb-2 text-xs text-slate-500">
+          How often the Weekly Picks recommendation was right, week by week{seasonTrend?.lastSeason ? `, vs the same weeks last season` : ""} — a track record for how much to trust taking the pick as-is.
+        </p>
+        {seasonTrendOption ? (
+          <div ref={seasonTrendRef} className="h-[240px]" />
+        ) : (
+          <div className="grid h-[240px] place-items-center text-sm text-slate-400">No graded weeks yet this season</div>
+        )}
+      </Box>
     </div>
   );
 }
