@@ -45,3 +45,17 @@ Pick one:
 1. Build the Model Backtest half now (fully unblocked) as its own page, and revisit Value Bets Backtest
    once prop-line data exists.
 2. Wait and ship both halves together as originally scoped, once prop-line ingestion is in place.
+
+**Status (2026-07-21): tabled.** No reliable historical prop-line data source has been found, and
+Model Backtest alone was deprioritized in favor of scoping the Fantasy Draft page instead (see below).
+
+## Fantasy Draft page (design doc written, not built)
+
+Full design in `docs/fantasy-pipeline.md`: a Player Analysis-adjacent page ranking players for
+the upcoming fantasy draft, aggregating multiple scraped ranking sources (CBS/ESPN/TheScore)
+into a consensus rank/ADP/value table, plus a later draft-guidance tool (mark players drafted,
+snake-order tracking). Deliberately built as a fully independent pipeline
+(`pipeline/fantasy_pipeline/`, own sqlite/JSON output, own duplicated export utilities) run
+**manually/on-demand only — no GitHub Actions automation** — so a fragile web scrape can never
+break the main NFL data pipeline, build, or deploy. Pick up by reading
+`docs/fantasy-pipeline.md` in full before starting.

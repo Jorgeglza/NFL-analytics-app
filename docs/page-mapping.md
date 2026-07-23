@@ -16,7 +16,17 @@
 | data/grading_model/* (4 tabs) | /data/grading_model | same | pages/grading-model/* | ✅ |
 | data/data_settings_page_2.py | /data/data_settings | — dropped | replaced by pipeline | n/a |
 | data/upload_page_3.py | /data/upload | — dropped | replaced by pipeline | n/a |
-| home.py | / | / | pages/Home | ☐ |
+| home.py | / | / | pages/Home | ✅ |
+
+## New pages (not ports — M3.5 + utility routes)
+
+| Page | New route | New component | Notes |
+|---|---|---|---|
+| Power Rankings | /game_analysis/power_rankings | pages/game-analysis/PowerRankings | Composite of Elo + season-to-date grade + Pythagorean win% |
+| Team Trends | /game_analysis/team_trends | pages/game-analysis/TeamTrends | Hidden from nav — reachable only via Power Rankings' "Compare" link |
+| Season Outlook | /game_analysis/season_outlook | pages/game-analysis/SeasonOutlook | Strength of Schedule + Playoff Probability (Monte Carlo) tabs |
+| Models Guide | /game_analysis/models_guide | pages/game-analysis/previews/ModelsGuide | Hidden from nav — reachable only from Matchup Previews' header link |
+| Glossary | /glossary | pages/GlossaryPage | Hidden from nav — reachable only from Home's footer link |
 
 ## Dash concept → React equivalent
 - callbacks → React state + derived memos; cascading dropdowns → dependent selects

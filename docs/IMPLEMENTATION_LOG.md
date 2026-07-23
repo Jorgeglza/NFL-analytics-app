@@ -28,7 +28,7 @@ Status legend: ☐ not started · ◐ in progress · ✅ done · ⛔ blocked
 - ◐ Home (functional; final design in M4)
 - ✅ /game_analysis/game_picks — rewritten to match the old layout: win-type-tinted table rows, manual-winner checkboxes for unplayed games (localStorage `gamePicks.manualWinners`), counts bar with count/% labels + grey "No result yet" bucket, spread-by-win-type scatter with ×N collision markers. Week-18 2025 win-type counts verified vs the pipeline's Win Type column (9/3/3/1).
 - ✅ /game_analysis/win_types — Season/Week toggle, per-block KPIs + stacked win-type bar (count|% labels, dashed Home-Favorite line) + spread scatter with ×N collision markers. Numbers verified vs pandas replica of old logic: KPIs exact on 4 seasons + 3 weeks; category counts exact for 2024 (season & week 1). Old-page quirks preserved (played pick'em → Underdog; played ties → "(No Score)" buckets; tie games count in win-% denominators).
-- ✅ /game_analysis/spread_win_percentage — filters (multi season/week, win types, bin size, signed/abs, min-N, CI), 6 KPIs, calibration/stacked/heatmap/lift charts, bucket table, Weekly Picks panel. KPIs + bin aggregates + Wilson p̂ verified exact vs pandas replica. Grid-aligned buckets replace pd.cut edges (deviation: pandas silently dropped a game whose |spread| hit the exact top edge; we keep it).
+- ✅ /game_analysis/spread_win_percentage — filters (multi season/week, win types, bin size, signed/abs, min-N, CI), 6 KPIs, calibration/stacked/heatmap/lift charts, bucket table, Weekly Picks panel. KPIs + bin aggregates + Wilson p̂ verified exact vs pandas replica. Grid-aligned buckets replace pd.cut edges (deviation: pandas silently dropped a game whose |spread| hit the exact top edge; we keep it). 2026-07-22: added a "Recommended vs Actual vs Historic" composition backtest chart below Weekly Picks — per-week pick logic factored into `computeWeekPicks()` (shared by the single-week table and the new rolling backtest), which replays every graded week up to the selected Season/Week and compares the average recommended win-type mix to what actually happened and to the long-run historic baseline. No pipeline/data changes; computed entirely client-side from `schedule.json`.
 - ✅ /data/grading_model (Season, Teams, Weekly, Features tabs) — contributions via contrib_params.json (weekContributions in lib/logic/contributions.ts). Weekly tab KPIs/rank/Z/percentile and Teams-tab avg scaled contributions (DAL 2025) verified exact vs pandas replica; season averages match.
 - ✅ /game_analysis/team_comparison — 3-column layout, Prev/Total/Avg rows + squashed rank bars, substats, grades boxes, trend/matchup side charts. SF/CIN 2025 verified vs pandas (note: turnover_margin_rank is null in pipeline data → "--", faithful).
 - ✅ /game_analysis/scorecards_teams — playstyle donuts + sparkline cards. DAL 2025 verified.
@@ -42,13 +42,13 @@ Status legend: ☐ not started · ◐ in progress · ✅ done · ⛔ blocked
 **M3 page list complete** — all 12 pages + Grading Model tabs ported and number-checked.
 Per page: run old app side-by-side (`pda-ie` env), match tables/KPIs/chart series on ≥3 filter combos (incl. unplayed games, week 1, multi-season). Log deviations in page-mapping.md.
 
-### M4 — UI modernization (zero logic changes) ◐
+### M4 — UI modernization (zero logic changes) ✅
 - ✅ Route-level code splitting (React.lazy + Suspense) and vendor chunking (echarts/react) — initial JS ~15 kB + 164 kB react chunk; ECharts loads per page (was one 1.2 MB bundle).
 - ✅ Shared `components/Loading` spinner applied to every page (replaces blank screens / ad-hoc text).
 - ✅ `app/tsconfig.tsbuildinfo` untracked + gitignored.
 - ✅ Design-system pass across all pages (zero data changes): shared UI kit in `components/ui.tsx` (Card, Kpi, Segmented, Chip, FilterBar, inputs) matching the navbar/home language — rounded-2xl white cards on slate-200 borders, navy #002f6c accents (h1 accent bars, KPI top-borders), uppercase micro-labels, unified pill segments/tab bars, consistent table headers (slate-50, tracking-wider). Verified per route via DOM audit (no legacy `rounded-xl`/old theads remain) and KPI spot checks (Weekly tab stats + Game Picks wk18 counts unchanged).
 - ☐ Optional: screenshot-based visual QA (browser pane screenshot capture currently times out on this app).
-- ◐ **UX audit — per-page items (§1–13) done; Cross-Page/Global items (bottom of `UX_AUDIT.md`) mostly open.** See "M4 cross-page/general audit items" note below (2026-07-20) for the itemized status and the still-missing list carried into `UX_AUDIT.md`'s "What's still missing" section.
+- ✅ **UX audit — per-page items (§1–13) and Cross-Page/Global items both done.** Reconciled 2026-07-21 against current source (not just log claims) — see the "Next" note above and `docs/UX_AUDIT.md`'s prioritized summary. Two items remain intentionally unimplemented by explicit user decision (win-type color-only encoding, engine-disagreement callout), not gaps.
 
 ### M3.5 — New analytics beyond old-app parity (not ports) ✅
 - ✅ /game_analysis/power_rankings — composite of Elo + season-to-date Overall Grade + Pythagorean win% (`lib/logic/powerRankings.ts`), any-week filter, movement vs. prior week, rank-trend chart.
@@ -56,13 +56,30 @@ Per page: run old app side-by-side (`pda-ie` env), match tables/KPIs/chart serie
 - ✅ /game_analysis/season_outlook — Strength of Schedule (played vs. remaining opponent Elo) + Playoff Probability (2,000-iteration Monte Carlo, simplified tiebreaker) tabs (`pages/game-analysis/season-outlook/shared.ts`, `lib/logic/playoffSim.ts`).
 - Deferred: Model Backtest + Value Bets Backtest — scoped but not built, see `docs/FUTURE_DEVELOPMENT.md` (blocked on historical prop-line data for the value-bets half).
 
-### M5 — Deploy + automation
+### M5 — Deploy + automation ✅
 - ✅ `.github/workflows/weekly-refresh.yml` (cron Tue 12:00 UTC + dispatch → pipeline → validate → auto-commit → explicit `gh workflow run deploy.yml` — GITHUB_TOKEN commits don't fire push triggers)
 - ✅ `.github/workflows/deploy.yml` (build → GitHub Pages, SPA fallback + Vite `base`) — live since Session 1
 - ✅ Dynamic season range: `config.SEASONS = range(2015, current_season()+1)` (rolls to the new season each September); `fetch_weekly` skips the newest season with a warning if unpublished; `validate` asserts 2015→current (one-season grace)
-- ◐ First end-to-end weekly-refresh run verified via workflow_dispatch
+- ✅ First end-to-end weekly-refresh run verified (2026-07-21, via GitHub Actions API): `weekly-refresh.yml` run `29833256531` fired on `schedule`, completed with `conclusion: success`; the matching `deploy.yml` `workflow_dispatch` run (13:12:37 UTC, same window) also succeeded — full cron → pipeline → validate → commit → deploy chain confirmed working end-to-end, not just inferred from a data commit.
+
+### F1 — Fantasy Draft page (independent track, non-blocking for M0–M5) ☐
+- ☐ Design doc written (`docs/fantasy-pipeline.md`, 2026-07-21) — not yet implemented.
+- Deliberately isolated from the main pipeline: own `pipeline/fantasy_pipeline/` package (own
+  sqlite file, own JSON output dir, duplicated export utilities rather than importing
+  `nfl_pipeline`'s), run **manually only** — no GitHub Actions automation — so a fragile
+  scrape can never break the weekly refresh, build, or deploy.
+- Phase 1 (rank table page) and Phase 2 (draft-guidance tool) both scoped; see the design doc
+  for the full plan before starting implementation.
 
 ## Session notes (newest first)
+
+### 2026-07-21 — Season-range cutoff moved to August
+- `config.current_season()` rollover moved from September 1 to August 1 (user request): the new season's schedule is published by nflverse well before kickoff (verified live: 2026 schedule, 272 games, already present via `nfl_data_py.import_schedules([2026])` in July 2026), so the new season can enter the app a month earlier as schedule-only data. No scores/stats until games are actually played — same "unplayed game" code path already used for in-season future weeks. Updated docstring, `SEASONS` comment, and `docs/pipeline-runbook.md`.
+
+### 2026-07-21 — Home CTA reflects week status, clearer Game Picks action icons
+- **Home "this week" CTA**: the launchpad button now reads "See week results →" once every game in the current week is final, "Make this week's picks →" otherwise (was a static "See this week's picks →" regardless of state) — `Home.tsx` compares `played` (games with a final score) against `cw.games.length`.
+- **Game Picks action icons**: the two per-row cross-link icons (added Session 7) swapped from ⚔️/🆚 to 🧭 (Matchup Preview) and ⚖️ (Team Comparison) — better matches what each linked page actually shows (a preview/guide vs. a side-by-side comparison) rather than generic "vs" iconography.
+- Small, isolated follow-up requests; not run against the full verification checklist (no test/build changes — presentational only).
 
 ### 2026-07-20 — Session 8 (cont.): Pythagorean split-bar, heatmap now starts at the selected week
 Two direct follow-up requests:
@@ -304,7 +321,12 @@ User request: confirm all UX-audit implementations and best practices are actual
 
 Full itemized breakdown (repeated components / overlapping objectives / disconnected journeys / global opportunities / data inconsistencies / prioritized summary, each tagged ✅/◐/☐) is inline in `docs/UX_AUDIT.md`, ending in a "What's still missing (quick list for next session)" section.
 
-**Next:** pick off the still-missing list above before considering M4 UX-audit work complete. Suggested order: Home launchpad + shared default-week rule (biggest navigation win per the audit's own prioritization) → engine-disagreement callout → unified glossary → Team Comparison cross-links → win-type color-independent encoding → Parlay persistence/quirk decision.
+**Next (updated 2026-07-21 — the list above was superseded by this same file's later 2026-07-20 entries):** M4/M5 are functionally complete. Verified against current source on 2026-07-21 (not just prior log claims):
+- Home launchpad, unified glossary, Team Comparison cross-links, shared default-week rule, Parlay reset — all done (see 2026-07-20 entries above).
+- Parlay Builder's player list honoring season_type, and Scorecards/Matchup-tab grade+rank context — both already implemented in source (`ParlayBuilder.tsx`'s `typed` filters by `leg.seasonType`; `Scorecards.tsx`'s `gradeInfo` and `MatchupTab.tsx`'s `gradesIdx.rank` both show league rank next to every grade) — the "still open" notes below about them were stale.
+- Win-type color-only encoding and the Spread-Win%-vs-Matchup-Previews disagreement callout remain **explicitly declined by the user**, not gaps — see the 2026-07-20 session notes above.
+- M5 weekly-refresh automation **verified end-to-end via the GitHub Actions API** (public, unauthenticated): `weekly-refresh.yml` run `29833256531` fired on `schedule`, `conclusion: success` (2026-07-21T13:10–13:12 UTC); `deploy.yml` shows a matching `workflow_dispatch` run at 13:12:37 UTC with `conclusion: success` — the full cron → pipeline → validate → commit → dispatched-deploy chain has actually run and succeeded once, not just produced a data commit.
+- No confirmed gaps remain from the UX audit as of this pass. See `docs/UX_AUDIT.md`'s prioritized summary, now reconciled to match.
 
 ### 2026-07-19 — Session 6 (cont.): Grading Model — audit §13 implementation + Features tab redesign
 User request: apply the UX audit's Grading Model comments, clean up tab navigation, and modernize/reorder the Features tab to explain the model and what feeds into it.
@@ -433,9 +455,6 @@ Verified in pane (TB@ATL wk1 2025, receiving_yards): KPI header renders logos/ga
 - Deferred: cross-links to Matchup Preview/Scorecards — needs the app-wide param-carrying link infrastructure (audit's shared-context theme).
 - Gotcha: long-running Vite dev server failed to emit new Tailwind arbitrary-value utilities (`top-[53px]` etc.) via HMR — classes present in DOM but `top: auto`. Restarting the dev server fixed it; production build unaffected.
 - Tests 42/42, build green; sticky + badges + rank chips verified in the browser pane.
-
-### 2026-07-21 — Season-range cutoff moved to August
-- `config.current_season()` rollover moved from September 1 to August 1 (user request): the new season's schedule is published by nflverse well before kickoff (verified live: 2026 schedule, 272 games, already present via `nfl_data_py.import_schedules([2026])` in July 2026), so the new season can enter the app a month earlier as schedule-only data. No scores/stats until games are actually played — same "unplayed game" code path already used for in-season future weeks. Updated docstring, `SEASONS` comment, and `docs/pipeline-runbook.md`.
 
 ### 2026-07-17 — Session 6: M5 backend automation (weekly refresh + rolling seasons)
 - `config.py`: `SEASONS` now `range(FIRST_SEASON=2015, current_season()+1)`; `current_season()` = calendar year from September, else previous year. `fetch_weekly` skips only the *newest* season (warning) if both loaders fail (early-September grace); other failures stay fatal. `validate` additionally asserts meta seasons start 2015 and newest ≥ current−1.

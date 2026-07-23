@@ -377,11 +377,18 @@ export default function SpreadWinPct() {
     };
   }, [df]);
 
-  // ============ Weekly Picks (full-week mix) ============
-  const reco = useMemo(() => {
-    if (!recoSeason || !recoWeek || !reg.length) return null;
-    const rs = Number(recoSeason);
-    const rw = Number(recoWeek);
+  // Computes the recommended-pick mix for one target (season, week) — shared by
+  // the single-week "Weekly Picks" table and the rolling backtest below, so both
+  // stay numerically identical (same history-exclusion + Wilson-fallback rule).
+  function computeWeekPicks(
+    reg: Game[],
+    rs: number,
+    rw: number,
+    binSize: number,
+    signed: boolean,
+    df: Game[],
+    minN: number,
+  ) {
     const weekGames = reg.filter((g) => g.season === rs && g.week === rw);
     if (!weekGames.length) return null;
 
@@ -483,12 +490,84 @@ export default function SpreadWinPct() {
     const favAssigned = Math.min(targetFav, rows.length);
     const summary = `Week ${rw}, ${rs}: Expected favorite share ≈ ${(expectedFav * 100).toFixed(1)}% (target favorites ≈ ${targetFav}/${assignable.length}); Assigned picks → Favorites ${favAssigned}, Underdogs ${assignable.length - favAssigned}.`;
     return { summary, rows, chips, record };
+  }
+
+  // ============ Weekly Picks (full-week mix) ============
+  const reco = useMemo(() => {
+    if (!recoSeason || !recoWeek || !reg.length) return null;
+    return computeWeekPicks(reg, Number(recoSeason), Number(recoWeek), binSize, signed, df, minN);
   }, [reg, recoSeason, recoWeek, binSize, signed, df, minN]);
+
+  // ============ Backtest: recommended vs actual vs historic composition ============
+  // Rolling window: every REG week up to and including the selected Season/Week
+  // (crossing season boundaries), each graded against its own final results.
+  const backtest = useMemo(() => {
+    if (!recoSeason || !recoWeek || !reg.length) return null;
+    const rs = Number(recoSeason);
+    const rw = Number(recoWeek);
+
+    const weekKeys = [...new Set(reg.map((g) => `${g.season}|${g.week}`))]
+      .map((k) => {
+        const [s, w] = k.split("|").map(Number);
+        return { season: s, week: w };
+      })
+      .filter((wk) => wk.season < rs || (wk.season === rs && wk.week <= rw))
+      .sort((a, b) => (a.season - b.season) || (a.week - b.week));
+
+    const recoCounts: Record<string, number> = {};
+    const actualCounts: Record<string, number> = {};
+    let weeksIncluded = 0;
+
+    for (const wk of weekKeys) {
+      const weekGames = reg.filter((g) => g.season === wk.season && g.week === wk.week);
+      // only fully graded weeks count toward the backtest (skip in-progress/future weeks)
+      if (!weekGames.length || weekGames.some((g) => !g.played)) continue;
+      const picks = computeWeekPicks(reg, wk.season, wk.week, binSize, signed, df, minN);
+      if (!picks || !picks.chips) continue;
+      weeksIncluded++;
+      for (const c of picks.chips) recoCounts[c.label] = (recoCounts[c.label] ?? 0) + c.count;
+      for (const g of weekGames) {
+        if (g.winType == null) continue; // ties/pick'ems excluded, same as df
+        actualCounts[g.winType] = (actualCounts[g.winType] ?? 0) + 1;
+      }
+    }
+
+    if (!weeksIncluded) return null;
+
+    const recoTotal = WIN_TYPE_CATS.reduce((s, wt) => s + (recoCounts[wt] ?? 0), 0);
+    const actualTotal = WIN_TYPE_CATS.reduce((s, wt) => s + (actualCounts[wt] ?? 0), 0);
+    const historicTotal = df.length;
+
+    const series = {
+      recommended: WIN_TYPE_CATS.map((wt) => (recoTotal ? (100 * (recoCounts[wt] ?? 0)) / recoTotal : 0)),
+      actual: WIN_TYPE_CATS.map((wt) => (actualTotal ? (100 * (actualCounts[wt] ?? 0)) / actualTotal : 0)),
+      historic: WIN_TYPE_CATS.map((wt) => (historicTotal ? (100 * df.filter((g) => g.winType === wt).length) / historicTotal : 0)),
+    };
+
+    return { series, weeksIncluded, recoTotal, actualTotal };
+  }, [reg, recoSeason, recoWeek, binSize, signed, df, minN]);
+
+  const backtestOption = useMemo(() => {
+    if (!backtest) return null;
+    return {
+      grid: { left: 10, right: 10, top: 30, bottom: 10, containLabel: true },
+      legend: { top: 0 },
+      tooltip: { trigger: "axis" as const, valueFormatter: (v: unknown) => `${Number(v).toFixed(1)}%` },
+      xAxis: { type: "category" as const, data: WIN_TYPE_CATS.map((wt) => CATEGORY_CODES[wt]), name: "Win type", nameLocation: "middle" as const, nameGap: 26 },
+      yAxis: { type: "value" as const, min: 0, max: 100, name: "% of week's games" },
+      series: [
+        { name: "Recommended", type: "bar" as const, data: backtest.series.recommended.map((v) => +v.toFixed(1)), itemStyle: { color: "#2459A7" } },
+        { name: "Actual", type: "bar" as const, data: backtest.series.actual.map((v) => +v.toFixed(1)), itemStyle: { color: "#3C9A5F" } },
+        { name: "Historic baseline", type: "bar" as const, data: backtest.series.historic.map((v) => +v.toFixed(1)), itemStyle: { color: "rgba(100,100,100,0.55)" } },
+      ],
+    };
+  }, [backtest]);
 
   const calRef = useECharts(calOption);
   const stackedRef = useECharts(stackedOption as EChartsOption | null);
   const heatRef = useECharts(heatOption as EChartsOption | null);
   const liftRef = useECharts(liftOption);
+  const backtestRef = useECharts(backtestOption);
 
   if (!schedule.length) return <Loading label="Loading schedule…" />;
 
@@ -725,6 +804,27 @@ export default function SpreadWinPct() {
             </tbody>
           </table>
         </div>
+      </Box>
+
+      {/* Backtest: recommended vs actual vs historic composition */}
+      <Box title={`Recommended vs Actual vs Historic — composition backtest (through Week ${recoWeek}, ${recoSeason})`}>
+        <p className="mb-3 text-xs text-slate-500">
+          Replays the same Weekly Picks logic for every graded week up to and including the week selected above (each
+          week's own history is excluded from its own rates, same as Weekly Picks), then compares the average
+          <span className="font-semibold"> recommended</span> mix to what
+          <span className="font-semibold"> actually</span> happened, against the
+          <span className="font-semibold"> historic baseline</span> from the current top-of-page filters.
+        </p>
+        {backtestOption ? (
+          <>
+            <div ref={backtestRef} className="h-[380px]" />
+            <div className="mt-2 text-xs text-slate-400">
+              {backtest!.weeksIncluded} graded week{backtest!.weeksIncluded === 1 ? "" : "s"} included · {backtest!.recoTotal} recommended picks · {backtest!.actualTotal} actual outcomes
+            </div>
+          </>
+        ) : (
+          <div className="grid h-[380px] place-items-center text-sm text-slate-400">No graded weeks in range yet</div>
+        )}
       </Box>
       </div>
     </div>
