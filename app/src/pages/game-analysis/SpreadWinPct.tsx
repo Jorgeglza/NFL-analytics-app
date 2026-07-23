@@ -140,6 +140,7 @@ export default function SpreadWinPct() {
   const [recoSeason, setRecoSeason] = useState("");
   const [recoWeek, setRecoWeek] = useState("");
   const [mixView, setMixView] = useState<"stacked" | "heatmap">("stacked");
+  const [trendView, setTrendView] = useState<"overall" | "category">("overall");
 
   useEffect(() => {
     getSchedule().then((rows) => {
@@ -561,18 +562,32 @@ export default function SpreadWinPct() {
     const rs = Number(recoSeason);
     const prevSeason = rs - 1;
 
-    const weeklyAccuracy = (season: number) => {
+    type CatStat = { pct: number | null; correct: number; total: number };
+    type WeekAcc = { week: number; overall: CatStat | null; categories: Record<WinType, CatStat> };
+
+    const weeklyAccuracy = (season: number): WeekAcc[] => {
       const weeks = [...new Set(reg.filter((g) => g.season === season).map((g) => g.week))].sort((a, b) => a - b);
       return weeks.map((w) => {
         const picks = computeWeekPicks(reg, season, w, binSize, signed, df, minN);
-        return { week: w, pct: picks?.record?.pct ?? null };
+        const rows = picks?.rows ?? [];
+        const graded = rows.filter((r) => r.result !== "pending");
+        const correct = graded.filter((r) => r.result === "correct").length;
+        const overall: CatStat | null = graded.length ? { pct: Math.round((100 * correct) / graded.length), correct, total: graded.length } : null;
+
+        const categories = {} as Record<WinType, CatStat>;
+        for (const wt of WIN_TYPE_CATS) {
+          const catRows = graded.filter((r) => r.reco === wt);
+          const catCorrect = catRows.filter((r) => r.result === "correct").length;
+          categories[wt] = catRows.length ? { pct: Math.round((100 * catCorrect) / catRows.length), correct: catCorrect, total: catRows.length } : { pct: null, correct: 0, total: 0 };
+        }
+        return { week: w, overall, categories };
       });
     };
 
     const thisSeason = weeklyAccuracy(rs);
     const hasPrev = reg.some((g) => g.season === prevSeason);
     const lastSeason = hasPrev ? weeklyAccuracy(prevSeason) : null;
-    if (!thisSeason.some((w) => w.pct != null) && !lastSeason?.some((w) => w.pct != null)) return null;
+    if (!thisSeason.some((w) => w.overall != null) && !lastSeason?.some((w) => w.overall != null)) return null;
 
     return { thisSeason, lastSeason, rs, prevSeason };
   }, [reg, recoSeason, binSize, signed, df, minN]);
@@ -584,45 +599,97 @@ export default function SpreadWinPct() {
       seasonTrend.lastSeason?.length ? seasonTrend.lastSeason[seasonTrend.lastSeason.length - 1].week : 0,
     );
     const weeks = Array.from({ length: maxWeek }, (_, i) => i + 1);
-    const byWeek = (arr: { week: number; pct: number | null }[]) => weeks.map((w) => arr.find((x) => x.week === w)?.pct ?? null);
 
-    const series = [
-      {
-        name: `${seasonTrend.rs} (this season)`,
-        type: "line" as const,
-        data: byWeek(seasonTrend.thisSeason),
-        connectNulls: false,
-        symbolSize: 6,
-        itemStyle: { color: "#2459A7" },
-        lineStyle: { width: 2 },
-      },
-      ...(seasonTrend.lastSeason
-        ? [
-            {
-              name: `${seasonTrend.prevSeason} (last season)`,
-              type: "line" as const,
-              data: byWeek(seasonTrend.lastSeason),
-              connectNulls: false,
-              symbolSize: 6,
-              itemStyle: { color: "rgba(100,100,100,0.7)" },
-              lineStyle: { width: 2, type: "dashed" as const },
-            },
-          ]
-        : []),
-    ];
+    const baseGrid = { left: 8, right: 8, top: 30, bottom: 8, containLabel: true };
+    const baseX = { type: "category" as const, data: weeks.map(String), name: "Week", nameLocation: "middle" as const, nameGap: 24, axisLabel: { fontSize: 10 } };
+    const baseY = { type: "value" as const, min: 0, max: 100, name: "Pick accuracy %", nameTextStyle: { fontSize: 10 }, axisLabel: { fontSize: 10 } };
+
+    if (trendView === "overall") {
+      const thisArr = weeks.map((w) => seasonTrend.thisSeason.find((x) => x.week === w));
+      const lastArr = seasonTrend.lastSeason ? weeks.map((w) => seasonTrend.lastSeason!.find((x) => x.week === w)) : null;
+
+      const series = [
+        {
+          name: `${seasonTrend.rs} (this season)`,
+          type: "line" as const,
+          data: thisArr.map((w) => w?.overall?.pct ?? null),
+          connectNulls: false,
+          symbolSize: 6,
+          itemStyle: { color: "#2459A7" },
+          lineStyle: { width: 2 },
+        },
+        ...(lastArr
+          ? [
+              {
+                name: `${seasonTrend.prevSeason} (last season)`,
+                type: "line" as const,
+                data: lastArr.map((w) => w?.overall?.pct ?? null),
+                connectNulls: false,
+                symbolSize: 6,
+                itemStyle: { color: "rgba(100,100,100,0.7)" },
+                lineStyle: { width: 2, type: "dashed" as const },
+              },
+            ]
+          : []),
+      ];
+
+      return {
+        grid: baseGrid,
+        legend: { top: 0, textStyle: { fontSize: 11 } },
+        tooltip: {
+          trigger: "axis" as const,
+          formatter: (params: unknown) => {
+            const arr = params as { axisValue: string; seriesIndex: number; seriesName: string; value: unknown; color: string }[];
+            if (!arr.length) return "";
+            const i = weeks.indexOf(Number(arr[0].axisValue));
+            const lines = arr.map((p) => {
+              const stat = p.seriesIndex === 0 ? thisArr[i]?.overall : lastArr?.[i]?.overall;
+              const val = stat ? `${stat.pct}% (${stat.correct}/${stat.total} correct)` : "no graded games";
+              return `<span style="color:${p.color}">●</span> ${p.seriesName}: <b>${val}</b>`;
+            });
+            return `Week ${arr[0].axisValue}<br/>${lines.join("<br/>")}`;
+          },
+        },
+        xAxis: baseX,
+        yAxis: baseY,
+        series,
+      };
+    }
+
+    // category view — this season only, one line per recommended win type
+    const thisArr = weeks.map((w) => seasonTrend.thisSeason.find((x) => x.week === w));
+    const series = WIN_TYPE_CATS.map((wt) => ({
+      name: wt,
+      type: "line" as const,
+      data: thisArr.map((w) => w?.categories[wt]?.pct ?? null),
+      connectNulls: false,
+      symbolSize: 5,
+      itemStyle: { color: WIN_TYPE_COLORS[wt] },
+      lineStyle: { width: 2 },
+    }));
 
     return {
-      grid: { left: 8, right: 8, top: 30, bottom: 8, containLabel: true },
-      legend: { top: 0, textStyle: { fontSize: 11 } },
+      grid: baseGrid,
+      legend: { top: 0, textStyle: { fontSize: 10 } },
       tooltip: {
         trigger: "axis" as const,
-        valueFormatter: (v: unknown) => (v == null ? "no graded games" : `${Number(v).toFixed(0)}%`),
+        formatter: (params: unknown) => {
+          const arr = params as { axisValue: string; seriesName: string; color: string }[];
+          if (!arr.length) return "";
+          const i = weeks.indexOf(Number(arr[0].axisValue));
+          const lines = arr.map((p) => {
+            const stat = thisArr[i]?.categories[p.seriesName as WinType];
+            const val = stat && stat.total > 0 ? `${stat.pct}% (${stat.correct}/${stat.total})` : "no picks";
+            return `<span style="color:${p.color}">●</span> ${p.seriesName}: <b>${val}</b>`;
+          });
+          return `Week ${arr[0].axisValue} — ${seasonTrend.rs}<br/>${lines.join("<br/>")}`;
+        },
       },
-      xAxis: { type: "category" as const, data: weeks.map(String), name: "Week", nameLocation: "middle" as const, nameGap: 24, axisLabel: { fontSize: 10 } },
-      yAxis: { type: "value" as const, min: 0, max: 100, name: "Pick accuracy %", nameTextStyle: { fontSize: 10 }, axisLabel: { fontSize: 10 } },
+      xAxis: baseX,
+      yAxis: baseY,
       series,
     };
-  }, [seasonTrend]);
+  }, [seasonTrend, trendView]);
 
   const calRef = useECharts(calOption);
   const stackedRef = useECharts(stackedOption as EChartsOption | null);
@@ -891,14 +958,27 @@ export default function SpreadWinPct() {
       </div>
 
       {/* Recommendation accuracy trend — track record for trusting the pick 1:1 */}
-      <Box title="Recommendation accuracy by week">
+      <Box>
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <div className="text-sm font-semibold text-slate-700">Recommendation accuracy by week</div>
+          <div className="flex rounded-full border border-slate-200 bg-slate-100 p-0.5">
+            {([["overall", "Overall"], ["category", "By category"]] as const).map(([v, l]) => (
+              <button key={v} onClick={() => setTrendView(v)} className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${trendView === v ? "bg-[#002f6c] text-white shadow-sm" : "text-slate-600 hover:text-slate-900"}`}>
+                {l}
+              </button>
+            ))}
+          </div>
+        </div>
         <p className="mb-2 text-xs text-slate-500">
-          How often the Weekly Picks recommendation was right, week by week{seasonTrend?.lastSeason ? `, vs the same weeks last season` : ""} — a track record for how much to trust taking the pick as-is.
+          {trendView === "overall"
+            ? `How often the Weekly Picks recommendation was right, week by week${seasonTrend?.lastSeason ? ", vs the same weeks last season" : ""}.`
+            : `Accuracy for this season broken out by the recommended win type — which categories the recommendation actually gets right.`}{" "}
+          Hover a week for the exact correct/total record.
         </p>
         {seasonTrendOption ? (
-          <div ref={seasonTrendRef} className="h-[240px]" />
+          <div ref={seasonTrendRef} className="h-[260px]" />
         ) : (
-          <div className="grid h-[240px] place-items-center text-sm text-slate-400">No graded weeks yet this season</div>
+          <div className="grid h-[260px] place-items-center text-sm text-slate-400">No graded weeks yet this season</div>
         )}
       </Box>
     </div>
