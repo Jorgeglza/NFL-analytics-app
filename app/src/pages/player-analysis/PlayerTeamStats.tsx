@@ -5,7 +5,7 @@
 // 32 cards), conference/division jump navigation, lazily-mounted team cards
 // (32 always-rendered canvases was the app's 2nd-heaviest page), and the
 // shared curated/grouped stat picker (audit's cross-page stat-selector fix).
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { EChartsOption } from "echarts";
 import { getPlayerWeek, getMeta, type Row } from "../../lib/data/loader";
 import { getTeamMetaMap, readableTextColor, type TeamMeta } from "../../lib/team/meta";
@@ -199,6 +199,16 @@ export default function PlayerTeamStats() {
     return f.length ? f : numericCols;
   }, [numericCols, side]);
   const selStat = sideCols.includes(stat) ? stat : sideCols.includes("passing_yards") ? "passing_yards" : sideCols[0] ?? "";
+
+  // First switch to defense (user request): rather than always landing on the
+  // same fallback stat, land on a random defense stat so the page doesn't
+  // feel stuck on one column every time.
+  const defenseDefaultApplied = useRef(false);
+  useEffect(() => {
+    if (side !== "defense" || defenseDefaultApplied.current || !sideCols.length) return;
+    defenseDefaultApplied.current = true;
+    if (!sideCols.includes(stat)) setStat(sideCols[Math.floor(Math.random() * sideCols.length)]);
+  }, [side, sideCols, stat]);
 
   const grid = useMemo(() => {
     if (!selStat || !meta) return null;

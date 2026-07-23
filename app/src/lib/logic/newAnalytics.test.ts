@@ -156,15 +156,15 @@ describe("computeStrengthOfSchedule throughWeek", () => {
     game("s2", 2099, 2, "AA", "CC", 10, 20),
   ];
 
-  it("moves a game from remaining to played once throughWeek reaches its week", () => {
+  it("moves a game from remaining to played once throughWeek passes its week (selected week itself counts as remaining, matching the heatmap)", () => {
     const atWeek1 = computeStrengthOfSchedule(schedule, 2099, 1);
     const aa1 = atWeek1.find((r) => r.team === "AA")!;
-    expect(aa1.playedN).toBe(1);
-    expect(aa1.remainingN).toBe(1);
+    expect(aa1.playedN).toBe(0);
+    expect(aa1.remainingN).toBe(2);
 
     const atWeek2 = computeStrengthOfSchedule(schedule, 2099, 2);
     const aa2 = atWeek2.find((r) => r.team === "AA")!;
-    expect(aa2.playedN).toBe(2);
-    expect(aa2.remainingN).toBe(0);
+    expect(aa2.playedN).toBe(1);
+    expect(aa2.remainingN).toBe(1);
   });
 });

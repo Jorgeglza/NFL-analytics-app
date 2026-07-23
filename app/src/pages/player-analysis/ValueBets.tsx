@@ -203,6 +203,33 @@ export default function ValueBets() {
       .sort((a, b) => (b.picks[0]?.score ?? -Infinity) - (a.picks[0]?.score ?? -Infinity));
   }, [tw, regSched, w]);
 
+  // Default stat filter (user request): once the week's mismatch overview is
+  // in, default to whichever stat shows up most often among the top-3
+  // mismatches per game — the stat most likely to be worth targeting this
+  // week — instead of a hardcoded stat. Skipped if a stat was deep-linked.
+  const statDefaultApplied = useRef(false);
+  useEffect(() => {
+    if (statDefaultApplied.current) return;
+    if (searchParams.get("stat")) {
+      statDefaultApplied.current = true;
+      return;
+    }
+    if (!weekOverview.length) return;
+    statDefaultApplied.current = true;
+    const counts = new Map<string, number>();
+    for (const g of weekOverview) for (const p of g.picks) counts.set(p.stat, (counts.get(p.stat) ?? 0) + 1);
+    let best: string | null = null;
+    let bestCount = -1;
+    for (const [s, c] of counts) {
+      if (c > bestCount) {
+        best = s;
+        bestCount = c;
+      }
+    }
+    if (best) setStat(best);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weekOverview, searchParams]);
+
   const kpis = useMemo(() => {
     if (!mismatches?.length) return null;
     return {

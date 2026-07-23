@@ -1,8 +1,10 @@
 // Strength of schedule — new analytics (not a port). Average opponent Elo
-// rating, split into games at/before `throughWeek` (the backtest "as of"
-// week — defaults to the current week) vs. games after it. Played games use
-// the opponent's actual pre-game rating (leak-free by construction, from
-// buildEloIndex's per-game entries). Games after throughWeek use the
+// rating, split into games strictly before `throughWeek` (the backtest "as
+// of" week — defaults to the current week) vs. games at/after it — the
+// selected week itself is treated as part of the road ahead, matching
+// computeOpponentHeatmap's `week >= fromWeek` below. Played games use the
+// opponent's actual pre-game rating (leak-free by construction, from
+// buildEloIndex's per-game entries). Games at/after throughWeek use the
 // opponent's rating AS OF throughWeek instead — otherwise a later "remaining"
 // game's opponent strength would already reflect real results the backtest
 // is supposed to not know about yet (same reasoning as playoffSim.ts).
@@ -34,7 +36,7 @@ export function computeStrengthOfSchedule(schedule: Row[], season: number, throu
     const week = Number(g.week);
     const home = String(g.home_team);
     const away = String(g.away_team);
-    if (week <= throughWeek) {
+    if (week < throughWeek) {
       const entry = eloIdx.get(String(g.game_id));
       if (!entry) continue;
       bump(home, entry.eloAway, true);

@@ -48,7 +48,7 @@ export default function SosTab({ schedule, season, week, meta }: { schedule: Row
   return (
     <div className="space-y-6">
       <p className="text-xs text-slate-500">
-        Average pre-game Elo rating of a team's opponents (higher = harder), split into games at/before week {week} vs. games after it — pick a past
+        Average pre-game Elo rating of a team's opponents (higher = harder), split into games before week {week} vs. games at/after it — pick a past
         week above to backtest what the remaining-schedule outlook looked like at that point in the season.
       </p>
 

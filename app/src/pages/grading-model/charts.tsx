@@ -58,7 +58,28 @@ export function offDefScatterOption(points: TeamPoint[], meta: Map<string, TeamM
   const xMed = medianOf(offs);
   const yMed = medianOf(defs);
 
-  return {
+  const seriesData = pts.map((p) => {
+    const logo = meta.get(p.team)?.logo;
+    return {
+      value: [p.off, p.def],
+      symbol: logo ? `image://${logo}` : "circle",
+      itemStyle: logo ? undefined : { color: meta.get(p.team)?.color ?? "#636EFA" },
+      label: {
+        show: true,
+        position: "bottom" as const,
+        distance: 2,
+        fontWeight: p.won ? ("bold" as const) : ("normal" as const),
+        color: p.won ? "rgba(0,110,0,0.95)" : "rgba(0,0,0,0.66)",
+        formatter: p.team,
+      },
+    };
+  });
+
+  // Media queries (user request): on narrow phone-width containers the 32
+  // full-size logos + labels overlap into an unreadable smear, so shrink the
+  // symbols, labels, and margins instead of rendering the desktop layout at
+  // a smaller scale.
+  const baseOption = {
     grid: { left: 10, right: 20, top: 20, bottom: 10, containLabel: true },
     xAxis: { type: "value", min: xMin, max: xMax, name: "Offense", nameLocation: "middle", nameGap: 28 },
     yAxis: { type: "value", min: yMin, max: yMax, name: "Defense" },
@@ -80,23 +101,7 @@ export function offDefScatterOption(points: TeamPoint[], meta: Map<string, TeamM
       {
         type: "scatter",
         symbolSize: 34,
-        data: pts.map((p) => {
-          const logo = meta.get(p.team)?.logo;
-          return {
-            value: [p.off, p.def],
-            symbol: logo ? `image://${logo}` : "circle",
-            itemStyle: logo ? undefined : { color: meta.get(p.team)?.color ?? "#636EFA" },
-            label: {
-              show: true,
-              position: "bottom",
-              distance: 2,
-              fontSize: 10,
-              fontWeight: p.won ? ("bold" as const) : ("normal" as const),
-              color: p.won ? "rgba(0,110,0,0.95)" : "rgba(0,0,0,0.66)",
-              formatter: p.team,
-            },
-          };
-        }),
+        data: seriesData.map((d) => ({ ...d, label: { ...d.label, fontSize: 10 } })),
         markLine: {
           silent: true,
           symbol: "none",
@@ -106,5 +111,25 @@ export function offDefScatterOption(points: TeamPoint[], meta: Map<string, TeamM
         },
       },
     ],
-  } as EChartsOption;
+  };
+
+  return {
+    baseOption,
+    media: [
+      {
+        query: { maxWidth: 520 },
+        option: {
+          grid: { left: 4, right: 12, top: 14, bottom: 4, containLabel: true },
+          xAxis: { nameGap: 20, nameTextStyle: { fontSize: 10 } },
+          yAxis: { nameTextStyle: { fontSize: 10 } },
+          series: [
+            {
+              symbolSize: 20,
+              data: seriesData.map((d) => ({ ...d, label: { ...d.label, distance: 1, fontSize: 8 } })),
+            },
+          ],
+        },
+      },
+    ],
+  } as unknown as EChartsOption;
 }
