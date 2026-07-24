@@ -11,14 +11,16 @@ import { usePageTitle } from "../../../lib/hooks/usePageTitle";
 import WeekPreviewTab from "./WeekPreviewTab";
 import MatchupTab from "./MatchupTab";
 import ModelOverviewTab from "./ModelOverviewTab";
+import ModelPickerTab from "./ModelPickerTab";
 
 const TABS = [
   ["Week Preview", "🗓️", "This week's slate — all models per game"],
   ["Matchup", "⚔️", "One game, all the evidence"],
   ["Model Overview", "🎯", "Historical accuracy of every model"],
+  ["Model Picker", "🧭", "Which model is best, and in which scenario"],
 ] as const;
 type Tab = (typeof TABS)[number][0];
-const TAB_SLUGS: Record<string, Tab> = { matchup: "Matchup", week: "Week Preview", overview: "Model Overview" };
+const TAB_SLUGS: Record<string, Tab> = { matchup: "Matchup", week: "Week Preview", overview: "Model Overview", picker: "Model Picker" };
 
 export default function MatchupPreviews() {
   const [searchParams] = useSearchParams();
@@ -76,7 +78,7 @@ export default function MatchupPreviews() {
       </div>
 
       {/* Prominent section tabs — cards, not a lost pill bar */}
-      <div className="grid gap-2 sm:grid-cols-3">
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
         {TABS.map(([t, icon, desc]) => (
           <button
             key={t}
@@ -101,6 +103,7 @@ export default function MatchupPreviews() {
           {tab === "Week Preview" && <WeekPreviewTab schedule={schedule} meta={meta} hist={hist} gradesIdx={gradesIdx} twIdx={twIdx} eloIdx={eloIdx} onOpenMatchup={openMatchup} />}
           {tab === "Matchup" && <MatchupTab schedule={schedule} ranks={ranksBySeason} meta={meta} hist={hist} gradesIdx={gradesIdx} twIdx={twIdx} eloIdx={eloIdx} initialSelection={matchupSelection} />}
           {tab === "Model Overview" && <ModelOverviewTab schedule={schedule} meta={meta} hist={hist} gradesIdx={gradesIdx} twIdx={twIdx} eloIdx={eloIdx} />}
+          {tab === "Model Picker" && <ModelPickerTab schedule={schedule} hist={hist} gradesIdx={gradesIdx} twIdx={twIdx} eloIdx={eloIdx} />}
         </>
       )}
     </div>
