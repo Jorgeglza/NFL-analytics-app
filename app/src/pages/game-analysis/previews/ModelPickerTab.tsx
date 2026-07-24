@@ -34,27 +34,47 @@ interface Rec {
   picks: Record<MetricKey, Pick>;
 }
 
-/** red (bad) -> amber (coin flip) -> green (good) by accuracy 0–100. */
-function colorForAcc(pct: number): string {
+/**
+ * red (bad) -> amber (coin flip) -> green (good), stretched over [domainLo, domainHi]
+ * instead of a fixed 0–100 span. Real accuracy rarely leaves ~40–80%, so a fixed
+ * span crams every normal cell into one washed-out yellow-green band; stretching
+ * to the data's own range (with 50% still anchored as the amber midpoint when it
+ * falls inside that range) makes the actual spread readable. Values outside the
+ * domain clamp to the nearest end color.
+ */
+function colorForAcc(pct: number, domainLo = 0, domainHi = 100): string {
+  const lo = Math.min(domainLo, domainHi);
+  const hi = Math.max(domainLo, domainHi);
+  const mid = lo < 50 && hi > 50 ? 50 : (lo + hi) / 2;
   const stops: [number, [number, number, number]][] = [
-    [0, [200, 16, 46]],
-    [50, [250, 204, 21]],
-    [100, [44, 162, 95]],
+    [lo, [200, 16, 46]],
+    [mid, [250, 204, 21]],
+    [hi, [44, 162, 95]],
   ];
-  const t = Math.max(0, Math.min(100, pct));
-  let lo = stops[0];
-  let hi = stops[stops.length - 1];
+  const t = Math.max(lo, Math.min(hi, pct));
+  let a = stops[0];
+  let b = stops[stops.length - 1];
   for (let i = 0; i < stops.length - 1; i++) {
     if (t >= stops[i][0] && t <= stops[i + 1][0]) {
-      lo = stops[i];
-      hi = stops[i + 1];
+      a = stops[i];
+      b = stops[i + 1];
       break;
     }
   }
-  const span = hi[0] - lo[0] || 1;
-  const lt = (t - lo[0]) / span;
-  const rgb = lo[1].map((v, i) => Math.round(v + (hi[1][i] - v) * lt));
+  const span = b[0] - a[0] || 1;
+  const lt = (t - a[0]) / span;
+  const rgb = a[1].map((v, i) => Math.round(v + (b[1][i] - v) * lt));
   return `rgb(${rgb.join(",")})`;
+}
+
+/** Linear-interpolated percentile of a pre-sorted numeric array. */
+function percentile(sorted: number[], p: number): number {
+  if (!sorted.length) return 0;
+  const idx = (sorted.length - 1) * p;
+  const lo = Math.floor(idx);
+  const hi = Math.ceil(idx);
+  if (lo === hi) return sorted[lo];
+  return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
 }
 
 const SCENARIOS = [
@@ -195,7 +215,7 @@ export default function ModelPickerTab({
     };
   }, [weekly]);
 
-  const heatOption = useMemo<EChartsOption | null>(() => {
+  const heat = useMemo(() => {
     if (!weekly.length) return null;
     const weeks = weekly.map((w) => w.week);
     const data: { value: [number, number, number]; n: number; correct: number }[] = [];
@@ -204,7 +224,20 @@ export default function ModelPickerTab({
         data.push({ value: [xi, yi, m.pct ?? -1], n: m.n, correct: m.correct });
       });
     });
-    return {
+    // Stretch the color scale to this view's actual spread (10th–90th percentile,
+    // padded to at least 20pts) instead of the full 0–100 range — otherwise a
+    // realistic 45–80% accuracy band all reads as one washed-out color, and a
+    // single small-N outlier week (0% or 100%) dominates the eye.
+    const validPct = data.map((d) => d.value[2]).filter((p) => p >= 0);
+    const sorted = [...validPct].sort((a, b) => a - b);
+    let domainLo = percentile(sorted, 0.1);
+    let domainHi = percentile(sorted, 0.9);
+    if (domainHi - domainLo < 20) {
+      const mid = (domainHi + domainLo) / 2;
+      domainLo = Math.max(0, mid - 10);
+      domainHi = Math.min(100, mid + 10);
+    }
+    const option = {
       grid: { left: 110, right: 12, top: 10, bottom: 30, containLabel: false },
       tooltip: {
         formatter: (p: unknown) => {
@@ -226,9 +259,9 @@ export default function ModelPickerTab({
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             color: (params: any) => {
               const pct = params.value[2];
-              return pct < 0 ? "#f1f5f9" : colorForAcc(pct);
+              return pct < 0 ? "#f1f5f9" : colorForAcc(pct, domainLo, domainHi);
             },
-          } as EChartsOption["series"],
+          },
           label: {
             show: true,
             fontSize: 9,
@@ -238,11 +271,58 @@ export default function ModelPickerTab({
           },
         },
       ],
-    } as EChartsOption;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any as EChartsOption;
+    return { option, domainLo, domainHi };
   }, [weekly]);
 
+  // ---------- accuracy trend aggregated by season (all-time, not one season) ----------
+  const [axisMode, setAxisMode] = useState<"week" | "season">("week");
+  const seasonAcc = useMemo(() => {
+    const ss = [...seasons].sort((a, b) => a - b);
+    return ss.map((s) => {
+      const rows = records.filter((r) => r.season === s);
+      const perModel = MODEL_KEYS.map(([key]) => accOf(rows.map((r) => r.picks[key])));
+      return { season: s, perModel };
+    });
+  }, [records, seasons]);
+
+  const seasonLineOption = useMemo<EChartsOption | null>(() => {
+    if (!seasonAcc.length) return null;
+    const xs = seasonAcc.map((s) => s.season);
+    return {
+      grid: { left: 8, right: 8, top: 30, bottom: 8, containLabel: true },
+      legend: { top: 0, textStyle: { fontSize: 11 } },
+      tooltip: {
+        trigger: "axis",
+        formatter: (params: unknown) => {
+          const arr = params as { axisValue: string; seriesIndex: number; color: string; seriesName: string }[];
+          if (!arr.length) return "";
+          const si = xs.indexOf(Number(arr[0].axisValue));
+          const lines = arr.map((p) => {
+            const m = seasonAcc[si].perModel[p.seriesIndex];
+            return `<span style="color:${p.color}">●</span> ${p.seriesName}: <b>${m.pct == null ? "no games" : `${m.pct.toFixed(0)}%`}</b>${m.n ? ` (${m.correct}/${m.n})` : ""}`;
+          });
+          return `Season ${arr[0].axisValue}<br/>${lines.join("<br/>")}`;
+        },
+      },
+      xAxis: { type: "category", data: xs.map(String), name: "Season", nameLocation: "middle", nameGap: 24, axisLabel: { fontSize: 10 } },
+      yAxis: { type: "value", min: 0, max: 100, name: "Accuracy %", nameTextStyle: { fontSize: 10 }, axisLabel: { fontSize: 10 } },
+      series: MODEL_KEYS.map(([key, label], i) => ({
+        name: label,
+        type: "line" as const,
+        data: seasonAcc.map((s) => (s.perModel[i].pct == null ? null : +s.perModel[i].pct!.toFixed(1))),
+        connectNulls: false,
+        symbolSize: 6,
+        lineStyle: { width: 2 },
+        itemStyle: { color: MODEL_COLORS[key] },
+      })),
+    };
+  }, [seasonAcc]);
+
   const lineRef = useECharts(lineOption);
-  const heatRef = useECharts(heatOption);
+  const seasonLineRef = useECharts(seasonLineOption);
+  const heatRef = useECharts(heat?.option ?? null);
 
   return (
     <div className="space-y-4">
@@ -306,24 +386,51 @@ export default function ModelPickerTab({
         </div>
       </div>
 
-      <div className="flex items-center justify-between gap-3">
-        <div className="text-sm font-semibold text-slate-700">Accuracy by week</div>
-        <Segmented label="Season" value={String(sel)} onChange={(v) => setSeason(Number(v))} options={seasons.map((s) => ({ value: String(s), label: String(s) }))} />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="text-sm font-semibold text-slate-700">Accuracy trend</div>
+        <div className="flex flex-wrap items-end gap-3">
+          <Segmented
+            label="Axis"
+            value={axisMode}
+            onChange={setAxisMode}
+            options={[
+              { value: "week", label: "Per week (one season)" },
+              { value: "season", label: "Per season (all-time)" },
+            ]}
+          />
+          {axisMode === "week" && (
+            <Segmented label="Season" value={String(sel)} onChange={(v) => setSeason(Number(v))} options={seasons.map((s) => ({ value: String(s), label: String(s) }))} />
+          )}
+        </div>
       </div>
 
       <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-        <div className="mb-1.5 text-xs font-semibold text-slate-600">Line — accuracy % per model, week by week ({sel})</div>
-        {lineOption ? <div ref={lineRef} className="h-[300px]" /> : <div className="grid h-[300px] place-items-center text-sm text-slate-400">No games this season</div>}
-      </div>
-
-      <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-        <div className="mb-1.5 text-xs font-semibold text-slate-600">Heatmap — accuracy % per model, week by week ({sel})</div>
-        {heatOption ? (
-          <div ref={heatRef} style={{ height: Math.max(220, MODEL_KEYS.length * 34 + 60) }} />
+        {axisMode === "week" ? (
+          <>
+            <div className="mb-1.5 text-xs font-semibold text-slate-600">Line — accuracy % per model, week by week ({sel})</div>
+            {lineOption ? <div ref={lineRef} className="h-[300px]" /> : <div className="grid h-[300px] place-items-center text-sm text-slate-400">No games this season</div>}
+          </>
         ) : (
-          <div className="grid h-[260px] place-items-center text-sm text-slate-400">No games this season</div>
+          <>
+            <div className="mb-1.5 text-xs font-semibold text-slate-600">Line — accuracy % per model, season by season (all-time)</div>
+            {seasonLineOption ? <div ref={seasonLineRef} className="h-[300px]" /> : <div className="grid h-[300px] place-items-center text-sm text-slate-400">No graded seasons</div>}
+          </>
         )}
       </div>
+
+      {axisMode === "week" && (
+        <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+          <div className="mb-1.5 text-xs font-semibold text-slate-600">Heatmap — accuracy % per model, week by week ({sel})</div>
+          {heat ? (
+            <>
+              <div ref={heatRef} style={{ height: Math.max(220, MODEL_KEYS.length * 34 + 60) }} />
+              <div className="mt-1.5 text-[10px] text-slate-400">Color scale stretched to this view's spread ({Math.round(heat.domainLo)}%–{Math.round(heat.domainHi)}%) — values outside it clamp to the end colors.</div>
+            </>
+          ) : (
+            <div className="grid h-[260px] place-items-center text-sm text-slate-400">No games this season</div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
