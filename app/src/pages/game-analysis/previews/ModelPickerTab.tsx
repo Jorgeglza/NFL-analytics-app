@@ -277,19 +277,24 @@ export default function ModelPickerTab({
   }, [weekly]);
 
   // ---------- accuracy trend aggregated by season (all-time, not one season) ----------
-  const [axisMode, setAxisMode] = useState<"week" | "season">("week");
-  const seasonAcc = useMemo(() => {
-    const ss = [...seasons].sort((a, b) => a - b);
-    return ss.map((s) => {
-      const rows = records.filter((r) => r.season === s);
-      const perModel = MODEL_KEYS.map(([key]) => accOf(rows.map((r) => r.picks[key])));
-      return { season: s, perModel };
-    });
-  }, [records, seasons]);
+  const [axisMode, setAxisMode] = useState<"week" | "weekAllSeasons">("week");
 
-  const seasonLineOption = useMemo<EChartsOption | null>(() => {
-    if (!seasonAcc.length) return null;
-    const xs = seasonAcc.map((s) => s.season);
+  // Every Week 1 across every season pooled together, every Week 2 pooled
+  // together, etc. — answers "does this model reliably start slow / peak
+  // mid-season / fade late" instead of just this one season's noise.
+  const weekAllSeasons = useMemo(() => {
+    const weeks = [...new Set(records.map((r) => r.week))].sort((a, b) => a - b);
+    return weeks.map((w) => {
+      const rows = records.filter((r) => r.week === w);
+      const perModel = MODEL_KEYS.map(([key]) => accOf(rows.map((r) => r.picks[key])));
+      const seasonsInWeek = new Set(rows.map((r) => r.season)).size;
+      return { week: w, perModel, seasonsInWeek };
+    });
+  }, [records]);
+
+  const weekAllSeasonsOption = useMemo<EChartsOption | null>(() => {
+    if (!weekAllSeasons.length) return null;
+    const weeks = weekAllSeasons.map((w) => w.week);
     return {
       grid: { left: 8, right: 8, top: 30, bottom: 8, containLabel: true },
       legend: { top: 0, textStyle: { fontSize: 11 } },
@@ -298,30 +303,31 @@ export default function ModelPickerTab({
         formatter: (params: unknown) => {
           const arr = params as { axisValue: string; seriesIndex: number; color: string; seriesName: string }[];
           if (!arr.length) return "";
-          const si = xs.indexOf(Number(arr[0].axisValue));
+          const wi = weeks.indexOf(Number(arr[0].axisValue));
+          const wk = weekAllSeasons[wi];
           const lines = arr.map((p) => {
-            const m = seasonAcc[si].perModel[p.seriesIndex];
+            const m = wk.perModel[p.seriesIndex];
             return `<span style="color:${p.color}">●</span> ${p.seriesName}: <b>${m.pct == null ? "no games" : `${m.pct.toFixed(0)}%`}</b>${m.n ? ` (${m.correct}/${m.n})` : ""}`;
           });
-          return `Season ${arr[0].axisValue}<br/>${lines.join("<br/>")}`;
+          return `Week ${arr[0].axisValue} — pooled across ${wk.seasonsInWeek} seasons<br/>${lines.join("<br/>")}`;
         },
       },
-      xAxis: { type: "category", data: xs.map(String), name: "Season", nameLocation: "middle", nameGap: 24, axisLabel: { fontSize: 10 } },
+      xAxis: { type: "category", data: weeks.map(String), name: "Week", nameLocation: "middle", nameGap: 24, axisLabel: { fontSize: 10 } },
       yAxis: { type: "value", min: 0, max: 100, name: "Accuracy %", nameTextStyle: { fontSize: 10 }, axisLabel: { fontSize: 10 } },
       series: MODEL_KEYS.map(([key, label], i) => ({
         name: label,
         type: "line" as const,
-        data: seasonAcc.map((s) => (s.perModel[i].pct == null ? null : +s.perModel[i].pct!.toFixed(1))),
+        data: weekAllSeasons.map((w) => (w.perModel[i].pct == null ? null : +w.perModel[i].pct!.toFixed(1))),
         connectNulls: false,
         symbolSize: 6,
         lineStyle: { width: 2 },
         itemStyle: { color: MODEL_COLORS[key] },
       })),
     };
-  }, [seasonAcc]);
+  }, [weekAllSeasons]);
 
   const lineRef = useECharts(lineOption);
-  const seasonLineRef = useECharts(seasonLineOption);
+  const weekAllSeasonsRef = useECharts(weekAllSeasonsOption);
   const heatRef = useECharts(heat?.option ?? null);
 
   return (
@@ -394,8 +400,8 @@ export default function ModelPickerTab({
             value={axisMode}
             onChange={setAxisMode}
             options={[
-              { value: "week", label: "Per week (one season)" },
-              { value: "season", label: "Per season (all-time)" },
+              { value: "week", label: "This season, by week" },
+              { value: "weekAllSeasons", label: "All seasons, by week #" },
             ]}
           />
           {axisMode === "week" && (
@@ -412,8 +418,8 @@ export default function ModelPickerTab({
           </>
         ) : (
           <>
-            <div className="mb-1.5 text-xs font-semibold text-slate-600">Line — accuracy % per model, season by season (all-time)</div>
-            {seasonLineOption ? <div ref={seasonLineRef} className="h-[300px]" /> : <div className="grid h-[300px] place-items-center text-sm text-slate-400">No graded seasons</div>}
+            <div className="mb-1.5 text-xs font-semibold text-slate-600">Line — accuracy % per model, by week # (every Week 1 pooled together, every Week 2 pooled together, …)</div>
+            {weekAllSeasonsOption ? <div ref={weekAllSeasonsRef} className="h-[300px]" /> : <div className="grid h-[300px] place-items-center text-sm text-slate-400">No graded games</div>}
           </>
         )}
       </div>
