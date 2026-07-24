@@ -85,6 +85,7 @@ export default function MatchupTab({
   gradesIdx,
   twIdx,
   eloIdx,
+  initialSelection,
 }: {
   schedule: Row[];
   ranks: Map<number, Row[]>; // season -> rank rows
@@ -93,18 +94,20 @@ export default function MatchupTab({
   gradesIdx: GradesIndex;
   twIdx: TeamWeekIndex;
   eloIdx: EloIndex;
+  /** Preselect a game (e.g. jumped here from a Week Preview card) — takes priority over URL params. */
+  initialSelection?: { season: string; week: string; game: string } | null;
 }) {
   const [searchParams] = useSearchParams();
   const reg = useMemo(() => schedule.filter((r) => r.game_type === "REG"), [schedule]);
   const seasons = useMemo(() => [...new Set(reg.map((r) => Number(r.season)))].sort((a, b) => b - a), [reg]);
-  const [season, setSeason] = useState(searchParams.get("season") ?? "");
+  const [season, setSeason] = useState(initialSelection?.season ?? searchParams.get("season") ?? "");
   const sel = season || String(seasons[0] ?? "");
   const s = Number(sel);
   const weeks = useMemo(
     () => [...new Set(reg.filter((r) => Number(r.season) === s).map((r) => Number(r.week)))].sort((a, b) => a - b),
     [reg, s],
   );
-  const [week, setWeek] = useState(searchParams.get("week") ?? "");
+  const [week, setWeek] = useState(initialSelection?.week ?? searchParams.get("week") ?? "");
   const defWeek = useMemo(() => defaultWeekNearToday(reg, s) ?? weeks[weeks.length - 1], [reg, s, weeks]);
   const selWeek = weeks.map(String).includes(week) ? week : String(defWeek ?? "");
   const w = Number(selWeek);
@@ -117,7 +120,7 @@ export default function MatchupTab({
         .sort((a, b) => kickoffMs(a) - kickoffMs(b) || String(a.game_id).localeCompare(String(b.game_id))),
     [reg, s, w],
   );
-  const [gameId, setGameId] = useState(searchParams.get("game") ?? "");
+  const [gameId, setGameId] = useState(initialSelection?.game ?? searchParams.get("game") ?? "");
   const selGame = games.find((g) => String(g.game_id) === gameId) ?? games[0];
   const away = selGame ? String(selGame.away_team) : "";
   const home = selGame ? String(selGame.home_team) : "";

@@ -28,6 +28,12 @@ export default function MatchupPreviews() {
   const [meta, setMeta] = useState<Map<string, TeamMeta> | null>(null);
   const [teamWeekBySeason, setTeamWeekBySeason] = useState<Map<number, Row[]> | null>(null);
   const [ranksBySeason, setRanksBySeason] = useState<Map<number, Row[]>>(new Map());
+  const [matchupSelection, setMatchupSelection] = useState<{ season: string; week: string; game: string } | null>(null);
+
+  const openMatchup = (season: string, week: string, game: string) => {
+    setMatchupSelection({ season, week, game });
+    setTab("Matchup");
+  };
 
   // MatchupTab sets its own (game-specific) title while active — skip here to
   // avoid a parent/child effect-ordering race clobbering it.
@@ -92,8 +98,8 @@ export default function MatchupPreviews() {
         <Loading label="Loading all seasons…" />
       ) : (
         <>
-          {tab === "Week Preview" && <WeekPreviewTab schedule={schedule} meta={meta} hist={hist} gradesIdx={gradesIdx} twIdx={twIdx} eloIdx={eloIdx} />}
-          {tab === "Matchup" && <MatchupTab schedule={schedule} ranks={ranksBySeason} meta={meta} hist={hist} gradesIdx={gradesIdx} twIdx={twIdx} eloIdx={eloIdx} />}
+          {tab === "Week Preview" && <WeekPreviewTab schedule={schedule} meta={meta} hist={hist} gradesIdx={gradesIdx} twIdx={twIdx} eloIdx={eloIdx} onOpenMatchup={openMatchup} />}
+          {tab === "Matchup" && <MatchupTab schedule={schedule} ranks={ranksBySeason} meta={meta} hist={hist} gradesIdx={gradesIdx} twIdx={twIdx} eloIdx={eloIdx} initialSelection={matchupSelection} />}
           {tab === "Model Overview" && <ModelOverviewTab schedule={schedule} meta={meta} hist={hist} gradesIdx={gradesIdx} twIdx={twIdx} eloIdx={eloIdx} />}
         </>
       )}

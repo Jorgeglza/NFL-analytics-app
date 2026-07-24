@@ -70,6 +70,7 @@ export default function WeekPreviewTab({
   gradesIdx,
   twIdx,
   eloIdx,
+  onOpenMatchup,
 }: {
   schedule: Row[];
   meta: Map<string, TeamMeta>;
@@ -77,6 +78,8 @@ export default function WeekPreviewTab({
   gradesIdx: GradesIndex;
   twIdx: TeamWeekIndex;
   eloIdx: EloIndex;
+  /** Jump to the Matchup tab for a specific game (season, week, game_id). */
+  onOpenMatchup?: (season: string, week: string, game: string) => void;
 }) {
   const reg = useMemo(() => schedule.filter((r) => r.game_type === "REG"), [schedule]);
   const seasons = useMemo(() => [...new Set(reg.map((r) => Number(r.season)))].sort((a, b) => b - a), [reg]);
@@ -223,7 +226,18 @@ export default function WeekPreviewTab({
             ? new Date(`${g.gameday}T12:00`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "2-digit" })
             : "";
           return (
-            <div key={String(g.game_id)} className="relative rounded-2xl bg-white p-3.5 shadow-sm transition-shadow hover:shadow-md" style={{ border: `2px solid ${borderCol ?? "#ddd"}` }}>
+            <div
+              key={String(g.game_id)}
+              onClick={() => onOpenMatchup?.(sel, selWeek, String(g.game_id))}
+              className={`group relative rounded-2xl bg-white p-3.5 shadow-sm transition-shadow hover:shadow-md ${onOpenMatchup ? "cursor-pointer" : ""}`}
+              style={{ border: `2px solid ${borderCol ?? "#ddd"}` }}
+              title={onOpenMatchup ? "View full matchup breakdown" : undefined}
+            >
+              {onOpenMatchup && (
+                <span className="pointer-events-none absolute bottom-1.5 right-2 text-[10px] text-slate-300 opacity-0 transition-opacity group-hover:opacity-100">
+                  view matchup →
+                </span>
+              )}
               {code && (
                 <div className="absolute right-7 top-1.5 rounded border px-1.5 py-0.5 text-xs font-extrabold" style={{ borderColor: WIN_TYPE_CODE_COLORS[code], color: WIN_TYPE_CODE_COLORS[code], background: `${WIN_TYPE_CODE_COLORS[code]}0d` }} title={WIN_TYPE_CODE_LONG[code]}>
                   {code}

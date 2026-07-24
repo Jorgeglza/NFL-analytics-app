@@ -148,9 +148,25 @@ export default function ModelOverviewTab({
 
   function Matrix({ title, rows, rowLabel }: { title: string; rows: [number, Rec[]][]; rowLabel: string }) {
     const maxCols = Math.max(0, ...rows.map(([, rs]) => rs.length));
+    const allRecs = rows.flatMap(([, rs]) => rs);
+    const evaldAll = allRecs.filter((r) => r.picks[primary].correct != null);
+    const corrAll = evaldAll.filter((r) => r.picks[primary].correct).length;
+    const pctAll = evaldAll.length ? Math.round((100 * corrAll) / evaldAll.length) : null;
+    const badgeColor = pctAll == null ? "#94a3b8" : pctAll >= 60 ? "#2CA25F" : pctAll < 50 ? "#C8102E" : "#B58B00";
     return (
       <div className="rounded-2xl border border-slate-200 bg-white p-3">
-        <div className="mb-1.5 text-base font-extrabold">{title}</div>
+        <div className="mb-1.5 flex items-center gap-2.5">
+          <div className="text-base font-extrabold">{title}</div>
+          <span
+            className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-bold"
+            style={{ color: badgeColor, background: `${badgeColor}18`, border: `1px solid ${badgeColor}44` }}
+            title={`${MODEL_KEYS.find(([k]) => k === primary)?.[1]}: ${corrAll} of ${evaldAll.length} correct across this ${rowLabel.toLowerCase()} grouping`}
+          >
+            <span className="h-1.5 w-1.5 rounded-full" style={{ background: badgeColor }} />
+            {pctAll == null ? "no results yet" : `${pctAll}% correct`}
+            {pctAll != null && <span className="font-medium opacity-70">({corrAll}/{evaldAll.length})</span>}
+          </span>
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-xs">
             <thead className="bg-slate-50">
