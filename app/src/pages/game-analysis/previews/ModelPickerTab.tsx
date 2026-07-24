@@ -77,6 +77,78 @@ function percentile(sorted: number[], p: number): number {
   return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
 }
 
+interface HeatEntry {
+  perModel: { pct: number | null; n: number; correct: number }[];
+}
+
+/**
+ * Builds a model × x-axis accuracy heatmap. Colors stretch to the 20th–80th
+ * percentile of this view's own values (min 12pts wide) rather than a fixed
+ * 0–100 span, and rather than the earlier 10th–90th/20pt version — the
+ * tighter window pulls more contrast out of the typical 45–80% accuracy
+ * cluster, at the cost of clamping extreme outlier cells harder to the ends.
+ */
+function buildHeatmap(
+  entries: HeatEntry[],
+  xAxisLabels: string[],
+  tooltipUnit: string,
+  tooltipValues: (string | number)[],
+): { option: EChartsOption; domainLo: number; domainHi: number } | null {
+  if (!entries.length) return null;
+  const data: { value: [number, number, number]; n: number; correct: number }[] = [];
+  entries.forEach((e, xi) => {
+    e.perModel.forEach((m, yi) => {
+      data.push({ value: [xi, yi, m.pct ?? -1], n: m.n, correct: m.correct });
+    });
+  });
+  const validPct = data.map((d) => d.value[2]).filter((p) => p >= 0);
+  const sorted = [...validPct].sort((a, b) => a - b);
+  let domainLo = percentile(sorted, 0.2);
+  let domainHi = percentile(sorted, 0.8);
+  if (domainHi - domainLo < 12) {
+    const mid = (domainHi + domainLo) / 2;
+    domainLo = Math.max(0, mid - 6);
+    domainHi = Math.min(100, mid + 6);
+  }
+  const option = {
+    grid: { left: 110, right: 12, top: 10, bottom: 30, containLabel: false },
+    tooltip: {
+      formatter: (p: unknown) => {
+        const d = p as { data: { value: [number, number, number]; n: number; correct: number } };
+        const [xi, yi] = d.data.value;
+        const label = MODEL_KEYS[yi][1];
+        const pct = d.data.value[2];
+        return `${label} — ${tooltipUnit} ${tooltipValues[xi]}<br/>${pct < 0 ? "No games" : `${pct.toFixed(0)}% (${d.data.correct}/${d.data.n})`}`;
+      },
+    },
+    xAxis: { type: "category", data: xAxisLabels, position: "bottom", axisLabel: { fontSize: 10 }, splitArea: { show: false } },
+    yAxis: { type: "category", data: MODEL_KEYS.map(([, l]) => l), axisLabel: { fontSize: 11 } },
+    visualMap: { show: false, min: 0, max: 100 },
+    series: [
+      {
+        type: "heatmap",
+        data: data.map((d) => d.value),
+        itemStyle: {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          color: (params: any) => {
+            const pct = params.value[2];
+            return pct < 0 ? "#f1f5f9" : colorForAcc(pct, domainLo, domainHi);
+          },
+        },
+        label: {
+          show: true,
+          fontSize: 9,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          formatter: (p: any) => (p.value[2] < 0 ? "" : `${Math.round(p.value[2])}`),
+          color: "#1e293b",
+        },
+      },
+    ],
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } as any as EChartsOption;
+  return { option, domainLo, domainHi };
+}
+
 const SCENARIOS = [
   { key: "all", label: "Overall", test: () => true },
   { key: "fav", label: "Picked favorite", test: (r: Rec, p: Pick) => p.side != null && r.favSide != null && p.side === r.favSide },
@@ -215,69 +287,13 @@ export default function ModelPickerTab({
     };
   }, [weekly]);
 
-  const heat = useMemo(() => {
-    if (!weekly.length) return null;
-    const weeks = weekly.map((w) => w.week);
-    const data: { value: [number, number, number]; n: number; correct: number }[] = [];
-    weekly.forEach((w, xi) => {
-      w.perModel.forEach((m, yi) => {
-        data.push({ value: [xi, yi, m.pct ?? -1], n: m.n, correct: m.correct });
-      });
-    });
-    // Stretch the color scale to this view's actual spread (10th–90th percentile,
-    // padded to at least 20pts) instead of the full 0–100 range — otherwise a
-    // realistic 45–80% accuracy band all reads as one washed-out color, and a
-    // single small-N outlier week (0% or 100%) dominates the eye.
-    const validPct = data.map((d) => d.value[2]).filter((p) => p >= 0);
-    const sorted = [...validPct].sort((a, b) => a - b);
-    let domainLo = percentile(sorted, 0.1);
-    let domainHi = percentile(sorted, 0.9);
-    if (domainHi - domainLo < 20) {
-      const mid = (domainHi + domainLo) / 2;
-      domainLo = Math.max(0, mid - 10);
-      domainHi = Math.min(100, mid + 10);
-    }
-    const option = {
-      grid: { left: 110, right: 12, top: 10, bottom: 30, containLabel: false },
-      tooltip: {
-        formatter: (p: unknown) => {
-          const d = p as { data: { value: [number, number, number]; n: number; correct: number } };
-          const [xi, yi] = d.data.value;
-          const label = MODEL_KEYS[yi][1];
-          const pct = d.data.value[2];
-          return `${label} — Week ${weeks[xi]}<br/>${pct < 0 ? "No games" : `${pct.toFixed(0)}% (${d.data.correct}/${d.data.n})`}`;
-        },
-      },
-      xAxis: { type: "category", data: weeks.map((w) => `Wk${w}`), position: "bottom", axisLabel: { fontSize: 10 }, splitArea: { show: false } },
-      yAxis: { type: "category", data: MODEL_KEYS.map(([, l]) => l), axisLabel: { fontSize: 11 } },
-      visualMap: { show: false, min: 0, max: 100 },
-      series: [
-        {
-          type: "heatmap",
-          data: data.map((d) => d.value),
-          itemStyle: {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            color: (params: any) => {
-              const pct = params.value[2];
-              return pct < 0 ? "#f1f5f9" : colorForAcc(pct, domainLo, domainHi);
-            },
-          },
-          label: {
-            show: true,
-            fontSize: 9,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            formatter: (p: any) => (p.value[2] < 0 ? "" : `${Math.round(p.value[2])}`),
-            color: "#1e293b",
-          },
-        },
-      ],
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any as EChartsOption;
-    return { option, domainLo, domainHi };
-  }, [weekly]);
+  const heat = useMemo(
+    () => buildHeatmap(weekly, weekly.map((w) => `Wk${w.week}`), "Week", weekly.map((w) => w.week)),
+    [weekly],
+  );
 
   // ---------- accuracy trend aggregated by season (all-time, not one season) ----------
-  const [axisMode, setAxisMode] = useState<"week" | "weekAllSeasons">("week");
+  const [axisMode, setAxisMode] = useState<"week" | "weekAllSeasons" | "season">("week");
 
   // Every Week 1 across every season pooled together, every Week 2 pooled
   // together, etc. — answers "does this model reliably start slow / peak
@@ -326,9 +342,60 @@ export default function ModelPickerTab({
     };
   }, [weekAllSeasons]);
 
+  // Full-season story: one point per season, each model's accuracy across
+  // that entire season — is a model getting better or worse over the years.
+  const seasonAcc = useMemo(() => {
+    const ss = [...seasons].sort((a, b) => a - b);
+    return ss.map((s) => {
+      const rows = records.filter((r) => r.season === s);
+      const perModel = MODEL_KEYS.map(([key]) => accOf(rows.map((r) => r.picks[key])));
+      return { season: s, perModel };
+    });
+  }, [records, seasons]);
+
+  const seasonLineOption = useMemo<EChartsOption | null>(() => {
+    if (!seasonAcc.length) return null;
+    const xs = seasonAcc.map((s) => s.season);
+    return {
+      grid: { left: 8, right: 8, top: 30, bottom: 8, containLabel: true },
+      legend: { top: 0, textStyle: { fontSize: 11 } },
+      tooltip: {
+        trigger: "axis",
+        formatter: (params: unknown) => {
+          const arr = params as { axisValue: string; seriesIndex: number; color: string; seriesName: string }[];
+          if (!arr.length) return "";
+          const si = xs.indexOf(Number(arr[0].axisValue));
+          const lines = arr.map((p) => {
+            const m = seasonAcc[si].perModel[p.seriesIndex];
+            return `<span style="color:${p.color}">●</span> ${p.seriesName}: <b>${m.pct == null ? "no games" : `${m.pct.toFixed(0)}%`}</b>${m.n ? ` (${m.correct}/${m.n})` : ""}`;
+          });
+          return `Season ${arr[0].axisValue}<br/>${lines.join("<br/>")}`;
+        },
+      },
+      xAxis: { type: "category", data: xs.map(String), name: "Season", nameLocation: "middle", nameGap: 24, axisLabel: { fontSize: 10 } },
+      yAxis: { type: "value", min: 0, max: 100, name: "Accuracy %", nameTextStyle: { fontSize: 10 }, axisLabel: { fontSize: 10 } },
+      series: MODEL_KEYS.map(([key, label], i) => ({
+        name: label,
+        type: "line" as const,
+        data: seasonAcc.map((s) => (s.perModel[i].pct == null ? null : +s.perModel[i].pct!.toFixed(1))),
+        connectNulls: false,
+        symbolSize: 6,
+        lineStyle: { width: 2 },
+        itemStyle: { color: MODEL_COLORS[key] },
+      })),
+    };
+  }, [seasonAcc]);
+
+  const seasonHeat = useMemo(
+    () => buildHeatmap(seasonAcc, seasonAcc.map((s) => String(s.season)), "Season", seasonAcc.map((s) => s.season)),
+    [seasonAcc],
+  );
+
   const lineRef = useECharts(lineOption);
   const weekAllSeasonsRef = useECharts(weekAllSeasonsOption);
+  const seasonLineRef = useECharts(seasonLineOption);
   const heatRef = useECharts(heat?.option ?? null);
+  const seasonHeatRef = useECharts(seasonHeat?.option ?? null);
 
   return (
     <div className="space-y-4">
@@ -402,6 +469,7 @@ export default function ModelPickerTab({
             options={[
               { value: "week", label: "This season, by week" },
               { value: "weekAllSeasons", label: "All seasons, by week #" },
+              { value: "season", label: "Full seasons, by year" },
             ]}
           />
           {axisMode === "week" && (
@@ -411,15 +479,22 @@ export default function ModelPickerTab({
       </div>
 
       <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-        {axisMode === "week" ? (
+        {axisMode === "week" && (
           <>
             <div className="mb-1.5 text-xs font-semibold text-slate-600">Line — accuracy % per model, week by week ({sel})</div>
             {lineOption ? <div ref={lineRef} className="h-[300px]" /> : <div className="grid h-[300px] place-items-center text-sm text-slate-400">No games this season</div>}
           </>
-        ) : (
+        )}
+        {axisMode === "weekAllSeasons" && (
           <>
             <div className="mb-1.5 text-xs font-semibold text-slate-600">Line — accuracy % per model, by week # (every Week 1 pooled together, every Week 2 pooled together, …)</div>
             {weekAllSeasonsOption ? <div ref={weekAllSeasonsRef} className="h-[300px]" /> : <div className="grid h-[300px] place-items-center text-sm text-slate-400">No graded games</div>}
+          </>
+        )}
+        {axisMode === "season" && (
+          <>
+            <div className="mb-1.5 text-xs font-semibold text-slate-600">Line — accuracy % per model, full season by full season</div>
+            {seasonLineOption ? <div ref={seasonLineRef} className="h-[300px]" /> : <div className="grid h-[300px] place-items-center text-sm text-slate-400">No graded seasons</div>}
           </>
         )}
       </div>
@@ -434,6 +509,20 @@ export default function ModelPickerTab({
             </>
           ) : (
             <div className="grid h-[260px] place-items-center text-sm text-slate-400">No games this season</div>
+          )}
+        </div>
+      )}
+
+      {axisMode === "season" && (
+        <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+          <div className="mb-1.5 text-xs font-semibold text-slate-600">Heatmap — accuracy % per model, full season by full season</div>
+          {seasonHeat ? (
+            <>
+              <div ref={seasonHeatRef} style={{ height: Math.max(220, MODEL_KEYS.length * 34 + 60) }} />
+              <div className="mt-1.5 text-[10px] text-slate-400">Color scale stretched to this view's spread ({Math.round(seasonHeat.domainLo)}%–{Math.round(seasonHeat.domainHi)}%) — values outside it clamp to the end colors.</div>
+            </>
+          ) : (
+            <div className="grid h-[260px] place-items-center text-sm text-slate-400">No graded seasons</div>
           )}
         </div>
       )}
