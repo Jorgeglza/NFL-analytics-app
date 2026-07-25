@@ -356,16 +356,19 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
     const tooltipFormatter = (p: unknown) => {
       const pt = (p as { data: Pt }).data;
       // Line 1: matchup (predicted winner bold, actual winner green).
-      // Line 2: final score, same away-home order as line 1's away@home.
-      // Line 3: category code, bold + green only when the pick was correct.
-      const scoreLine = pt.score !== null ? `<br/>${pt.score}` : "";
-      const codeStyle = pt.correct ? "font-weight:700;color:#059669;" : "";
-      const codeLine = `<br/><span style="${codeStyle}">${categoryCode(pt.category)}</span>`;
+      // Line 2: category code (colored by category, bold + green when correct) + score.
+      // Line 3: predicted home win probability.
+      // Line 4: predicted vs. actual margin, abbreviated onto one line.
+      const codeStyle = pt.correct ? "font-weight:700;color:#059669;" : `color:${colorOf(pt.category)};font-weight:600;`;
+      const codeAndScore = pt.score !== null
+        ? `<span style="${codeStyle}">${categoryCode(pt.category)}</span>, ${pt.score}`
+        : `<span style="${codeStyle}">${categoryCode(pt.category)}</span>`;
+      const predSign = pt.predictedMargin >= 0 ? "+" : "";
       return (
-        `${pt.name}${scoreLine}${codeLine}` +
+        `${pt.name}` +
+        `<br/>${codeAndScore}` +
         `<br/>predicted home win prob ${pt.value[0].toFixed(0)}%` +
-        `<br/>predicted margin ${pt.predictedMargin >= 0 ? "+" : ""}${pt.predictedMargin.toFixed(1)} pts` +
-        `<br/>actual margin ${pt.value[1].toFixed(1)} pts`
+        `<br/>Pred ${predSign}${pt.predictedMargin.toFixed(1)} pts | Act ${pt.value[1].toFixed(1)} pts`
       );
     };
     // The category KPI row above doubles as the legend/filter (per request),
