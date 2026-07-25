@@ -55,6 +55,23 @@ export function isCorrect(g: Row): boolean {
   return (Number(g.predicted_margin) > 0 ? 1 : 0) === Number(g.home_win);
 }
 
+/** "AWAY@HOME" tooltip label — bolds the model's predicted winner and
+ * colors the actual winner green, so a hover shows both at a glance
+ * without reading the raw numbers. Ties get no green (no actual winner);
+ * the predicted side is always bold, win or lose. Returns HTML — only for
+ * use inside ECharts tooltip formatters (DOM-rendered by default, so
+ * inline styles apply directly), never rendered as plain text. */
+export function matchupLabel(g: Row): string {
+  const home = String(g.home_team);
+  const away = String(g.away_team);
+  const predictedHome = Number(g.predicted_margin) > 0;
+  const actualHome = Number(g.actual_margin) > 0;
+  const actualAway = Number(g.actual_margin) < 0;
+  const teamSpan = (code: string, bold: boolean, green: boolean) =>
+    `<span style="font-weight:${bold ? 700 : 400};${green ? "color:#059669;" : ""}">${code}</span>`;
+  return `${teamSpan(away, !predictedHome, actualAway)}@${teamSpan(home, predictedHome, actualHome)}`;
+}
+
 /** Straight-up accuracy per week number (pooled across whatever games are passed in). */
 export function accuracyByWeek(games: Row[]): { week: number; n: number; acc: number | null }[] {
   const weeks = Array.from(new Set(games.map((g) => Number(g.week)))).sort((a, b) => a - b);
@@ -221,15 +238,20 @@ export function categoryOf(g: Row): WinType | typeof UNCATEGORIZED_CATEGORY {
 export interface CategoryStat {
   category: WinType | typeof UNCATEGORIZED_CATEGORY;
   n: number;
+  correct: number;
+  wrong: number;
   acc: number | null;
 }
 
 /** Per-category (closing-spread favorite/underdog x home/away) game count
- * and the model's straight-up pick accuracy within that category. */
+ * and the model's straight-up pick accuracy within that category. Exposes
+ * `correct`/`wrong` counts directly (not just `acc`) so a stacked bar can
+ * use exact integers instead of re-deriving them from a rounded percentage. */
 export function categoryStats(games: Row[]): CategoryStat[] {
   return CATEGORY_ORDER.map((category) => {
     const rows = games.filter((g) => categoryOf(g) === category);
-    return { category, n: rows.length, acc: accuracyOf(rows) };
+    const correct = rows.filter(isCorrect).length;
+    return { category, n: rows.length, correct, wrong: rows.length - correct, acc: accuracyOf(rows) };
   });
 }
 

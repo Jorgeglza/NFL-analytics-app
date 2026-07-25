@@ -27,6 +27,7 @@ import {
   filterGames,
   isCellCorrect,
   isCorrect,
+  matchupLabel,
   missComparison,
   pct,
   reliabilityBuckets,
@@ -42,6 +43,18 @@ const CALIBRATION_TOLERANCE_PCT = 0.1; // >10pt gap between predicted and observ
 type Category = WinType | typeof UNCATEGORIZED_CATEGORY;
 const colorOf = (c: Category) => (c === UNCATEGORIZED_CATEGORY ? UNCATEGORIZED_COLOR : WIN_TYPE_COLORS[c as WinType]);
 const shortLabel = (c: Category) => (c === UNCATEGORIZED_CATEGORY ? "Tie / no spread" : c);
+
+/** Blends a hex color toward white — used for the "wrong pick" segment of
+ * the category bar so it reads as an obviously lighter tint of the same
+ * category color, not an unrelated color. */
+function lighten(hex: string, amount = 0.6): string {
+  const n = parseInt(hex.replace("#", ""), 16);
+  const r = (n >> 16) & 255;
+  const g = (n >> 8) & 255;
+  const b = n & 255;
+  const mix = (c: number) => Math.round(c + (255 - c) * amount);
+  return `rgb(${mix(r)}, ${mix(g)}, ${mix(b)})`;
+}
 
 type Mode = "Points" | "%";
 
@@ -161,7 +174,7 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
     if (!filtered.length) return null;
     const points = filtered.map((g) => ({
       value: [Number(g.predicted_margin), Number(g.actual_margin)] as [number, number],
-      name: `${g.season} wk${g.week} ${g.away_team}@${g.home_team}`,
+      name: `${g.season} wk${g.week} ${matchupLabel(g)}`,
       correct: isCorrect(g),
       winProb: g.home_win_prob === null ? null : Number(g.home_win_prob),
     }));
@@ -313,7 +326,7 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
       if (!byType.has(key)) byType.set(key, []);
       byType.get(key)!.push({
         value: [Number(g.home_win_prob) * 100, Number(g.actual_margin)],
-        name: `${g.season} wk${g.week} ${g.away_team}@${g.home_team}`,
+        name: `${g.season} wk${g.week} ${matchupLabel(g)}`,
         correct,
         // Correct picks get a bold dark outline and sit slightly larger so
         // they visibly stand out over wrong picks — otherwise the fill
@@ -371,32 +384,67 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
 
   // Same categories, broken down by week — does the model do better/worse
   // on (say) home favorites as the season progresses, not just in aggregate.
+  // Horizontal + grouped + stacked: y = week, x = N games. Each category
+  // gets its own small stacked bar (correct = solid category color, wrong =
+  // a lighter tint) grouped side by side within that week's row — same
+  // "stack shows the split, color contrast shows the accuracy" idea as the
+  // category KPI chips above, just broken out per week instead of pooled.
   const catByWeek = useMemo(() => categoryStatsByWeek(filtered), [filtered]);
   const catByWeekOption = useMemo<EChartsOption | null>(() => {
     if (!catByWeek.length) return null;
     const activeOrdered = CATEGORY_ORDER.filter((c) => activeCategories.has(c));
+    if (!activeOrdered.length) return null;
+    const weekLabels = catByWeek.map((r) => `Wk${r.week}`);
+    type CellDatum = { value: number; category: Category; correct: number; wrong: number; n: number };
+    const series: EChartsOption["series"] = [];
+    activeOrdered.forEach((category) => {
+      const cellOf = (weekIdx: number) => catByWeek[weekIdx].stats.find((s) => s.category === category);
+      series.push({
+        name: `${category} — correct`,
+        type: "bar",
+        stack: `stack-${category}`,
+        itemStyle: { color: colorOf(category) },
+        data: weekLabels.map((_, i) => {
+          const s = cellOf(i);
+          return { value: s?.correct ?? 0, category, correct: s?.correct ?? 0, wrong: s?.wrong ?? 0, n: s?.n ?? 0 } as CellDatum;
+        }),
+        label: {
+          show: true,
+          position: "inside",
+          rotate: 90,
+          color: "#fff",
+          fontSize: 9,
+          fontWeight: "bold" as const,
+          formatter: (p: unknown) => {
+            const d = (p as { data: CellDatum }).data;
+            // Skip the label entirely at 0% (no correct picks) — a rotated
+            // "0%" on a razor-thin or empty segment is just clutter.
+            return d.n && d.correct > 0 ? pct(d.correct / d.n, 0) : "";
+          },
+        },
+      });
+      series.push({
+        name: `${category} — wrong`,
+        type: "bar",
+        stack: `stack-${category}`,
+        itemStyle: { color: lighten(colorOf(category)) },
+        data: weekLabels.map((_, i) => {
+          const s = cellOf(i);
+          return { value: s?.wrong ?? 0, category, correct: s?.correct ?? 0, wrong: s?.wrong ?? 0, n: s?.n ?? 0 } as CellDatum;
+        }),
+      });
+    });
     return {
-      grid: { left: 10, right: 20, top: 10, bottom: 10, containLabel: true },
+      grid: { left: 50, right: 20, top: 10, bottom: 60, containLabel: false },
       tooltip: {
-        trigger: "axis",
         formatter: (p: unknown) => {
-          const arr = p as { seriesName: string; dataIndex: number }[];
-          const week = catByWeek[arr[0].dataIndex].week;
-          const lines = arr.map((s) => {
-            const stat = catByWeek[s.dataIndex].stats.find((st) => st.category === s.seriesName);
-            return `${s.seriesName}: ${pct(stat?.acc ?? null)} (n=${stat?.n ?? 0})`;
-          });
-          return [`Week ${week}`, ...lines].join("<br/>");
+          const pt = p as { name: string; data: CellDatum };
+          return `${pt.name} — ${pt.data.category}<br/>Correct: ${pt.data.correct}<br/>Wrong: ${pt.data.wrong}<br/>Accuracy: ${pct(pt.data.n ? pt.data.correct / pt.data.n : null)} (n=${pt.data.n})`;
         },
       },
-      xAxis: { type: "category", data: catByWeek.map((r) => `Wk${r.week}`), name: "Week" },
-      yAxis: { type: "value", name: "Accuracy", min: 0, max: 1, axisLabel: { formatter: (v: number) => `${(v * 100).toFixed(0)}%` } },
-      series: activeOrdered.map((category) => ({
-        name: category,
-        type: "bar" as const,
-        itemStyle: { color: colorOf(category) },
-        data: catByWeek.map((r) => r.stats.find((s) => s.category === category)?.acc ?? null),
-      })),
+      xAxis: { type: "category", data: weekLabels, name: "Week", nameLocation: "middle", nameGap: 32 },
+      yAxis: { type: "value", name: "Games (N)", nameLocation: "middle", nameGap: 32 },
+      series,
     } as EChartsOption;
   }, [catByWeek, activeCategories]);
   const catByWeekRef = useECharts(catByWeekOption);
@@ -601,9 +649,11 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
           </div>
           <div ref={granularRef} className="h-[480px]" />
           <div className="mt-4">
-            <h4 className="mb-1 text-sm font-semibold text-slate-700">Accuracy by category, per week</h4>
-            <p className="mb-2 text-xs text-slate-500">Same categories as above (toggle above to show/hide here too) — does the model favor one matchup type more as the season goes on?</p>
-            <div ref={catByWeekRef} className="h-[320px]" />
+            <h4 className="mb-1 text-sm font-semibold text-slate-700">Games and accuracy by category, per week</h4>
+            <p className="mb-2 text-xs text-slate-500">
+              Each week's column groups one stacked bar per active category (toggle above to show/hide) — bar height = N games, the solid segment is correct picks, the lighter segment is wrong.
+            </p>
+            <div ref={catByWeekRef} className="h-[420px]" />
           </div>
         </Card>
       )}

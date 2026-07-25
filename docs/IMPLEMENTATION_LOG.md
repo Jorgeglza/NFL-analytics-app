@@ -383,6 +383,24 @@ Per page: run old app side-by-side (`pda-ie` env), match tables/KPIs/chart serie
   wired to the spread correctly. Verified in a clean browser tab: 5 chart instances, chip
   click toggles `opacity-40` styling and removes/restores the corresponding chart series with
   zero console errors, `tsc --noEmit`/`npm run build`/58-test suite all green.
+- **Category section correction + redesign (2026-07-25)**: user feedback that a prior attempt
+  to turn the KPI chips into a stacked-bar chart was a misstep — the chips were "perfect,"
+  reverted to them exactly. The stacked-correct-vs-wrong bar idea (x=N, solid=correct, lighter
+  tint=wrong, label=correct% only on the correct segment) belonged on the **weekly** breakdown
+  chart instead, replacing its old grouped-bar-by-accuracy design. Rebuilt "Games and accuracy
+  by category, per week" as a grouped-and-stacked bar: for each active category, two series
+  (`"category — correct"`/`"category — wrong"`) sharing a per-category `stack` id, so ECharts
+  groups the categories side by side within each week while each category's own correct/wrong
+  split stacks together. `CategoryStat` (`shared.ts`) gained explicit `correct`/`wrong` integer
+  fields (previously only `acc`) so the stack heights are exact counts, not values re-derived
+  from a rounded percentage. Iterated twice more same-session: axes flipped so weeks read left
+  to right on the x-axis (N game count on y) per follow-up request, and the correct-segment's
+  percentage label rotated 90° for legibility in the now-narrow grouped columns, suppressed
+  entirely at exactly 0% (an upright "0%" on a sliver segment was pure clutter) per further
+  feedback. Verified after each change: `tsc --noEmit`/`npm run build`/58-test suite green;
+  clean browser tab confirmed chips render with their original accuracy/n numbers, toggling a
+  chip dims it (`opacity-40`) and updates both the granular scatter and the weekly chart, zero
+  console errors.
 - Research artifacts (`data/predictive_model/*.csv`, `metrics.json`, `report.txt` — the
   per-round result tables that back every number in `docs/predictive-model.md`) are now
   **git-tracked** (2026-07-25) — removed from `.gitignore` and committed (~63 KB). Only
