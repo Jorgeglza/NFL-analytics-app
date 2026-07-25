@@ -55,6 +55,15 @@ export function isCorrect(g: Row): boolean {
   return (Number(g.predicted_margin) > 0 ? 1 : 0) === Number(g.home_win);
 }
 
+/** Same "predicted winner vs actual" check as `isCorrect()`, but the pick
+ * cutoff is a caller-supplied win-probability threshold (0-100) instead of
+ * the fixed 50/50 line — `predicted_margin > 0` is exactly
+ * `home_win_prob > 50%`, so `thresholdPct = 50` reproduces `isCorrect()`
+ * exactly. Only meaningful for graded games (`home_win_prob !== null`). */
+export function isCorrectAtThreshold(g: Row, thresholdPct: number): boolean {
+  return (Number(g.home_win_prob) * 100 >= thresholdPct ? 1 : 0) === Number(g.home_win);
+}
+
 /** "AWAY@HOME" tooltip label — bolds the model's predicted winner and
  * colors the actual winner green, so a hover shows both at a glance
  * without reading the raw numbers. Ties get no green (no actual winner);
@@ -260,21 +269,24 @@ export interface CategoryStat {
 /** Per-category (closing-spread favorite/underdog x home/away) game count
  * and the model's straight-up pick accuracy within that category. Exposes
  * `correct`/`wrong` counts directly (not just `acc`) so a stacked bar can
- * use exact integers instead of re-deriving them from a rounded percentage. */
-export function categoryStats(games: Row[]): CategoryStat[] {
+ * use exact integers instead of re-deriving them from a rounded percentage.
+ * `correctFn` defaults to the standard 50% cutoff (`isCorrect`) but accepts
+ * `isCorrectAtThreshold` bound to a custom cutoff, for UI that lets the
+ * decision threshold move. */
+export function categoryStats(games: Row[], correctFn: (g: Row) => boolean = isCorrect): CategoryStat[] {
   return CATEGORY_ORDER.map((category) => {
     const rows = games.filter((g) => categoryOf(g) === category);
-    const correct = rows.filter(isCorrect).length;
-    return { category, n: rows.length, correct, wrong: rows.length - correct, acc: accuracyOf(rows) };
+    const correct = rows.filter(correctFn).length;
+    return { category, n: rows.length, correct, wrong: rows.length - correct, acc: rows.length ? correct / rows.length : null };
   });
 }
 
 /** Same per-category accuracy, broken out by week — "does the model do
  * better or worse on home favorites (or any other category) as the season
  * progresses." */
-export function categoryStatsByWeek(games: Row[]): { week: number; stats: CategoryStat[] }[] {
+export function categoryStatsByWeek(games: Row[], correctFn: (g: Row) => boolean = isCorrect): { week: number; stats: CategoryStat[] }[] {
   const weeks = Array.from(new Set(games.map((g) => Number(g.week)))).sort((a, b) => a - b);
-  return weeks.map((week) => ({ week, stats: categoryStats(games.filter((g) => Number(g.week) === week)) }));
+  return weeks.map((week) => ({ week, stats: categoryStats(games.filter((g) => Number(g.week) === week), correctFn) }));
 }
 
 export type FavoriteLocation = Extract<WinType, "Favorite home" | "Favorite away">;
@@ -298,18 +310,18 @@ export function favoriteLocationOf(g: Row): FavoriteLocation | typeof UNCATEGORI
 }
 
 /** Same shape as `categoryStats()`, grouped by pre-game favorite location instead. */
-export function favoriteLocationStats(games: Row[]): CategoryStat[] {
+export function favoriteLocationStats(games: Row[], correctFn: (g: Row) => boolean = isCorrect): CategoryStat[] {
   return FAVORITE_LOCATION_ORDER.map((category) => {
     const rows = games.filter((g) => favoriteLocationOf(g) === category);
-    const correct = rows.filter(isCorrect).length;
-    return { category, n: rows.length, correct, wrong: rows.length - correct, acc: accuracyOf(rows) };
+    const correct = rows.filter(correctFn).length;
+    return { category, n: rows.length, correct, wrong: rows.length - correct, acc: rows.length ? correct / rows.length : null };
   });
 }
 
 /** Same shape as `categoryStatsByWeek()`, grouped by pre-game favorite location instead. */
-export function favoriteLocationStatsByWeek(games: Row[]): { week: number; stats: CategoryStat[] }[] {
+export function favoriteLocationStatsByWeek(games: Row[], correctFn: (g: Row) => boolean = isCorrect): { week: number; stats: CategoryStat[] }[] {
   const weeks = Array.from(new Set(games.map((g) => Number(g.week)))).sort((a, b) => a - b);
-  return weeks.map((week) => ({ week, stats: favoriteLocationStats(games.filter((g) => Number(g.week) === week)) }));
+  return weeks.map((week) => ({ week, stats: favoriteLocationStats(games.filter((g) => Number(g.week) === week), correctFn) }));
 }
 
 /** Compact comparison of what differs between correct and incorrect picks. */

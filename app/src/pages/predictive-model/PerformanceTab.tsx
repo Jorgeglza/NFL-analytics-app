@@ -5,8 +5,8 @@
 // derived win-probability surface and whether it's actually well-calibrated
 // (does a 70% prediction happen ~70% of the time?), which is a different
 // question from "did it pick the right team."
-import { useMemo, useState } from "react";
-import type { EChartsOption } from "echarts";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { ECharts, EChartsOption } from "echarts";
 import type { Row } from "../../lib/data/loader";
 import { useECharts } from "../../components/charts/useECharts";
 import { Card, FilterGroup, Kpi, Segmented, tableWrapCls, theadCls, trCls } from "../../components/ui";
@@ -32,6 +32,7 @@ import {
   filterGames,
   isCellCorrect,
   isCorrect,
+  isCorrectAtThreshold,
   matchupLabel,
   missComparison,
   pct,
@@ -160,6 +161,11 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
   const [team, setTeam] = useState(ALL_TEAMS);
   const [mode, setMode] = useState<Mode>("Points");
   const [grouping, setGrouping] = useState<Grouping>("Outcome");
+  // Decision cutoff (% home win probability) for the granular chart's
+  // section only — dragged directly on the chart. Scoped here rather than
+  // touching accuracyOf/isCorrect globally: the top KPI row and Points-mode
+  // charts keep the standard 50% definition of "correct."
+  const [thresholdPct, setThresholdPct] = useState(50);
   const [activeCategories, setActiveCategories] = useState<Set<Category>>(new Set(CATEGORY_ORDER));
   const toggleCategory = (c: Category) =>
     setActiveCategories((prev) => {
@@ -175,8 +181,9 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
 
   const acc = accuracyOf(filtered);
   const ats = atsAccuracyOf(filtered);
-  const catStats = useMemo(() => categoryStats(filtered), [filtered]);
-  const favStats = useMemo(() => favoriteLocationStats(filtered), [filtered]);
+  const correctFn = useCallback((g: Row) => isCorrectAtThreshold(g, thresholdPct), [thresholdPct]);
+  const catStats = useMemo(() => categoryStats(filtered, correctFn), [filtered, correctFn]);
+  const favStats = useMemo(() => favoriteLocationStats(filtered, correctFn), [filtered, correctFn]);
   // "Outcome" (default) crosses the spread's favorite with the actual
   // winner (4 buckets, only knowable post-game); "Pregame" groups by
   // favorite location alone (2 buckets, knowable before kickoff) — for
@@ -348,7 +355,7 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
     const byType = new Map<Category, Pt[]>();
     graded.forEach((g) => {
       const key = activeCategoryOf(g);
-      const correct = isCorrect(g);
+      const correct = correctFn(g);
       if (!byType.has(key)) byType.set(key, []);
       byType.get(key)!.push({
         value: [Number(g.home_win_prob) * 100, Number(g.actual_margin)],
@@ -396,13 +403,22 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
       yAxis: { type: "value", name: "Actual margin (home − away, pts)", nameLocation: "middle", nameGap: 42, nameRotate: 90, min: -maxAbsMargin, max: maxAbsMargin },
       series: [
         {
+          id: "threshold-line",
           type: "line",
-          data: [[50, -maxAbsMargin], [50, maxAbsMargin]],
-          lineStyle: { color: "#94a3b8", type: "dashed", width: 1 },
+          data: [[thresholdPct, -maxAbsMargin], [thresholdPct, maxAbsMargin]],
+          lineStyle: { color: "#0f172a", type: "solid", width: 2 },
           symbol: "none",
           silent: true,
           tooltip: { show: false },
-          z: 1,
+          label: {
+            show: true,
+            formatter: () => `${thresholdPct.toFixed(0)}% cutoff`,
+            position: "insideEndTop",
+            fontSize: 10,
+            fontWeight: "bold" as const,
+            color: "#0f172a",
+          },
+          z: 3,
         },
         {
           type: "line",
@@ -422,8 +438,58 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
         })),
       ],
     } as EChartsOption;
-  }, [filtered, activeCategories, grouping, activeCategoryOf, activeCatOrder]);
-  const granularRef = useECharts(granularOption);
+  }, [filtered, activeCategories, grouping, activeCategoryOf, activeCatOrder, correctFn, thresholdPct]);
+  const granularChartRef = useRef<ECharts | null>(null);
+  const granularRef = useECharts(granularOption, {
+    onInit: (chart) => {
+      granularChartRef.current = chart;
+    },
+  });
+
+  // Lets the cutoff line itself be dragged left/right instead of only set
+  // via the reset button — grabbed via raw zrender mouse events (rather
+  // than an ECharts `graphic` element) so hit-testing always uses the
+  // chart's live pixel coordinates, which stays correct across resizes
+  // without any manual pixel math. Re-attached whenever the % section
+  // mounts (the chart div only exists once `mode === "%"`).
+  const thresholdRef = useRef(thresholdPct);
+  thresholdRef.current = thresholdPct;
+  useEffect(() => {
+    if (mode !== "%") return;
+    const chart = granularChartRef.current;
+    if (!chart) return;
+    const zr = chart.getZr();
+    const hitTestPx = 8;
+    let dragging = false;
+
+    const pixelXOfThreshold = () => chart.convertToPixel({ gridIndex: 0 }, [thresholdRef.current, 0])[0];
+    const isNearLine = (offsetX: number) => Math.abs(offsetX - pixelXOfThreshold()) <= hitTestPx;
+
+    const onMouseDown = (params: { offsetX: number }) => {
+      if (isNearLine(params.offsetX)) dragging = true;
+    };
+    const onMouseMove = (params: { offsetX: number }) => {
+      if (dragging) {
+        const value = chart.convertFromPixel({ gridIndex: 0 }, [params.offsetX, 0])[0];
+        setThresholdPct(Math.max(0, Math.min(100, value)));
+      }
+      zr.setCursorStyle(dragging || isNearLine(params.offsetX) ? "ew-resize" : "default");
+    };
+    const onMouseUp = () => {
+      dragging = false;
+    };
+
+    zr.on("mousedown", onMouseDown);
+    zr.on("mousemove", onMouseMove);
+    zr.on("mouseup", onMouseUp);
+    zr.on("globalout", onMouseUp);
+    return () => {
+      zr.off("mousedown", onMouseDown);
+      zr.off("mousemove", onMouseMove);
+      zr.off("mouseup", onMouseUp);
+      zr.off("globalout", onMouseUp);
+    };
+  }, [mode]);
 
   // Same categories, broken down by week — does the model do better/worse
   // on (say) home favorites as the season progresses, not just in aggregate.
@@ -433,8 +499,8 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
   // "stack shows the split, color contrast shows the accuracy" idea as the
   // category KPI chips above, just broken out per week instead of pooled.
   const catByWeek = useMemo(
-    () => (grouping === "Outcome" ? categoryStatsByWeek(filtered) : favoriteLocationStatsByWeek(filtered)),
-    [filtered, grouping],
+    () => (grouping === "Outcome" ? categoryStatsByWeek(filtered, correctFn) : favoriteLocationStatsByWeek(filtered, correctFn)),
+    [filtered, grouping, correctFn],
   );
   const catByWeekOption = useMemo<EChartsOption | null>(() => {
     if (!catByWeek.length) return null;
@@ -672,9 +738,10 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
                   : "Predicted probability vs. actual margin — by pre-game favorite"}
                 <InfoDot
                   text={
-                    grouping === "Outcome"
-                      ? "Every game individually (no bucketing) — x = predicted home win probability, y = the real final-score margin. The vertical line marks the 50% pick threshold; the horizontal line marks an actual tie. Fill color matches Game Picks / Win Types / Spread Win % elsewhere in the app: which side was favored by the closing spread, crossed with who actually won. The bold dark outline is separate — it marks games the model picked correctly (predicted side matched the actual winner); no outline means it picked wrong."
-                      : "Every game individually (no bucketing) — x = predicted home win probability, y = the real final-score margin. Fill color shows only which side the closing spread favored (home or away) — known before kickoff, unlike the matchup-type view, which also depends on who actually won. This isolates pre-game model accuracy by favorite location. The bold dark outline marks games the model picked correctly; no outline means it picked wrong."
+                    (grouping === "Outcome"
+                      ? "Every game individually (no bucketing) — x = predicted home win probability, y = the real final-score margin. The horizontal line marks an actual tie. Fill color matches Game Picks / Win Types / Spread Win % elsewhere in the app: which side was favored by the closing spread, crossed with who actually won. The bold dark outline is separate — it marks games the model picked correctly (predicted side matched the actual winner); no outline means it picked wrong."
+                      : "Every game individually (no bucketing) — x = predicted home win probability, y = the real final-score margin. Fill color shows only which side the closing spread favored (home or away) — known before kickoff, unlike the matchup-type view, which also depends on who actually won. This isolates pre-game model accuracy by favorite location. The bold dark outline marks games the model picked correctly; no outline means it picked wrong.") +
+                    " The solid vertical line is the decision cutoff — drag it to see how accuracy shifts if the model called a game for whichever side crosses that probability instead of a flat 50%. Only this chart, the chips below, and the weekly breakdown react to it; the KPI row above and the Points-mode charts always use 50%."
                   }
                 />
               </span>
@@ -695,6 +762,19 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
               : "Each dot is one game, colored only by which side (home or away) the closing spread favored — known before kickoff, with no dependency on the result. A bold outline = the model's pick was correct; no outline = wrong. Click a category below to show/hide it."
           }
         >
+          <div className="mb-3 flex flex-wrap items-center gap-3">
+            <span className="text-xs font-medium text-slate-600">
+              Decision cutoff: <span className="font-semibold text-slate-800">{thresholdPct.toFixed(0)}%</span> predicted home win probability
+            </span>
+            {Math.round(thresholdPct) !== 50 && (
+              <button
+                onClick={() => setThresholdPct(50)}
+                className="rounded-full border border-slate-300 px-2.5 py-1 text-[11px] font-medium text-slate-600 hover:bg-slate-50"
+              >
+                Reset to 50%
+              </button>
+            )}
+          </div>
           <div className="mb-4 flex flex-wrap gap-2">
             {activeCatStats.map((s) => {
               const active = activeCategories.has(s.category);
