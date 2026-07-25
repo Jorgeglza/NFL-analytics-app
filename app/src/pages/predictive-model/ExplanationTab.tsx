@@ -16,6 +16,7 @@ import type { Row } from "../../lib/data/loader";
 import { useECharts } from "../../components/charts/useECharts";
 import { Card, tableWrapCls, theadCls, trCls } from "../../components/ui";
 import { labelFor, pct } from "./shared";
+import { describeFeature } from "./featureDescriptions";
 
 const TOP_N = 20;
 
@@ -49,7 +50,18 @@ export default function ExplanationTab({
     const rows = [...topN].reverse();
     return {
       grid: { left: 10, right: 30, top: 10, bottom: 10, containLabel: true },
-      tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
+      tooltip: {
+        trigger: "axis",
+        axisPointer: { type: "shadow" },
+        extraCssText: "max-width: 320px; white-space: normal;",
+        formatter: (params) => {
+          const p = Array.isArray(params) ? params[0] : params;
+          const r = rows[p.dataIndex];
+          const feature = String(r.feature);
+          return `<b>${labelFor(feature)}</b><br/>Importance: ${Number(r.importance ?? 0).toFixed(4)}` +
+            `<br/><span style="color:#64748b">${describeFeature(feature)}</span>`;
+        },
+      },
       xAxis: { type: "value", name: "Mean drop in accuracy when shuffled" },
       yAxis: { type: "category", data: rows.map((r) => labelFor(String(r.feature))), axisLabel: { fontSize: 10 } },
       series: [
@@ -97,11 +109,17 @@ export default function ExplanationTab({
   const contribRows = useMemo(() => {
     if (!selectedFeatures) return [];
     return featureCols
-      .map((c) => ({
-        feature: c,
-        raw: selectedFeatures[c] === null ? null : Number(selectedFeatures[c]),
-        contrib: Number(selectedFeatures[`${c}_contrib`] ?? 0),
-      }))
+      .map((c) => {
+        const homeRaw = selectedFeatures[`${c}_home`];
+        const awayRaw = selectedFeatures[`${c}_away`];
+        return {
+          feature: c,
+          home: homeRaw === undefined || homeRaw === null ? null : Number(homeRaw),
+          away: awayRaw === undefined || awayRaw === null ? null : Number(awayRaw),
+          diff: selectedFeatures[c] === null ? null : Number(selectedFeatures[c]),
+          contrib: Number(selectedFeatures[`${c}_contrib`] ?? 0),
+        };
+      })
       .sort((a, b) => Math.abs(b.contrib) - Math.abs(a.contrib));
   }, [selectedFeatures, featureCols]);
 
@@ -147,7 +165,12 @@ export default function ExplanationTab({
             <tbody>
               {filtered.map((r) => (
                 <tr key={String(r.feature)} className={trCls}>
-                  <td className="px-3 py-1.5 font-medium">{labelFor(String(r.feature))}</td>
+                  <td
+                    className="cursor-help px-3 py-1.5 font-medium underline decoration-dotted decoration-slate-300 underline-offset-2"
+                    title={describeFeature(String(r.feature))}
+                  >
+                    {labelFor(String(r.feature))}
+                  </td>
                   <td className="px-3 py-1.5 text-right">{Number(r.importance ?? 0).toFixed(4)}</td>
                 </tr>
               ))}
@@ -216,7 +239,9 @@ export default function ExplanationTab({
                   <thead className={`sticky top-0 ${theadCls}`}>
                     <tr>
                       <th className="px-3 py-2">Feature</th>
-                      <th className="px-3 py-2 text-right">Raw value (home − away)</th>
+                      <th className="px-3 py-2 text-right">Away</th>
+                      <th className="px-3 py-2 text-right">Home</th>
+                      <th className="px-3 py-2 text-right">Diff (home − away)</th>
                       <th className="px-3 py-2 text-right">Contribution to margin</th>
                     </tr>
                   </thead>
@@ -224,19 +249,28 @@ export default function ExplanationTab({
                     <tr className={trCls}>
                       <td className="px-3 py-1.5 font-medium text-slate-500">Intercept (baseline)</td>
                       <td className="px-3 py-1.5 text-right text-slate-400">--</td>
+                      <td className="px-3 py-1.5 text-right text-slate-400">--</td>
+                      <td className="px-3 py-1.5 text-right text-slate-400">--</td>
                       <td className="px-3 py-1.5 text-right font-semibold">{intercept.toFixed(2)}</td>
                     </tr>
                     {contribRows.map((r) => (
                       <tr key={r.feature} className={trCls}>
-                        <td className="px-3 py-1.5 font-medium">{labelFor(r.feature)}</td>
-                        <td className="px-3 py-1.5 text-right">{r.raw !== null ? r.raw.toFixed(2) : "--"}</td>
+                        <td
+                          className="cursor-help px-3 py-1.5 font-medium underline decoration-dotted decoration-slate-300 underline-offset-2"
+                          title={describeFeature(r.feature)}
+                        >
+                          {labelFor(r.feature)}
+                        </td>
+                        <td className="px-3 py-1.5 text-right text-slate-600">{r.away !== null ? r.away.toFixed(2) : "--"}</td>
+                        <td className="px-3 py-1.5 text-right text-slate-600">{r.home !== null ? r.home.toFixed(2) : "--"}</td>
+                        <td className="px-3 py-1.5 text-right">{r.diff !== null ? r.diff.toFixed(2) : "--"}</td>
                         <td className={`px-3 py-1.5 text-right font-semibold ${r.contrib >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
                           {r.contrib >= 0 ? "+" : ""}{r.contrib.toFixed(2)}
                         </td>
                       </tr>
                     ))}
                     <tr className="border-t-2 border-slate-300 bg-slate-50/70">
-                      <td className="px-3 py-1.5 font-semibold text-slate-700" colSpan={2}>Sum (intercept + all contributions)</td>
+                      <td className="px-3 py-1.5 font-semibold text-slate-700" colSpan={4}>Sum (intercept + all contributions)</td>
                       <td className="px-3 py-1.5 text-right font-bold text-slate-800">{contribSum.toFixed(2)}</td>
                     </tr>
                   </tbody>

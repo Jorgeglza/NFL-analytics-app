@@ -149,6 +149,21 @@ def run(games: pd.DataFrame):
             for j, col in enumerate(FEATURE_COLS):
                 feat_row[col] = None if pd.isna(row[col]) else float(row[col])
                 feat_row[f"{col}_contrib"] = float(contributions[i, j])
+                # Per-team raw values behind each diff_ feature, so the game
+                # inspector table can show actual home/away stats instead of
+                # only the (home - away) diff the model actually trains on.
+                # Context columns (is_dome/wind/temp/div_game) have no
+                # per-team split; rest_diff's is home_rest/away_rest.
+                if col.startswith("diff_"):
+                    underlying = col[len("diff_"):]
+                    home_col, away_col = f"home_{underlying}", f"away_{underlying}"
+                elif col == "rest_diff":
+                    home_col, away_col = "home_rest", "away_rest"
+                else:
+                    home_col, away_col = None, None
+                if home_col is not None and home_col in row.index and away_col in row.index:
+                    feat_row[f"{col}_home"] = None if pd.isna(row[home_col]) else float(row[home_col])
+                    feat_row[f"{col}_away"] = None if pd.isna(row[away_col]) else float(row[away_col])
             game_feature_rows.append(feat_row)
 
         # Permutation importance against the regression target (MAE-based --
