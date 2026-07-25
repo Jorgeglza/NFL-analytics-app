@@ -1,0 +1,152 @@
+{
+  "model_summary": [
+    {
+      "test_season": 2024,
+      "model": "hgb",
+      "target": "home_win",
+      "n": 272,
+      "accuracy": 0.6764705882352942,
+      "brier": 0.2157510890177314,
+      "log_loss": 0.6218955237689743
+    },
+    {
+      "test_season": 2024,
+      "model": "logreg",
+      "target": "home_win",
+      "n": 272,
+      "accuracy": 0.6875,
+      "brier": 0.20392806177595799,
+      "log_loss": 0.5962738000186422
+    },
+    {
+      "test_season": 2025,
+      "model": "hgb",
+      "target": "home_win",
+      "n": 272,
+      "accuracy": 0.6139705882352942,
+      "brier": 0.22702134064625562,
+      "log_loss": 0.6444244288799245
+    },
+    {
+      "test_season": 2025,
+      "model": "logreg",
+      "target": "home_win",
+      "n": 272,
+      "accuracy": 0.6213235294117647,
+      "brier": 0.22485978170035673,
+      "log_loss": 0.6397906652280754
+    },
+    {
+      "test_season": 2024,
+      "model": "hgb",
+      "target": "home_covers",
+      "n": 268,
+      "accuracy": 0.48134328358208955,
+      "brier": 0.25152103419428906,
+      "log_loss": 0.6961943239631265
+    },
+    {
+      "test_season": 2024,
+      "model": "logreg",
+      "target": "home_covers",
+      "n": 268,
+      "accuracy": 0.4552238805970149,
+      "brier": 0.2517123329634987,
+      "log_loss": 0.6965724466813171
+    },
+    {
+      "test_season": 2025,
+      "model": "hgb",
+      "target": "home_covers",
+      "n": 271,
+      "accuracy": 0.5166051660516605,
+      "brier": 0.25104412600620457,
+      "log_loss": 0.6952397490231812
+    },
+    {
+      "test_season": 2025,
+      "model": "logreg",
+      "target": "home_covers",
+      "n": 271,
+      "accuracy": 0.4907749077490775,
+      "brier": 0.25000374765562045,
+      "log_loss": 0.6931539765189698
+    }
+  ],
+  "market_summary": [
+    {
+      "test_season": 2024,
+      "model": "market_moneyline",
+      "target": "home_win",
+      "n": 272,
+      "accuracy": 0.7169117647058824,
+      "brier": 0.2001616187888562,
+      "log_loss": 0.5874888995056521
+    },
+    {
+      "test_season": 2024,
+      "model": "elo",
+      "target": "home_win",
+      "n": 272,
+      "accuracy": 0.6727941176470589,
+      "brier": 0.20870510249993168,
+      "log_loss": 0.6055042425503178
+    },
+    {
+      "test_season": 2025,
+      "model": "market_moneyline",
+      "target": "home_win",
+      "n": 272,
+      "accuracy": 0.6544117647058824,
+      "brier": 0.21159985695624273,
+      "log_loss": 0.6082296841116979
+    },
+    {
+      "test_season": 2025,
+      "model": "elo",
+      "target": "home_win",
+      "n": 272,
+      "accuracy": 0.6323529411764706,
+      "brier": 0.22496511733021837,
+      "log_loss": 0.6415164812980721
+    }
+  ],
+  "ats_baselines": [
+    {
+      "test_season": 2024,
+      "model": "always_home",
+      "target": "home_covers",
+      "n": 268,
+      "accuracy": 0.5111940298507462,
+      "brier": NaN,
+      "log_loss": NaN
+    },
+    {
+      "test_season": 2024,
+      "model": "always_favorite",
+      "target": "home_covers",
+      "n": 268,
+      "accuracy": 0.5335820895522388,
+      "brier": NaN,
+      "log_loss": NaN
+    },
+    {
+      "test_season": 2025,
+      "model": "always_home",
+      "target": "home_covers",
+      "n": 271,
+      "accuracy": 0.4981549815498155,
+      "brier": NaN,
+      "log_loss": NaN
+    },
+    {
+      "test_season": 2025,
+      "model": "always_favorite",
+      "target": "home_covers",
+      "n": 271,
+      "accuracy": 0.4833948339483395,
+      "brier": NaN,
+      "log_loss": NaN
+    }
+  ]
+}

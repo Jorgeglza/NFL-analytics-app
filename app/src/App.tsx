@@ -43,6 +43,7 @@ const IMPLEMENTED: Record<string, LazyExoticComponent<ComponentType>> = {
   "/player_analysis/matchup_bets": lazy(() => import("./pages/player-analysis/MatchupBets")),
   "/player_analysis/value_bets": lazy(() => import("./pages/player-analysis/ValueBets")),
   "/data/grading_model": lazy(() => import("./pages/grading-model/GradingModel")),
+  "/data/predictive_model": lazy(() => import("./pages/predictive-model/PredictiveModel")),
 };
 
 function Placeholder({ name, description }: { name: string; description: string }) {

@@ -6,6 +6,7 @@ pipeline/.venv/
 
 # Raw API pull cache (rebuildable)
 data/raw_cache/
+data/raw_cache_predictive/
 
 # Node
 app/node_modules/

@@ -1,0 +1,29 @@
+==============================================================================
+PREDICTIVE MODEL SPIKE - walk-forward evaluation
+==============================================================================
+
+ATS breakeven at standard -110 vig: 52.3810%
+
+--- target: home_win ---
+  season 2024:
+    market_moneyline   n=272  acc=0.7169 brier=0.2002 logloss=0.5875
+    logreg             n=272  acc=0.6875 brier=0.2039 logloss=0.5963
+    hgb                n=272  acc=0.6765 brier=0.2158 logloss=0.6219
+    elo                n=272  acc=0.6728 brier=0.2087 logloss=0.6055
+  season 2025:
+    market_moneyline   n=272  acc=0.6544 brier=0.2116 logloss=0.6082
+    elo                n=272  acc=0.6324 brier=0.2250 logloss=0.6415
+    logreg             n=272  acc=0.6213 brier=0.2249 logloss=0.6398
+    hgb                n=272  acc=0.6140 brier=0.2270 logloss=0.6444
+
+--- target: home_covers ---
+  season 2024:
+    always_favorite    n=268  acc=0.5336 brier=n/a logloss=n/a
+    always_home        n=268  acc=0.5112 brier=n/a logloss=n/a
+    hgb                n=268  acc=0.4813 brier=0.2515 logloss=0.6962
+    logreg             n=268  acc=0.4552 brier=0.2517 logloss=0.6966
+  season 2025:
+    hgb                n=271  acc=0.5166 brier=0.2510 logloss=0.6952
+    always_home        n=271  acc=0.4982 brier=n/a logloss=n/a
+    logreg             n=271  acc=0.4908 brier=0.2500 logloss=0.6932
+    always_favorite    n=271  acc=0.4834 brier=n/a logloss=n/a

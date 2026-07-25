@@ -51,6 +51,32 @@ export const getTeamWeekRanks = async (season: number) =>
 export const getPlayerWeek = async (season: number) =>
   toRecords(await fetchJson<CompactFrame>(`player_week/${season}.json`));
 
+// Predictive Model page (P2) — own subfolder, isolated pipeline package
+// (pipeline/predictive_model/export_page.py). See docs/predictive-model.md.
+export const getPredictiveModelGames = async () =>
+  toRecords(await fetchJson<CompactFrame>("predictive_model/games.json"));
+export const getPredictiveModelSeasonSummary = async () =>
+  toRecords(await fetchJson<CompactFrame>("predictive_model/season_summary.json"));
+export const getPredictiveModelImportance = async () =>
+  toRecords(await fetchJson<CompactFrame>("predictive_model/importance.json"));
+
+export interface PredictiveModelCalibration {
+  table: CompactFrame;
+  correlation: number | null;
+  residual_pool: number[];
+  residual_diagnostics: CompactFrame;
+}
+export const getPredictiveModelCalibration = () =>
+  fetchJson<PredictiveModelCalibration>("predictive_model/calibration.json");
+
+export interface PredictiveModelMeta {
+  generated_at: string;
+  test_seasons: number[];
+  n_features: number;
+  model: string;
+}
+export const getPredictiveModelMeta = () => fetchJson<PredictiveModelMeta>("predictive_model/meta.json");
+
 export interface ContribParams {
   [gradeType: string]: {
     mode: "offense" | "defense" | "overall";

@@ -110,6 +110,12 @@ export const NAV_GROUPS: NavGroup[] = [
         description: "Random Forest team grades — season, team, weekly and feature views",
         implemented: true,
       },
+      {
+        label: "Predictive Model",
+        path: "/data/predictive_model",
+        description: "Margin-regression model explored against the market — performance, feature importance and calibration",
+        implemented: true,
+      },
     ],
   },
 ];

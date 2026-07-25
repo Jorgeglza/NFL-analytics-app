@@ -71,6 +71,239 @@ Per page: run old app side-by-side (`pda-ie` env), match tables/KPIs/chart serie
 - Phase 1 (rank table page) and Phase 2 (draft-guidance tool) both scoped; see the design doc
   for the full plan before starting implementation.
 
+### P1 — Predictive model research spike (independent track, non-blocking) ⛔
+- ✅ Design doc + result written (`docs/predictive-model.md`, 2026-07-24).
+- Deliberately isolated: own `pipeline/predictive_model/` package, own cache
+  (`data/raw_cache_predictive/`), own output dir (`data/predictive_model/`), reads
+  `data/nfl.sqlite` read-only, run **manually only** — no GitHub Actions, no changes to
+  `pipeline/nfl_pipeline/*`, `engine.ts`, or `ModelPickerTab.tsx`.
+- Walk-forward HistGradientBoosting + LogisticRegression, leakage-safe features (Elo,
+  rolling EPA/success/explosive rate from play-by-play, season-to-date grades, rest days,
+  weather, div-game, QB-starter-continuity, injury severity) — free nflverse data only, per
+  user decision (no paid odds APIs).
+- ⛔ **Result: no edge found.** Trained models underperform the market's own vig-free
+  moneyline on straight-up accuracy (season 2024: market 71.3% vs. best trained model 68.8%;
+  season 2025: market 65.4% vs. 64.0%); ATS accuracy for every model (trained or trivial)
+  sits within noise of 50%, below the ~52.4% breakeven at standard -110 vig. Full numbers
+  and next-step options in `docs/predictive-model.md`'s decision-gate section.
+- Per the approved plan, no UI was built (gate: only proceed to a "Predictive Model" page,
+  kept separate from Model Picker, if a walk-forward ATS edge appeared) — tabled pending a
+  decision on `docs/predictive-model.md`'s follow-up options (snap-count-weighted injury
+  severity, richer tracking features, accept free-data ceiling, or more held-out seasons).
+- ⛔ Follow-up (2026-07-24): added Next Gen Stats (tracking-derived: time-to-throw, CPOE,
+  aggressiveness, rush yards over expected, separation/cushion, YAC above expectation;
+  2016-2025) + FTN charting (motion/play-action/RPO/box-count/blitz/drop rate; 2022-2025
+  only) as an "extended" feature set, A/B tested against the baseline on identical
+  walk-forward splits (`pipeline/predictive_model/compare_feature_sets.py`). **Did not
+  help** — straight-up accuracy unchanged-to-slightly-worse, ATS accuracy worse in both
+  test seasons (2024: 51.3%→48.4%; 2025: 51.3%→48.0%), though McNemar's test says none of
+  these deltas are statistically significant (all p > 0.05) — so no evidence either
+  direction is real, but no improvement found. Elo dominates permutation importance by an
+  order of magnitude over every other feature, new or old. Full numbers and a hypothesis
+  for why (FTN's short 2022-2025 history diluting a much larger training set) in
+  `docs/predictive-model.md`.
+- Also ran a slice analysis (`analyze_slices.py`) checking whether any team/week/scenario
+  subset of the original baseline model clears ATS breakeven — a few teams and weeks
+  looked good (SEA 68.6%, PHI 65.7%, week 10 64.3%) but on ~30-game samples across 32
+  teams/18 weeks tested, consistent with pure sampling noise (multiple-comparisons trap),
+  not a real pattern. Away-favorite / small-spread slices were directionally plausible
+  (matches known market bias) but still below breakeven.
+- Round 3 (2026-07-24): added snap-count-weighted injury severity (name-matched join
+  between `load_injuries`/`load_snap_counts`, 96.7% match rate), pass/rush EPA split,
+  starting field position + expected points, red-zone/third-down/pressure situational
+  features (`compare_models_pca.py`), applied PCA (fit per walk-forward fold only, kept
+  23/33 columns for 90% variance), and tried 5 model types (HGB, LogisticRegression,
+  RandomForest, SVM, MLP) with/without PCA. **Straight-up accuracy improved measurably**:
+  logreg/mlp (no PCA) beat the original baseline HGB in *both* individual test seasons,
+  pooled 66.8% vs. 64.5% (still below market's 68.5%) — McNemar p=0.166, directionally real
+  but not statistically confirmed at this sample size. **No confirmed ATS edge**: several
+  configs individually cleared the 52.4% breakeven in one season (e.g. hgb+PCA hit 54.2% in
+  2025) but the same configs were among the *worst* in the other season (hgb+PCA: 46.9% in
+  2024) — a cross-season consistency check (checking pooled numbers and per-season
+  agreement, not just cherry-picking each season's best of 10 tested configs) shows this is
+  noise, the same multiple-comparisons trap as the earlier team/week slice analysis. Full
+  numbers in `docs/predictive-model.md`.
+- Round 4 (2026-07-24): reviewed 3 external papers (`Predictive model papers.docx`:
+  Streitmatter 2023, Bouzianis 2019 UNH thesis, Ruscio & Brady 2021 TCNJ) and implemented
+  the two most concrete ideas plus checked a third. **Nonlinear transforms** (signed
+  square/sqrt of Elo, starting field position/EP, season grade — Bouzianis' single most
+  consistent finding across 32 per-team models): small non-significant nudge for HGB
+  (64.2%→65.0% pooled straight-up, McNemar p=0.42), no help for LogisticRegression or ATS.
+  **Calibration table** (Ruscio & Brady's reliability-diagram method, added to
+  `evaluate.py`): Round 4 HGB is well-calibrated for straight-up picks (r=0.9964, matching
+  their "r>.99" bar); the same metric on ATS predictions is a meaningless ±1.0000 —
+  an artifact of only 2 populated probability bins, itself more evidence of "no real
+  signal" for that target rather than a calibration problem. **Feature selection vs. PCA
+  check** (`compare_selection_methods.py`, custom leakage-safe `L1FeatureSelector`):
+  confirmed **PCA should be dropped** — it costs ~2pts of accuracy vs. raw features or
+  L1 selection (63.3% vs. 65.2%/65.9% pooled, McNemar p=0.21 pca-vs-l1) with no offsetting
+  benefit found anywhere this session. L1 selection ≈ raw for HistGradientBoosting (p=1.00,
+  no difference — tree ensembles already do their own implicit selection). Streitmatter's
+  margin-regression + Monte Carlo simulation idea (derive both win-prob and ATS-prob from
+  one fitted score-margin distribution instead of two disconnected classifiers) was
+  reviewed but not implemented this round — flagged as the most conceptually important
+  idea from the literature; implemented next as Round 5 (below). Full numbers and paper
+  summaries in `docs/predictive-model.md`.
+- Round 5 (2026-07-24): implemented the margin-regression + Monte Carlo simulation idea
+  (`pipeline/predictive_model/margin_regression.py`) — one regression on point margin,
+  residual (uncertainty) distribution estimated from out-of-fold training predictions,
+  win-prob and ATS-cover-prob both derived from that single fitted distribution (Monte
+  Carlo resampling of actual residuals, plus a closed-form normal-CDF cross-check).
+  **Straight-up accuracy matches the best two-classifier result** (65.9% pooled vs. 66.8%
+  for round3 logreg, both well above the original 64.2% baseline) with one unified model
+  instead of two separately-tuned ones — the architectural payoff the approach promised.
+  Residual diagnostics were a pleasant surprise: σ≈13.3 points, skew≈0.05, kurtosis≈0.33
+  (close to normal) — and this σ **independently lands almost exactly on Ruscio & Brady's
+  own published PFR "uncertainty" constant (13.40-13.45)**, an unplanned cross-validation
+  against the literature. **Still no ATS edge** (pooled ~49-50%) — but a more informative
+  negative result than the classifiers': the margin-regression model actually expresses a
+  wide range of ATS confidence (10%-90%, not clustered at ~50% like the classifiers), and
+  that confidence still doesn't track outcomes (calibration r is negative, -0.14 to -0.33,
+  though on small per-bin samples) — stronger evidence the market has already priced in
+  whatever signal these features carry. Full numbers in `docs/predictive-model.md`.
+- Round 6 (2026-07-24): reviewed 5 more papers (Beal/Norman/Ramchurn 2020, Harville 1980,
+  Song/Boulier/Stekler 2007, Boulier & Stekler 2003, Szalkowski & Nelson 2012) and
+  implemented 3 concrete items. **Naive Bayes + AdaBoost** (`compare_new_models.py`):
+  AdaBoost is now the best straight-up performer on the Round 4 feature set (66.4% pooled,
+  McNemar p=0.18 vs. the original baseline — the most encouraging non-significant result
+  yet); Naive Bayes did NOT repeat Beal's benchmark result (67.53%) here, likely because
+  our feature set is far more collinear than their simpler 42-feature set, which hurts
+  Naive Bayes's independence assumption more. **Weighted ensemble** (`ensemble_models.py`,
+  hgb+logreg+naive_bayes+adaboost, equal vs. Brier-inverse-weighted): tied but did not beat
+  the single best model on either target — these models share a feature set, so their
+  errors are correlated rather than complementary, the precondition ensembling needs to
+  pay off. **Home-underdog backtest** (`home_underdog_backtest.py`, full 2015-2025 history,
+  n=1110 home-dog games — much larger than any slice tried earlier this session): the
+  classic 53.5% (2002-2011) home-underdog cover-rate bias has fully diminished to a
+  coin-flip ~50.2% in current data (not significant vs. 50%). A different pattern initially
+  appeared — home favorites under-covering — **but this did not survive a Round 7
+  data-quality fix (see below) and is now non-significant too**; corrected in place in
+  `docs/predictive-model.md`. Item 4 from this round's review (an "overreaction" feature —
+  the market overreacts to a team's most recent large-margin result, per Vergin 2001) was
+  queued for next. Full numbers and paper summaries in `docs/predictive-model.md`.
+- Round 7 (2026-07-24): implemented the queued overreaction feature, and along the way
+  **found and fixed a real data-quality bug affecting every round since Round 1**.
+  `team_week` carries a small number of duplicate `(team, season, week)` "phantom" rows (a
+  documented upstream nflverse quirk, correctly preserved verbatim in the parity-critical
+  main `nfl_pipeline` — not a bug there). `build_team_features` merges multiple frames
+  derived from `team_week`; merging two frames that both carry the same duplicate keys
+  produces a Cartesian product for those keys, not just an addition, so every merge added
+  since Round 1 silently inflated the dataset a little more. Fixed by deduplicating in
+  `predictive_model/features.py`'s `load_team_week()` — safe here since this package has no
+  parity requirement, unlike `nfl_pipeline`. **Verified against ground truth**: the
+  schedule table has exactly 2,895 completed REG games for 2015-2025, matching the fixed
+  pipeline exactly (was silently returning 2,968-3,114 depending on which round's merges
+  were active). **Impact**: re-running the original baseline after the fix moved HGB from
+  64.2%→~64.6% pooled straight-up and ATS from 51.3%→~49.9% — the largest shifts found by
+  spot-check; no qualitative conclusion from this session changes (market still leads,
+  still no confirmed ATS edge anywhere), except Round 6's home-favorite finding (z=-2.04)
+  which drops to non-significant (z=-1.75) on corrected data. Treat all pre-Round-7
+  percentages as accurate to roughly ±0.5-1.5 points, not exact.
+  **The overreaction feature itself** (`surprise_points_margin`/`surprise_epa_diff` — how
+  much of an outlier a team's last game was vs. its own established baseline, computed
+  leakage-safe): tested the hypothesis directly first (`test_overreaction_hypothesis.py`,
+  full 2015-2025 history) — Pearson correlation between surprise and market bias was
+  **r=-0.02** for both point-margin and EPA framings, essentially zero, no monotonic
+  pattern. Confirmed with a walk-forward retest (`retest_round5_surprise.py`, AdaBoost +
+  HGB): all 8 McNemar comparisons not significant (p=0.29-1.00), feature added nothing to
+  either target. Read together: this isn't "didn't help by chance," it's "the underlying
+  bias this feature targets doesn't show up in our data" — same pattern as the diminished
+  home-underdog bias. Full numbers in `docs/predictive-model.md`.
+- **Final results (2026-07-24)**: re-ran every Round 1-6 script on the corrected (deduped)
+  data to produce one authoritative comparison table (`docs/predictive-model.md`'s "Final
+  results" section). **Best configuration found across the entire session: AdaBoost on the
+  Round 4 feature set, 66.73% pooled straight-up accuracy** (vs. 64.52% for the original
+  Round 1 baseline, vs. 68.57% for the market). Final McNemar test (best vs. baseline, both
+  on corrected data): p=0.1344 — the most encouraging result of the whole investigation,
+  still not statistically significant at n=544. Every other configuration tested (NGS/FTN,
+  PCA, margin regression, ensembling, the overreaction feature) falls at or below this,
+  within a tight 62-67% band, and nothing gets within 1.8 points of the market. **Conclusion:
+  not yet worth adding to the app** — the promising result isn't confirmed, and even if it
+  were, it still wouldn't beat the market. Recommended next steps if pursuing further: more
+  held-out test seasons (thin 2-season sample for a 2-point effect), or accept the free-data
+  ceiling as a settled null result.
+- **Round 8 (2026-07-24): robustness check across 7 seasons.** Took 6 distinct configs from
+  the final results table and re-ran walk-forward across 2019-2025 (n=1,871) instead of just
+  2024-2025 (n=544) — `robustness_top6.py`. **The absolute numbers came back down**:
+  AdaBoost's 66.73% (2 seasons) drops to 64.40% pooled over 7 — 2024 turned out to be an
+  unusually easy season for every config (68-70% across the board), which had flattered the
+  2-season table. **But the relative improvement over the original baseline got *more*
+  credible, not less**: AdaBoost vs. baseline reaches **McNemar p=0.0436 on the 7-season
+  sample — the first result in this entire session to clear conventional significance**
+  (2-season McNemar was p=0.13-0.18). All 6 configs beat the baseline (+0.5 to +1.7pt), and
+  5 of 6 are more season-to-season stable than the baseline's std=0.0386 (least accurate
+  *and* least consistent of everything tested). Margin regression tied for best accuracy
+  (64.40%) with the lowest variance of all (std=0.0280, even beating the market's own 0.0301)
+  despite being the most architecturally complex config — complexity bought stability here,
+  not just accuracy. **Still no beating the market** (66.38% pooled over the same 7 seasons)
+  — the gap narrowed from -3.69pt (baseline) to -1.98pt (best) but never closed. Full table
+  in `docs/predictive-model.md`'s Round 8 section.
+- **Model decision (2026-07-24)**: margin regression, LogReg-style, chosen as the go-to
+  model; AdaBoost documented as the close runner-up (see `docs/predictive-model-decision.md`).
+  Tied on accuracy (64.40% pooled, 7 seasons) but margin regression is more stable
+  (std=0.0280 vs. 0.0323) and gives much richer material for the planned predictive-model
+  page (predicted point margin instead of just win/loss, linear coefficients instead of
+  split-based importances, a real fitted confidence distribution) — see the decision doc for
+  the full reasoning. AdaBoost kept as fallback if the margin-regression machinery proves
+  hard to productionize. Next: P2 below, the predictive-model page itself.
+- Same-day follow-up: isolated NGS-only and FTN-only (vs. the combined set above) —
+  `compare_feature_sets.py` now runs baseline/ngs_only/ftn_only/combined together. On
+  straight-up accuracy, isolating each source shows a small non-significant uptick in 3 of
+  4 season/set combos (best: FTN-only 2025 at +1.5pt) that vanishes once combined —
+  consistent with "too many columns for ~2,700 training games" rather than "the data is
+  useless." **On ATS, isolating doesn't help either** — every configuration sits at or
+  below the baseline's 51.3%, and permutation importance for the ATS target stays
+  negligible across all three feature sets. This line of investigation (NGS/FTN, alone or
+  combined) is exhausted with no ATS edge found; see `docs/predictive-model.md` for the
+  full numbers and remaining options (snap-count-weighted injuries, accept the free-data
+  ceiling, or more held-out seasons).
+
+### P2 — Predictive Model page (independent track, follows P1) ✅
+- Model decision made: margin regression, LogReg-style (`docs/predictive-model-decision.md`).
+- ✅ Built `/data/predictive_model` (4 tabs: Overview, Performance, Explanation, Confidence),
+  historical-only per user decision (no live/upcoming-week predictions — the pipeline has no
+  `predict_upcoming()` capability, out of scope for this pass), backtest widened to all
+  available history (2018-2025, n=2,127 walk-forward predictions — wider than any window used
+  during research). New export step: `pipeline/predictive_model/export_page.py`, writes to
+  `app/public/data/predictive_model/*.json` (games, season_summary, importance, calibration,
+  meta), reusing `margin_regression.py`'s `lin_reg` walk-forward loop. Nav entry added under
+  "Data"; loaders added to `lib/data/loader.ts`. Pooled numbers this run: 64.3% straight-up
+  (n=2,127) vs. market 66.4%, Elo 63.6%; ATS 50.0% (n=2,075) — same "no confirmed edge"
+  conclusion as every research round, stated plainly on the Overview tab rather than implied
+  otherwise. Verified in browser preview (all 4 tabs load real data, filters work, no console
+  errors); `npm run build`, `tsc --noEmit`, and the 58-test Vitest suite all green. Full
+  writeup in `docs/predictive-model.md`'s "P2: the exploration page itself" section.
+- Re-run `python pipeline/predictive_model/export_page.py` manually once a season completes
+  (not on the weekly cron — this package still has no GitHub Actions wiring).
+- Research artifacts (`data/predictive_model/*.csv`, `metrics.json`, `report.txt` — the
+  per-round result tables that back every number in `docs/predictive-model.md`) are now
+  **git-tracked** (2026-07-25) — removed from `.gitignore` and committed (~63 KB). Only
+  `data/raw_cache_predictive/` (18 MB of raw nflreadpy pulls, purely rebuildable) stays
+  ignored. Rationale: these CSVs are small, deterministic (`random_state=42`), and otherwise
+  unverifiable without rerunning 8 rounds of scripts — committing them costs nothing at
+  build/runtime since `data/` isn't part of the app bundle (only `app/public/data/` is).
+
+### P3 — Live/upcoming-week predictions (independent track, follows P2) ☐
+- Not started. Scope (per user, 2026-07-25): add a `predict_upcoming()` capability to
+  `pipeline/predictive_model/` so the margin-regression model can score the *current* week's
+  scheduled-but-unplayed games, then surface those predictions in **two** places:
+  1. The existing Model Picker tab (`app/src/pages/game-analysis/previews/ModelPickerTab.tsx`,
+     part of Matchup Previews) — add margin-regression as another model in its comparison.
+  2. The `/data/predictive_model` page built in P2 — likely a new tab or a section on
+     Overview showing this week's predicted margins/probabilities, distinct from the
+     historical backtest tabs.
+- Needed pipeline work (identified during P2 planning, not yet built): (a) build the same
+  ROUND4 diff-feature row for scheduled-but-unplayed games — `features.build_game_table()`
+  currently filters to `home_score.notna()`, blocking this; the underlying *team*-level
+  features are already leakage-safe/pregame, so this is a filter change + a new assembly
+  path, not a feature-engineering change; (b) persist the fitted `lin_reg` pipeline (residual
+  pool + sigma included) instead of refitting fresh every run, so a weekly job can just
+  predict, not retrain; (c) decide whether this runs on the weekly GitHub Actions cron (a
+  meaningful change to this package's "manual only" isolation rule) or stays manual like the
+  rest of P1/P2.
+- Plan not yet written — write one (with Explore/Plan agents per the usual workflow) before
+  implementing.
+
 ## Session notes (newest first)
 
 ### 2026-07-21 — Season-range cutoff moved to August
