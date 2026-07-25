@@ -1,6 +1,11 @@
-// Overview: pooled/per-season accuracy vs market & Elo baselines, plus the
-// settled "why this model" story from docs/predictive-model-decision.md.
+// Overview: KPIs, accuracy-by-season table, and a trend chart up front —
+// the full research story (why this model, the complexity/accuracy
+// comparison) is collapsed by default so the tab reads as a dashboard, not
+// a research memo. Click "Why this model?" to expand it.
+import { useMemo, useState } from "react";
+import type { EChartsOption } from "echarts";
 import type { Row } from "../../lib/data/loader";
+import { useECharts } from "../../components/charts/useECharts";
 import { Card, Kpi, tableWrapCls, theadCls, trCls } from "../../components/ui";
 import { pct } from "./shared";
 
@@ -18,24 +23,30 @@ const COMPLEXITY_ROWS: { config: string; features: string; complexity: number; a
 ];
 
 export default function OverviewTab({ seasonSummary, testSeasons }: { seasonSummary: Row[]; testSeasons: number[] }) {
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const pooled = seasonSummary.find((r) => r.season === "pooled");
   const bySeasonAsc = seasonSummary.filter((r) => r.season !== "pooled").sort((a, b) => Number(a.season) - Number(b.season));
 
+  const trendOption = useMemo<EChartsOption | null>(() => {
+    if (!bySeasonAsc.length) return null;
+    const seasons = bySeasonAsc.map((r) => String(r.season));
+    return {
+      grid: { left: 10, right: 20, top: 30, bottom: 10, containLabel: true },
+      legend: { top: 0 },
+      tooltip: { trigger: "axis", valueFormatter: (v: unknown) => `${(Number(v) * 100).toFixed(1)}%` },
+      xAxis: { type: "category", data: seasons, name: "Season" },
+      yAxis: { type: "value", name: "Straight-up accuracy", axisLabel: { formatter: (v: number) => `${(v * 100).toFixed(0)}%` } },
+      series: [
+        { name: "Model", type: "line", data: bySeasonAsc.map((r) => r.model_accuracy), lineStyle: { color: "#002f6c", width: 3 }, symbolSize: 8 },
+        { name: "Market", type: "line", data: bySeasonAsc.map((r) => r.market_accuracy), lineStyle: { color: "#94a3b8", type: "dashed" }, symbolSize: 6 },
+        { name: "Elo", type: "line", data: bySeasonAsc.map((r) => r.elo_accuracy), lineStyle: { color: "#dc2626", type: "dashed" }, symbolSize: 6 },
+      ],
+    } as EChartsOption;
+  }, [bySeasonAsc]);
+  const trendRef = useECharts(trendOption);
+
   return (
     <div className="space-y-4">
-      <Card accent="#002f6c">
-        <h2 className="text-sm font-bold uppercase tracking-wider text-[#002f6c]">What this page is (and isn't)</h2>
-        <p className="mt-2 max-w-3xl text-sm leading-relaxed text-slate-600">
-          An 8-round research spike (<code>docs/predictive-model.md</code>) tested a walk-forward-trained model —
-          margin regression, LogReg-style: one linear regression fit on point margin, using 41 leakage-safe
-          features (Elo, rolling EPA/success rate, season-to-date grades, injuries, weather, rest, nonlinear
-          transforms) — against the market's own closing line. <b className="text-slate-700">The honest conclusion:
-          straight-up accuracy trails the market by ~2 points, and no configuration tested shows a confirmed
-          against-the-spread (ATS) edge.</b> This page exists to explore <i>how</i> the model performs and explain
-          <i> why</i> it makes the calls it does — not to suggest it beats the closing line.
-        </p>
-      </Card>
-
       <div className="flex flex-wrap gap-3">
         <Kpi label="Pooled straight-up accuracy" value={pct(Number(pooled?.model_accuracy))} sub={`n=${pooled?.n ?? "--"}`} />
         <Kpi label="Market moneyline accuracy" value={pct(Number(pooled?.market_accuracy))} accent="#94a3b8" />
@@ -73,38 +84,67 @@ export default function OverviewTab({ seasonSummary, testSeasons }: { seasonSumm
         </div>
       </Card>
 
-      <Card
-        title="Why this model, and why not a more complex one"
-        subtitle="8-season pooled straight-up accuracy across every configuration tried this session — docs/predictive-model.md, Round 8"
-      >
-        <div className={`overflow-x-auto ${tableWrapCls}`}>
-          <table className="w-full text-sm">
-            <thead className={theadCls}>
-              <tr>
-                <th className="px-3 py-2">Configuration</th>
-                <th className="px-3 py-2 text-right">Features</th>
-                <th className="px-3 py-2 text-right">Complexity (1-5)</th>
-                <th className="px-3 py-2 text-right">Pooled accuracy</th>
-              </tr>
-            </thead>
-            <tbody>
-              {COMPLEXITY_ROWS.map((r) => (
-                <tr key={r.config} className={`${trCls} ${r.config.includes("this page") ? "bg-[#002f6c]/[0.04]" : ""}`}>
-                  <td className="px-3 py-1.5 font-medium">{r.config}</td>
-                  <td className="px-3 py-1.5 text-right">{r.features}</td>
-                  <td className="px-3 py-1.5 text-right">{r.complexity || "--"}</td>
-                  <td className="px-3 py-1.5 text-right font-semibold">{r.acc}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <p className="mt-3 text-xs text-slate-500">
-          Margin regression ties AdaBoost for best accuracy but has the lowest season-to-season variance of anything
-          tested, and — unlike a classifier — produces a predicted point margin and a fitted confidence distribution,
-          which is why it was chosen for this exploration page. See <code>docs/predictive-model-decision.md</code>.
-        </p>
+      <Card title="Model vs. market vs. Elo, by season">
+        <div ref={trendRef} className="h-[360px]" />
       </Card>
+
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <button
+          onClick={() => setDetailsOpen((o) => !o)}
+          className="flex w-full items-center justify-between px-4 py-3 text-left"
+        >
+          <span className="text-sm font-semibold text-slate-800">Why this model? What was tried, and how we landed here</span>
+          <span className="text-xs font-medium text-[#002f6c]">{detailsOpen ? "Hide ▲" : "Show ▼"}</span>
+        </button>
+        {detailsOpen && (
+          <div className="space-y-4 border-t border-slate-100 p-4">
+            <p className="max-w-3xl text-sm leading-relaxed text-slate-600">
+              An 8-round research spike (<code>docs/predictive-model.md</code>) tested a walk-forward-trained model —
+              margin regression, LogReg-style: one linear regression fit on point margin, using 41 leakage-safe
+              features (Elo, rolling EPA/success rate, season-to-date grades, injuries, weather, rest, nonlinear
+              transforms) — against the market's own closing line. <b className="text-slate-700">The honest conclusion:
+              straight-up accuracy trails the market by ~2 points, and no configuration tested shows a confirmed
+              against-the-spread (ATS) edge.</b> This page exists to explore <i>how</i> the model performs and explain
+              <i> why</i> it makes the calls it does — not to suggest it beats the closing line.
+            </p>
+
+            <div>
+              <h3 className="mb-1 text-sm font-semibold text-slate-700">Why this model, and why not a more complex one</h3>
+              <p className="mb-2 text-xs text-slate-500">
+                8-season pooled straight-up accuracy across every configuration tried this session — docs/predictive-model.md, Round 8
+              </p>
+              <div className={`overflow-x-auto ${tableWrapCls}`}>
+                <table className="w-full text-sm">
+                  <thead className={theadCls}>
+                    <tr>
+                      <th className="px-3 py-2">Configuration</th>
+                      <th className="px-3 py-2 text-right">Features</th>
+                      <th className="px-3 py-2 text-right">Complexity (1-5)</th>
+                      <th className="px-3 py-2 text-right">Pooled accuracy</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {COMPLEXITY_ROWS.map((r) => (
+                      <tr key={r.config} className={`${trCls} ${r.config.includes("this page") ? "bg-[#002f6c]/[0.04]" : ""}`}>
+                        <td className="px-3 py-1.5 font-medium">{r.config}</td>
+                        <td className="px-3 py-1.5 text-right">{r.features}</td>
+                        <td className="px-3 py-1.5 text-right">{r.complexity || "--"}</td>
+                        <td className="px-3 py-1.5 text-right font-semibold">{r.acc}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="mt-3 text-xs text-slate-500">
+                Margin regression ties AdaBoost for best accuracy but has the lowest season-to-season variance of
+                anything tested, and — unlike a classifier — produces a predicted point margin and a fitted
+                confidence distribution, which is why it was chosen for this exploration page. See{" "}
+                <code>docs/predictive-model-decision.md</code>.
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

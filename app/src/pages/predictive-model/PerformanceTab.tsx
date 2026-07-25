@@ -7,7 +7,32 @@ import type { EChartsOption } from "echarts";
 import type { Row } from "../../lib/data/loader";
 import { useECharts } from "../../components/charts/useECharts";
 import { Card, FilterGroup, Kpi, tableWrapCls, theadCls, trCls } from "../../components/ui";
-import { ALL_SEASONS, ALL_TEAMS, accuracyOf, atsAccuracyOf, filterGames, pct, seasonOptions, teamOptions } from "./shared";
+import {
+  ALL_SEASONS,
+  ALL_TEAMS,
+  accuracyByConfidence,
+  accuracyByWeek,
+  accuracyOf,
+  atsAccuracyOf,
+  filterGames,
+  missComparison,
+  pct,
+  seasonOptions,
+  teamOptions,
+} from "./shared";
+
+/** Small hover-only info marker — matches the app's existing convention of a
+ * native `title` attribute for "nothing obvious until hovered" hints. */
+function InfoDot({ text }: { text: string }) {
+  return (
+    <span
+      title={text}
+      className="ml-1.5 inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full bg-slate-200 text-[10px] font-bold text-slate-500 align-middle"
+    >
+      i
+    </span>
+  );
+}
 
 export default function PerformanceTab({ games }: { games: Row[] }) {
   const [season, setSeason] = useState(ALL_SEASONS);
@@ -70,6 +95,63 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
     });
   }, [filtered]);
 
+  const weekly = useMemo(() => accuracyByWeek(filtered), [filtered]);
+  const weeklyOption = useMemo<EChartsOption | null>(() => {
+    if (!weekly.length) return null;
+    return {
+      grid: { left: 10, right: 20, top: 10, bottom: 10, containLabel: true },
+      tooltip: {
+        trigger: "axis",
+        formatter: (p: unknown) => {
+          const arr = p as { dataIndex: number }[];
+          const r = weekly[arr[0].dataIndex];
+          return `Week ${r.week}<br/>${pct(r.acc)} (n=${r.n})`;
+        },
+      },
+      xAxis: { type: "category", data: weekly.map((r) => `Wk${r.week}`), name: "Week" },
+      yAxis: { type: "value", name: "Accuracy", min: 0, max: 1, axisLabel: { formatter: (v: number) => `${(v * 100).toFixed(0)}%` } },
+      series: [
+        {
+          type: "bar",
+          data: weekly.map((r) => r.acc),
+          itemStyle: { color: "#002f6c" },
+          markLine: { symbol: "none", lineStyle: { type: "dashed", color: "#94a3b8" }, label: { formatter: "50%" }, data: [{ yAxis: 0.5 }] },
+        },
+      ],
+    } as EChartsOption;
+  }, [weekly]);
+  const weeklyRef = useECharts(weeklyOption);
+
+  const confidence = useMemo(() => accuracyByConfidence(filtered), [filtered]);
+  const confidenceOption = useMemo<EChartsOption | null>(() => {
+    if (!confidence.length) return null;
+    return {
+      grid: { left: 10, right: 20, top: 10, bottom: 10, containLabel: true },
+      tooltip: {
+        trigger: "axis",
+        formatter: (p: unknown) => {
+          const arr = p as { dataIndex: number }[];
+          const r = confidence[arr[0].dataIndex];
+          return `|predicted margin| ${r.bucket} pts<br/>${pct(r.acc)} (n=${r.n})`;
+        },
+      },
+      xAxis: { type: "category", data: confidence.map((r) => `${r.bucket} pts`), name: "Model's confidence (|predicted margin|)" },
+      yAxis: { type: "value", name: "Accuracy", min: 0, max: 1, axisLabel: { formatter: (v: number) => `${(v * 100).toFixed(0)}%` } },
+      series: [
+        {
+          type: "bar",
+          data: confidence.map((r) => r.acc),
+          itemStyle: { color: "#dc2626" },
+          markLine: { symbol: "none", lineStyle: { type: "dashed", color: "#94a3b8" }, label: { formatter: "50%" }, data: [{ yAxis: 0.5 }] },
+        },
+      ],
+    } as EChartsOption;
+  }, [confidence]);
+  const confidenceRef = useECharts(confidenceOption);
+
+  const miss = useMemo(() => missComparison(filtered), [filtered]);
+  const [correctStats, wrongStats] = miss;
+
   return (
     <div className="space-y-4">
       <FilterGroup label="Filter">
@@ -98,7 +180,12 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
       </div>
 
       <Card
-        title="Predicted vs. actual margin"
+        title={
+          <span className="inline-flex items-center">
+            Predicted vs. actual margin
+            <InfoDot text="Predicted margin: the model's estimate of home score minus away score, made before kickoff. Actual margin: the real final-score differential. A point on the dashed diagonal is a perfect prediction; the further above/below it, the further off the model's margin was — even on games it still picked correctly." />
+          </span>
+        }
         subtitle="Each dot is one game. On the dashed line = perfect prediction. Blue = correct winner call, red = wrong."
       >
         <div ref={scatterRef} className="h-[480px]" />
@@ -132,6 +219,39 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
             </tbody>
           </table>
         </div>
+      </Card>
+
+      <Card title="Accuracy by week" subtitle="How the model performs at each point in the season, pooled across the current filter">
+        <div ref={weeklyRef} className="h-[320px]" />
+      </Card>
+
+      <Card
+        title="What's different about the misses?"
+        subtitle="Accuracy broken out by how confident the model was (|predicted margin|) — a model with real signal should be more reliable on lopsided calls than close ones"
+      >
+        <div ref={confidenceRef} className="h-[320px]" />
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+            <div className="text-xs font-semibold text-slate-600">Correct picks (n={correctStats?.n ?? 0})</div>
+            <dl className="mt-1.5 space-y-0.5 text-xs text-slate-500">
+              <div className="flex justify-between"><dt>Avg |predicted margin|</dt><dd className="font-medium text-slate-700">{correctStats?.avgAbsPredicted?.toFixed(1) ?? "--"} pts</dd></div>
+              <div className="flex justify-between"><dt>Avg |spread line|</dt><dd className="font-medium text-slate-700">{correctStats?.avgAbsSpread?.toFixed(1) ?? "--"} pts</dd></div>
+              <div className="flex justify-between"><dt>Avg margin error</dt><dd className="font-medium text-slate-700">{correctStats?.avgAbsError?.toFixed(1) ?? "--"} pts</dd></div>
+            </dl>
+          </div>
+          <div className="rounded-xl border border-rose-200 bg-rose-50/50 p-3">
+            <div className="text-xs font-semibold text-rose-700">Wrong picks (n={wrongStats?.n ?? 0})</div>
+            <dl className="mt-1.5 space-y-0.5 text-xs text-slate-500">
+              <div className="flex justify-between"><dt>Avg |predicted margin|</dt><dd className="font-medium text-slate-700">{wrongStats?.avgAbsPredicted?.toFixed(1) ?? "--"} pts</dd></div>
+              <div className="flex justify-between"><dt>Avg |spread line|</dt><dd className="font-medium text-slate-700">{wrongStats?.avgAbsSpread?.toFixed(1) ?? "--"} pts</dd></div>
+              <div className="flex justify-between"><dt>Avg margin error</dt><dd className="font-medium text-slate-700">{wrongStats?.avgAbsError?.toFixed(1) ?? "--"} pts</dd></div>
+            </dl>
+          </div>
+        </div>
+        <p className="mt-3 text-xs text-slate-500">
+          If the misses cluster in low-confidence buckets and low average spread lines, the model is failing exactly
+          where you'd expect — close, hard-to-call games — rather than missing in ways that suggest a deeper problem.
+        </p>
       </Card>
     </div>
   );

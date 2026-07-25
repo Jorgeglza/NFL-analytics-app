@@ -5,6 +5,7 @@
 import { useEffect, useState } from "react";
 import {
   getPredictiveModelGames,
+  getPredictiveModelGameFeatures,
   getPredictiveModelSeasonSummary,
   getPredictiveModelImportance,
   getPredictiveModelCalibration,
@@ -31,6 +32,7 @@ type Tab = (typeof TABS)[number][0];
 export default function PredictiveModel() {
   const [tab, setTab] = useState<Tab>("Overview");
   const [games, setGames] = useState<Row[]>([]);
+  const [gameFeatures, setGameFeatures] = useState<Row[]>([]);
   const [seasonSummary, setSeasonSummary] = useState<Row[]>([]);
   const [importance, setImportance] = useState<Row[]>([]);
   const [calibration, setCalibration] = useState<PredictiveModelCalibration | null>(null);
@@ -41,12 +43,14 @@ export default function PredictiveModel() {
   useEffect(() => {
     Promise.all([
       getPredictiveModelGames(),
+      getPredictiveModelGameFeatures(),
       getPredictiveModelSeasonSummary(),
       getPredictiveModelImportance(),
       getPredictiveModelCalibration(),
       getPredictiveModelMeta(),
-    ]).then(([g, ss, imp, cal, m]) => {
+    ]).then(([g, gf, ss, imp, cal, m]) => {
       setGames(g);
+      setGameFeatures(gf);
       setSeasonSummary(ss);
       setImportance(imp);
       setCalibration(cal);
@@ -54,7 +58,7 @@ export default function PredictiveModel() {
     });
   }, []);
 
-  const loading = !games.length || !seasonSummary.length || !calibration || !meta;
+  const loading = !games.length || !gameFeatures.length || !seasonSummary.length || !calibration || !meta;
 
   return (
     <div className="space-y-4">
@@ -92,7 +96,9 @@ export default function PredictiveModel() {
         <>
           {tab === "Overview" && <OverviewTab seasonSummary={seasonSummary} testSeasons={meta!.test_seasons} />}
           {tab === "Performance" && <PerformanceTab games={games} />}
-          {tab === "Explanation" && <ExplanationTab importance={importance} />}
+          {tab === "Explanation" && (
+            <ExplanationTab importance={importance} games={games} gameFeatures={gameFeatures} featureCols={meta!.feature_cols} />
+          )}
           {tab === "Confidence" && <ConfidenceTab calibration={calibration!} />}
         </>
       )}

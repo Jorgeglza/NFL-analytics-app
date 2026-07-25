@@ -59,6 +59,8 @@ export const getPredictiveModelSeasonSummary = async () =>
   toRecords(await fetchJson<CompactFrame>("predictive_model/season_summary.json"));
 export const getPredictiveModelImportance = async () =>
   toRecords(await fetchJson<CompactFrame>("predictive_model/importance.json"));
+export const getPredictiveModelGameFeatures = async () =>
+  toRecords(await fetchJson<CompactFrame>("predictive_model/game_features.json"));
 
 export interface PredictiveModelCalibration {
   table: CompactFrame;
@@ -73,6 +75,7 @@ export interface PredictiveModelMeta {
   generated_at: string;
   test_seasons: number[];
   n_features: number;
+  feature_cols: string[];
   model: string;
 }
 export const getPredictiveModelMeta = () => fetchJson<PredictiveModelMeta>("predictive_model/meta.json");

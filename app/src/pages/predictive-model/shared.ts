@@ -44,3 +44,63 @@ export function atsAccuracyOf(games: Row[]): { acc: number | null; n: number } {
 export function pct(v: number | null | undefined, digits = 1): string {
   return v === null || v === undefined ? "--" : `${(v * 100).toFixed(digits)}%`;
 }
+
+/** "diff_l3_epa_diff" -> "l3 epa diff" — shared feature-name display across tabs. */
+export function labelFor(feature: string): string {
+  return feature.replace(/^diff_/, "").replace(/_/g, " ");
+}
+
+export function isCorrect(g: Row): boolean {
+  return (Number(g.predicted_margin) > 0 ? 1 : 0) === Number(g.home_win);
+}
+
+/** Straight-up accuracy per week number (pooled across whatever games are passed in). */
+export function accuracyByWeek(games: Row[]): { week: number; n: number; acc: number | null }[] {
+  const weeks = Array.from(new Set(games.map((g) => Number(g.week)))).sort((a, b) => a - b);
+  return weeks.map((week) => {
+    const rows = games.filter((g) => Number(g.week) === week);
+    return { week, n: rows.length, acc: accuracyOf(rows) };
+  });
+}
+
+/** Fixed confidence buckets by |predicted margin| — reveals whether the model is
+ * more reliable on lopsided calls than close ones ("what's different about the misses"). */
+const CONFIDENCE_BUCKETS: [number, number, string][] = [
+  [0, 3, "0-3"],
+  [3, 7, "3-7"],
+  [7, 12, "7-12"],
+  [12, 20, "12-20"],
+  [20, Infinity, "20+"],
+];
+
+export function accuracyByConfidence(games: Row[]): { bucket: string; n: number; acc: number | null }[] {
+  return CONFIDENCE_BUCKETS.map(([lo, hi, label]) => {
+    const rows = games.filter((g) => {
+      const m = Math.abs(Number(g.predicted_margin));
+      return m >= lo && m < hi;
+    });
+    return { bucket: label, n: rows.length, acc: accuracyOf(rows) };
+  });
+}
+
+/** Compact comparison of what differs between correct and incorrect picks. */
+export function missComparison(games: Row[]): {
+  n: number;
+  avgAbsSpread: number | null;
+  avgAbsPredicted: number | null;
+  avgAbsError: number | null;
+}[] {
+  const groups = [games.filter(isCorrect), games.filter((g) => !isCorrect(g))];
+  return groups.map((rows) => {
+    if (!rows.length) return { n: 0, avgAbsSpread: null, avgAbsPredicted: null, avgAbsError: null };
+    const spreadRows = rows.filter((g) => g.spread_line !== null);
+    return {
+      n: rows.length,
+      avgAbsSpread: spreadRows.length
+        ? spreadRows.reduce((s, g) => s + Math.abs(Number(g.spread_line)), 0) / spreadRows.length
+        : null,
+      avgAbsPredicted: rows.reduce((s, g) => s + Math.abs(Number(g.predicted_margin)), 0) / rows.length,
+      avgAbsError: rows.reduce((s, g) => s + Math.abs(Number(g.actual_margin) - Number(g.predicted_margin)), 0) / rows.length,
+    };
+  });
+}

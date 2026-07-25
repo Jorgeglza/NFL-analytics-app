@@ -275,6 +275,26 @@ Per page: run old app side-by-side (`pda-ie` env), match tables/KPIs/chart serie
   writeup in `docs/predictive-model.md`'s "P2: the exploration page itself" section.
 - Re-run `python pipeline/predictive_model/export_page.py` manually once a season completes
   (not on the weekly cron — this package still has no GitHub Actions wiring).
+- **Redesign (2026-07-25), per user feedback that Overview was over-informative for a landing
+  tab**: Overview now leads with KPIs + accuracy-by-season table + a model-vs-market-vs-Elo
+  trend chart; the full research narrative (the "what this page is" blurb + the 8-config
+  complexity/accuracy table) moved into a click-to-expand section at the bottom, collapsed by
+  default. Performance gained: a hover-only "i" info marker next to "Predicted vs. actual
+  margin" explaining what the two numbers mean (matches the app's existing native-`title`
+  hover convention); an "Accuracy by week" bar chart; and a "What's different about the
+  misses?" section (accuracy by |predicted margin| confidence bucket, plus a correct-vs-wrong
+  comparison of avg confidence/spread/margin error) — confirms misses cluster in low-
+  confidence, low-spread games rather than in a pattern suggesting a deeper problem.
+  Explanation gained a **Game inspector**: pick any season/week/matchup and see an exact
+  per-game linear decomposition (`export_page.py` now also computes and exports
+  `game_features.json` — each feature's post-impute/scale value times the fitted `lin_reg`
+  coefficient, i.e. its exact point contribution to that game's predicted margin; the
+  intercept + all contributions sum to the predicted margin exactly, verified in the browser
+  preview). This is a genuinely different explanation than permutation importance (global,
+  averaged) — it's local and exact, only possible because the chosen model is linear.
+  Verified: `tsc --noEmit`, `npm run build`, 58-test Vitest suite all green; browser preview
+  click-through of the collapsible, the new charts, and the game inspector (including
+  reactivity when switching weeks) with zero console errors.
 - Research artifacts (`data/predictive_model/*.csv`, `metrics.json`, `report.txt` — the
   per-round result tables that back every number in `docs/predictive-model.md`) are now
   **git-tracked** (2026-07-25) — removed from `.gitignore` and committed (~63 KB). Only

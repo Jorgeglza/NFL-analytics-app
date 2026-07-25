@@ -78,6 +78,7 @@ def run(games: pd.DataFrame):
     instead of only aggregate metrics."""
     build = _reg_builders()["lin_reg"]
     game_rows = []
+    game_feature_rows = []
     residual_pool_all = []
     importance_by_season = []
     diag_rows = []
@@ -110,6 +111,17 @@ def run(games: pd.DataFrame):
 
         p_win_cdf, p_cov_cdf = _normal_cdf(predicted_margin, sigma, spread_test)
 
+        # Per-game linear decomposition: lin_reg is impute -> scale -> linear,
+        # so predicted_margin == intercept + sum(coef_i * scaled_feature_i).
+        # Reconstructing that sum per game gives an exact, additive "how do
+        # these stats convert to this prediction" breakdown -- unlike
+        # permutation importance (which is a global, not per-game, measure).
+        imputed = model.named_steps["impute"].transform(X_test)
+        scaled = model.named_steps["scale"].transform(imputed)
+        coef = model.named_steps["reg"].coef_
+        intercept = float(model.named_steps["reg"].intercept_)
+        contributions = scaled * coef  # (n_games, n_features)
+
         for i, (_, row) in enumerate(test.iterrows()):
             game_rows.append({
                 "season": int(row["season"]),
@@ -127,6 +139,16 @@ def run(games: pd.DataFrame):
                 "elo_p_home": None if pd.isna(row["elo_p_home"]) else float(row["elo_p_home"]),
             })
 
+            feat_row = {
+                "season": int(row["season"]), "week": int(row["week"]),
+                "home_team": row["home_team"], "away_team": row["away_team"],
+                "intercept": intercept,
+            }
+            for j, col in enumerate(FEATURE_COLS):
+                feat_row[col] = None if pd.isna(row[col]) else float(row[col])
+                feat_row[f"{col}_contrib"] = float(contributions[i, j])
+            game_feature_rows.append(feat_row)
+
         # Permutation importance against the regression target (MAE-based --
         # lin_reg, not a classifier), per test-season fold.
         pi = permutation_importance(
@@ -137,12 +159,13 @@ def run(games: pd.DataFrame):
         importance_by_season.append(imp)
 
     games_df = pd.DataFrame(game_rows)
+    game_features_df = pd.DataFrame(game_feature_rows)
     diag_df = pd.DataFrame(diag_rows)
     residual_pool = np.concatenate(residual_pool_all) if residual_pool_all else np.array([])
     importance_df = pd.concat(importance_by_season, axis=1).mean(axis=1).sort_values(ascending=False) \
         if importance_by_season else pd.Series(dtype=float)
 
-    return games_df, diag_df, residual_pool, importance_df
+    return games_df, game_features_df, diag_df, residual_pool, importance_df
 
 
 def build_season_summary(games_df: pd.DataFrame) -> pd.DataFrame:
@@ -190,7 +213,7 @@ def main():
     games = games.dropna(subset=["home_margin"])
     print(f"{len(games)} completed REG games. Test seasons: {EXPORT_TEST_SEASONS[0]}-{EXPORT_TEST_SEASONS[-1]}\n")
 
-    games_df, diag_df, residual_pool, importance = run(games)
+    games_df, game_features_df, diag_df, residual_pool, importance = run(games)
     print(f"Exported {len(games_df)} walk-forward predictions across "
           f"{games_df['season'].nunique()} seasons.")
 
@@ -204,6 +227,7 @@ def main():
     importance_df = importance.rename("importance").reset_index().rename(columns={"index": "feature"})
 
     _write_json("games.json", _compact(games_df))
+    _write_json("game_features.json", _compact(game_features_df))
     _write_json("season_summary.json", _compact(season_summary))
     _write_json("importance.json", _compact(importance_df))
     _write_json("calibration.json", {
@@ -216,6 +240,7 @@ def main():
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "test_seasons": EXPORT_TEST_SEASONS,
         "n_features": len(FEATURE_COLS),
+        "feature_cols": FEATURE_COLS,
         "model": "margin_regression_lin_reg",
     })
     print(f"\nSaved to {APP_DATA_DIR}")
