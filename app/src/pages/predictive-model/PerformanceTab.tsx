@@ -184,6 +184,14 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
   const correctFn = useCallback((g: Row) => isCorrectAtThreshold(g, thresholdPct), [thresholdPct]);
   const catStats = useMemo(() => categoryStats(filtered, correctFn), [filtered, correctFn]);
   const favStats = useMemo(() => favoriteLocationStats(filtered, correctFn), [filtered, correctFn]);
+  // Single pooled number for the cutoff readout — same graded subset as the
+  // granular chart itself (ungraded games have no home_win_prob to compare
+  // against a threshold), so this always matches "sum of the chips below."
+  const accAtThreshold = useMemo(() => {
+    const graded = filtered.filter((g) => g.home_win_prob !== null);
+    if (!graded.length) return null;
+    return { acc: graded.filter(correctFn).length / graded.length, n: graded.length };
+  }, [filtered, correctFn]);
   // "Outcome" (default) crosses the spread's favorite with the actual
   // winner (4 buckets, only knowable post-game); "Pregame" groups by
   // favorite location alone (2 buckets, knowable before kickoff) — for
@@ -765,6 +773,11 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
           <div className="mb-3 flex flex-wrap items-center gap-3">
             <span className="text-xs font-medium text-slate-600">
               Decision cutoff: <span className="font-semibold text-slate-800">{thresholdPct.toFixed(0)}%</span> predicted home win probability
+            </span>
+            <span className="text-xs font-medium text-slate-600">
+              Success rate at this cutoff:{" "}
+              <span className="font-semibold text-slate-800">{pct(accAtThreshold?.acc ?? null)}</span>
+              {accAtThreshold && <span className="text-slate-400"> (n={accAtThreshold.n})</span>}
             </span>
             {Math.round(thresholdPct) !== 50 && (
               <button
