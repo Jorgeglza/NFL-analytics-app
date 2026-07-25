@@ -17,6 +17,7 @@ import {
   accuracyByWeek,
   accuracyOf,
   atsAccuracyOf,
+  bestThreshold,
   buildMarginHeatmap,
   calibrationByWeek,
   calibrationBySeason,
@@ -192,6 +193,10 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
     if (!graded.length) return null;
     return { acc: graded.filter(correctFn).length / graded.length, n: graded.length };
   }, [filtered, correctFn]);
+  // The cutoff that would have maximized pooled accuracy on the games
+  // currently in view — a quick "how good could this get" reference point,
+  // not a recommendation to actually pick games this way (see the tooltip).
+  const optimalThreshold = useMemo(() => bestThreshold(filtered), [filtered]);
   // "Outcome" (default) crosses the spread's favorite with the actual
   // winner (4 buckets, only knowable post-game); "Pregame" groups by
   // favorite location alone (2 buckets, knowable before kickoff) — for
@@ -785,6 +790,15 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
                 className="rounded-full border border-slate-300 px-2.5 py-1 text-[11px] font-medium text-slate-600 hover:bg-slate-50"
               >
                 Reset to 50%
+              </button>
+            )}
+            {optimalThreshold && (
+              <button
+                onClick={() => setThresholdPct(optimalThreshold.thresholdPct)}
+                title={`Sets the cutoff to ${optimalThreshold.thresholdPct.toFixed(1)}%, the highest pooled accuracy (${pct(optimalThreshold.acc)}) achievable on the games currently in view — the best case, not a recommendation for how to actually pick games.`}
+                className="rounded-full border border-[#002f6c]/30 bg-[#002f6c]/5 px-2.5 py-1 text-[11px] font-medium text-[#002f6c] hover:bg-[#002f6c]/10"
+              >
+                Maximize accuracy
               </button>
             )}
           </div>

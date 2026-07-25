@@ -64,6 +64,25 @@ export function isCorrectAtThreshold(g: Row, thresholdPct: number): boolean {
   return (Number(g.home_win_prob) * 100 >= thresholdPct ? 1 : 0) === Number(g.home_win);
 }
 
+/** Sweeps every distinct predicted probability in `games` as a candidate
+ * cutoff (pooled accuracy only changes at these points, so they're the only
+ * values worth checking) and returns the one with the highest pooled
+ * accuracy — the best a moving decision cutoff can do on this exact slice
+ * of games. Ties keep the lowest qualifying cutoff, an arbitrary but stable
+ * choice among equally-good options. Null if there are no graded games. */
+export function bestThreshold(games: Row[]): { thresholdPct: number; acc: number; n: number } | null {
+  const graded = games.filter((g) => g.home_win_prob !== null);
+  if (!graded.length) return null;
+  const candidates = Array.from(new Set(graded.map((g) => Number(g.home_win_prob) * 100))).sort((a, b) => a - b);
+  let best = { thresholdPct: 50, acc: -1 };
+  for (const t of candidates) {
+    const correct = graded.filter((g) => isCorrectAtThreshold(g, t)).length;
+    const acc = correct / graded.length;
+    if (acc > best.acc) best = { thresholdPct: t, acc };
+  }
+  return { ...best, n: graded.length };
+}
+
 /** "AWAY@HOME" tooltip label — bolds the model's predicted winner and
  * colors the actual winner green, so a hover shows both at a glance
  * without reading the raw numbers. Ties get no green (no actual winner);
