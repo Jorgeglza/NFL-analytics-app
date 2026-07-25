@@ -122,39 +122,49 @@ export function buildMarginHeatmap(games: Row[], bucketWidth = 10): Heatmap {
   return { xLabels: labels, yLabels: labels, cells };
 }
 
-/** Bucketizes predicted win probability (x, fixed-width % bins) against the
- * actual outcome (y: Away win / Home win — only 2 rows, since the outcome
- * itself is binary) — the "%" mode's parallel to the margin heatmap. A cell
- * is "correct" when its bucket is on the side of 50% matching that row's
- * outcome (e.g. a 60-70% bucket in the "Home win" row is a correct call). */
-export function buildProbabilityHeatmap(games: Row[], bucketWidthPct = 10): Heatmap {
+export interface ReliabilityBucket {
+  binLo: number;
+  binHi: number;
+  n: number;
+  meanPredicted: number; // avg predicted probability of games actually in this bin
+  observedRate: number; // actual home-win rate of games in this bin
+}
+
+/** Reliability-diagram buckets: bins predicted win probability into
+ * fixed-width bins and compares mean predicted vs. observed win rate per
+ * bin — the standard tool for "is this probability itself accurate," a
+ * different question from pick accuracy. Mirrors
+ * pipeline/predictive_model/evaluate.py's calibration_table exactly, just
+ * computed client-side so it can be scoped to the current season/team
+ * filter instead of only the pooled global number on the Confidence tab. */
+export function reliabilityBuckets(games: Row[], nBins = 10): ReliabilityBucket[] {
   const graded = games.filter((g) => g.home_win_prob !== null);
-  if (!graded.length) return { xLabels: [], yLabels: [], cells: [] };
-  const nBuckets = Math.round(100 / bucketWidthPct);
-  const xLabels = Array.from({ length: nBuckets }, (_, i) => `${i * bucketWidthPct}-${(i + 1) * bucketWidthPct}%`);
-  const yLabels = ["Away win", "Home win"];
+  if (!graded.length) return [];
+  const edges = Array.from({ length: nBins + 1 }, (_, i) => i / nBins);
+  const bucketIndex = (p: number) => Math.max(0, Math.min(nBins - 1, Math.floor(p * nBins)));
 
-  const bucketIndex = (p: number) => Math.max(0, Math.min(nBuckets - 1, Math.floor((p * 100) / bucketWidthPct)));
-
-  const grid: { n: number; correct: number }[][] = Array.from({ length: nBuckets }, () => [
-    { n: 0, correct: 0 },
-    { n: 0, correct: 0 },
-  ]);
+  const bins: { n: number; sumPredicted: number; sumObserved: number }[] = Array.from({ length: nBins }, () => ({
+    n: 0,
+    sumPredicted: 0,
+    sumObserved: 0,
+  }));
   graded.forEach((g) => {
-    const xi = bucketIndex(Number(g.home_win_prob));
-    const yi = Number(g.home_win); // 0 = away win row, 1 = home win row
-    grid[xi][yi].n += 1;
-    if (isCorrect(g)) grid[xi][yi].correct += 1;
+    const p = Number(g.home_win_prob);
+    const b = bins[bucketIndex(p)];
+    b.n += 1;
+    b.sumPredicted += p;
+    b.sumObserved += Number(g.home_win);
   });
 
-  const cells: HeatmapCell[] = [];
-  for (let xi = 0; xi < nBuckets; xi++) {
-    for (let yi = 0; yi < 2; yi++) {
-      const cell = grid[xi][yi];
-      if (cell.n > 0) cells.push({ xi, yi, n: cell.n, correctShare: cell.correct / cell.n });
-    }
-  }
-  return { xLabels, yLabels, cells };
+  return bins
+    .map((b, i) => ({
+      binLo: edges[i],
+      binHi: edges[i + 1],
+      n: b.n,
+      meanPredicted: b.n ? b.sumPredicted / b.n : 0,
+      observedRate: b.n ? b.sumObserved / b.n : 0,
+    }))
+    .filter((b) => b.n > 0);
 }
 
 /** Per-season calibration: does the model's own predicted win probability

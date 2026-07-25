@@ -324,6 +324,22 @@ Per page: run old app side-by-side (`pda-ie` env), match tables/KPIs/chart serie
   a fresh tab): both view modes render, toggle switches correctly, all chart/table numbers
   sane (e.g. correct picks show higher avg confidence than wrong picks, calibration gaps
   mostly under 5pt). `tsc --noEmit`, `npm run build`, 58-test suite all green.
+- **"%" mode chart redesign (2026-07-25)**: user feedback that the "%" view's charts weren't
+  as clean/useful as the "Points" view's. Replaced the jittered predicted-probability-vs-
+  binary-outcome scatter and the 2-row probability×outcome heatmap (both bespoke, neither a
+  standard visualization) with the actual purpose-built tool for "is this probability
+  accurate": a **reliability diagram** (`shared.ts`'s new `reliabilityBuckets()`, ports
+  `pipeline/predictive_model/evaluate.py`'s `calibration_table` client-side so it can be
+  scoped to the season/team filter, not just the pooled global number already on the
+  Confidence tab) — 10 probability bins plotted as bubbles (size = N) against the
+  perfect-calibration diagonal, blue within 10pt of the diagonal / red beyond it. The misses
+  section became a **calibration-gap bar chart** (predicted − observed per bucket, diverging
+  around zero, same blue/red rule) built from the same bucket data — removed
+  `buildProbabilityHeatmap` entirely (unused after the swap, deleted rather than left dead).
+  Also added the predicted win probability to the Points-mode scatter's hover tooltip
+  (`pct(g.home_win_prob)` alongside the existing predicted/actual margin line) per direct
+  request. Verified in a clean browser tab: 3 chart instances render in both modes, zero
+  console errors, `tsc --noEmit`/`npm run build`/58-test suite all green.
 - Research artifacts (`data/predictive_model/*.csv`, `metrics.json`, `report.txt` — the
   per-round result tables that back every number in `docs/predictive-model.md`) are now
   **git-tracked** (2026-07-25) — removed from `.gitignore` and committed (~63 KB). Only

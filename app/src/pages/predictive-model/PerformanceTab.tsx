@@ -17,7 +17,6 @@ import {
   accuracyOf,
   atsAccuracyOf,
   buildMarginHeatmap,
-  buildProbabilityHeatmap,
   calibrationByWeek,
   calibrationBySeason,
   filterGames,
@@ -25,10 +24,13 @@ import {
   isCorrect,
   missComparison,
   pct,
+  reliabilityBuckets,
   seasonOptions,
   teamOptions,
   type Heatmap,
 } from "./shared";
+
+const CALIBRATION_TOLERANCE_PCT = 0.1; // >10pt gap between predicted and observed is "miscalibrated"
 
 type Mode = "Points" | "%";
 
@@ -141,11 +143,13 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
       value: [Number(g.predicted_margin), Number(g.actual_margin)] as [number, number],
       name: `${g.season} wk${g.week} ${g.away_team}@${g.home_team}`,
       correct: isCorrect(g),
+      winProb: g.home_win_prob === null ? null : Number(g.home_win_prob),
     }));
     const maxAbs = Math.max(30, ...points.map((p) => Math.max(Math.abs(p.value[0]), Math.abs(p.value[1])))) * 1.05;
     const tooltipFormatter = (p: unknown) => {
-      const pt = p as { data: { name: string; value: [number, number] } };
-      return `${pt.data.name}<br/>predicted ${pt.data.value[0].toFixed(1)} vs actual ${pt.data.value[1].toFixed(1)}`;
+      const pt = p as { data: { name: string; value: [number, number]; winProb: number | null } };
+      const winProbLine = pt.data.winProb !== null ? `<br/>predicted home win prob ${pct(pt.data.winProb)}` : "";
+      return `${pt.data.name}<br/>predicted ${pt.data.value[0].toFixed(1)} vs actual ${pt.data.value[1].toFixed(1)}${winProbLine}`;
     };
     return {
       // Generous, explicit padding (rather than relying only on containLabel)
@@ -205,58 +209,44 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
   }, [filtered]);
   const scatterRef = useECharts(scatterOption);
 
-  // --- % mode: predicted win probability vs. actual outcome ---
-  const probScatterOption = useMemo<EChartsOption | null>(() => {
-    const graded = filtered.filter((g) => g.home_win_prob !== null);
-    if (!graded.length) return null;
-    // Deterministic jitter (seeded by a hash of the game key) so the same
-    // game always lands in the same spot on re-render, but points at the
-    // same probability/outcome don't all stack exactly on top of each other.
-    const jitterOf = (g: Row) => {
-      const key = `${g.season}-${g.week}-${g.home_team}-${g.away_team}`;
-      let h = 0;
-      for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
-      return ((h % 1000) / 1000 - 0.5) * 0.16;
-    };
-    const points = graded.map((g) => ({
-      value: [Number(g.home_win_prob) * 100, Number(g.home_win) + jitterOf(g)] as [number, number],
-      name: `${g.season} wk${g.week} ${g.away_team}@${g.home_team}`,
-      correct: isCorrect(g),
+  // --- % mode: reliability diagram — the standard "is this probability
+  // itself accurate" chart (bins predicted probability, plots mean
+  // predicted vs. observed rate per bin against the perfect-calibration
+  // diagonal). Bubble size = N in that bin. This replaces an earlier
+  // jittered predicted-vs-binary-outcome scatter, which was much noisier
+  // to read than the margin scatter it sat next to — a reliability diagram
+  // is the neat, purpose-built equivalent for a probability surface. */
+  const reliability = useMemo(() => reliabilityBuckets(filtered, 10), [filtered]);
+  const reliabilityOption = useMemo<EChartsOption | null>(() => {
+    if (!reliability.length) return null;
+    const maxN = Math.max(1, ...reliability.map((b) => b.n));
+    const points = reliability.map((b) => ({
+      value: [b.meanPredicted * 100, b.observedRate * 100] as [number, number],
+      n: b.n,
+      binLo: b.binLo * 100,
+      binHi: b.binHi * 100,
+      wellCalibrated: Math.abs(b.meanPredicted - b.observedRate) <= CALIBRATION_TOLERANCE_PCT,
     }));
-    const tooltipFormatter = (p: unknown) => {
-      const pt = p as { data: { name: string; value: [number, number] } };
-      return `${pt.data.name}<br/>predicted home win prob ${pt.data.value[0].toFixed(0)}%<br/>actual: ${pt.data.value[1] > 0.5 ? "Home win" : "Away win"}`;
-    };
+    const sizeOf = (_value: unknown, params: { data: { n: number } }) => 10 + 30 * Math.sqrt(params.data.n / maxN);
     return {
-      grid: { left: 90, right: 30, top: 40, bottom: 60, containLabel: false },
-      legend: { top: 0, data: ["Correct pick", "Wrong pick"] },
-      tooltip: { formatter: tooltipFormatter },
-      xAxis: {
-        type: "value",
-        name: "Predicted home win probability (%)",
-        nameLocation: "middle",
-        nameGap: 32,
-        min: 0,
-        max: 100,
+      grid: { left: 60, right: 30, top: 40, bottom: 60, containLabel: false },
+      legend: { top: 0, data: ["Well-calibrated bucket", "Miscalibrated bucket"] },
+      tooltip: {
+        formatter: (p: unknown) => {
+          const pt = p as { data: { binLo: number; binHi: number; n: number; value: [number, number] } };
+          return `Predicted ${pt.data.binLo.toFixed(0)}-${pt.data.binHi.toFixed(0)}% bucket (n=${pt.data.n})<br/>Avg predicted ${pt.data.value[0].toFixed(1)}%<br/>Observed win rate ${pt.data.value[1].toFixed(1)}%`;
+        },
       },
-      yAxis: {
-        type: "value",
-        name: "Actual outcome",
-        nameLocation: "middle",
-        nameGap: 70,
-        nameRotate: 90,
-        min: -0.3,
-        max: 1.3,
-        axisLabel: { formatter: (v: number) => (v <= 0 ? "Away win" : v >= 1 ? "Home win" : "") },
-      },
+      xAxis: { type: "value", name: "Mean predicted win probability", nameLocation: "middle", nameGap: 32, min: 0, max: 100 },
+      yAxis: { type: "value", name: "Observed win rate", nameLocation: "middle", nameGap: 42, nameRotate: 90, min: 0, max: 100 },
       series: [
         {
           type: "line",
+          name: "Perfect calibration",
           data: [
-            [50, -0.3],
-            [50, 1.3],
+            [0, 0],
+            [100, 100],
           ],
-          name: "50% decision line",
           lineStyle: { color: "#94a3b8", type: "dashed", width: 1 },
           symbol: "none",
           silent: true,
@@ -264,25 +254,25 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
           z: 1,
         },
         {
-          name: "Correct pick",
+          name: "Well-calibrated bucket",
           type: "scatter",
-          symbolSize: 6,
-          itemStyle: { color: "#2563eb", opacity: 0.5 },
-          data: points.filter((p) => p.correct),
+          itemStyle: { color: "#2563eb", opacity: 0.75 },
+          data: points.filter((p) => p.wellCalibrated),
+          symbolSize: sizeOf,
           z: 2,
         },
         {
-          name: "Wrong pick",
+          name: "Miscalibrated bucket",
           type: "scatter",
-          symbolSize: 6,
-          itemStyle: { color: "#dc2626", opacity: 0.5 },
-          data: points.filter((p) => !p.correct),
+          itemStyle: { color: "#dc2626", opacity: 0.75 },
+          data: points.filter((p) => !p.wellCalibrated),
+          symbolSize: sizeOf,
           z: 2,
         },
       ],
     } as EChartsOption;
-  }, [filtered]);
-  const probScatterRef = useECharts(probScatterOption);
+  }, [reliability]);
+  const reliabilityRef = useECharts(reliabilityOption);
 
   const bySeasonTable = useMemo(() => {
     const seasonsAsc = Array.from(new Set(filtered.map((g) => Number(g.season)))).sort((a, b) => a - b);
@@ -352,12 +342,47 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
   );
   const heatmapRef = useECharts(heatmapOption);
 
-  const probHeatmap = useMemo(() => buildProbabilityHeatmap(filtered, 10), [filtered]);
-  const probHeatmapOption = useMemo(
-    () => heatmapOptionOf(probHeatmap, { xName: "Predicted home win probability", yName: "Actual outcome", xGap: 44, yGap: 55, diagonal: false }),
-    [probHeatmap],
-  );
-  const probHeatmapRef = useECharts(probHeatmapOption);
+  // Calibration gap by bucket — a diverging bar chart built from the same
+  // reliability buckets as the diagram above: shows exactly which
+  // confidence ranges the model over/under-states, which is the "%" mode's
+  // equivalent of "what's different about the misses" (a badly miscalibrated
+  // bucket is where the probability itself is misleading, whether or not
+  // any individual pick in it happened to be right).
+  const gapOption = useMemo<EChartsOption | null>(() => {
+    if (!reliability.length) return null;
+    const gaps = reliability.map((b) => (b.meanPredicted - b.observedRate) * 100);
+    return {
+      grid: { left: 60, right: 20, top: 20, bottom: 60, containLabel: false },
+      tooltip: {
+        formatter: (p: unknown) => {
+          const arr = p as { dataIndex: number }[];
+          const b = reliability[arr[0].dataIndex];
+          const gap = (b.meanPredicted - b.observedRate) * 100;
+          return `Predicted ${(b.binLo * 100).toFixed(0)}-${(b.binHi * 100).toFixed(0)}% bucket (n=${b.n})<br/>Avg predicted ${pct(b.meanPredicted)}<br/>Observed ${pct(b.observedRate)}<br/>Gap ${gap >= 0 ? "+" : ""}${gap.toFixed(1)}pt`;
+        },
+      },
+      xAxis: {
+        type: "category",
+        data: reliability.map((b) => `${(b.binLo * 100).toFixed(0)}-${(b.binHi * 100).toFixed(0)}%`),
+        name: "Predicted win probability bucket",
+        nameLocation: "middle",
+        nameGap: 44,
+        axisLabel: { rotate: 45, fontSize: 10 },
+      },
+      yAxis: { type: "value", name: "Predicted − observed (pts)", nameLocation: "middle", nameGap: 42 },
+      series: [
+        {
+          type: "bar",
+          data: gaps.map((g) => ({
+            value: g,
+            itemStyle: { color: Math.abs(g) > CALIBRATION_TOLERANCE_PCT * 100 ? "#dc2626" : "#2563eb" },
+          })),
+          markLine: { symbol: "none", lineStyle: { color: "#0f172a" }, data: [{ yAxis: 0 }], label: { show: false } },
+        },
+      ],
+    } as EChartsOption;
+  }, [reliability]);
+  const gapRef = useECharts(gapOption);
 
   const miss = useMemo(() => missComparison(filtered), [filtered]);
   const [correctStats, wrongStats] = miss;
@@ -406,13 +431,13 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
         <Card
           title={
             <span className="inline-flex items-center">
-              Predicted win probability vs. actual outcome
-              <InfoDot text="Predicted probability: the model's confidence the home team wins, made before kickoff (see the Confidence tab for how margin converts to this number). Points above the dashed 50% line were picked to win at home; below, to lose. A well-calibrated model should also be right in proportion to its stated confidence — see the tables below." />
+              Reliability diagram
+              <InfoDot text="Games are grouped into 10 buckets by predicted home win probability. Each dot is one bucket: x = the average probability the model actually predicted for games in it, y = the share of those games the home team actually won. A dot on the dashed diagonal means that bucket is perfectly calibrated (e.g. among games predicted ~70%, the home team really did win ~70% of the time); further from the line = more over/under-confident. Dot size = how many games are in that bucket." />
             </span>
           }
-          subtitle="Each dot is one game, jittered vertically so overlapping games stay visible. On the dashed line = the 50% pick threshold. Blue = correct winner call, red = wrong."
+          subtitle="Bucketed by predicted probability. On the dashed diagonal = perfectly calibrated. Blue = within 10pt of the diagonal, red = off by more."
         >
-          <div ref={probScatterRef} className="h-[520px]" />
+          <div ref={reliabilityRef} className="h-[480px]" />
         </Card>
       )}
 
@@ -523,10 +548,10 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
         </Card>
       ) : (
         <Card
-          title="What's different about the misses?"
-          subtitle="Predicted probability vs. actual outcome, bucketed. Cell = N games. Blue outline = majority correct, red outline = majority wrong (ties go red)."
+          title="Calibration gap by bucket"
+          subtitle="Predicted minus observed win rate for each probability bucket — the direction and size of over/under-confidence. Blue = within 10pt (well-calibrated), red = off by more."
         >
-          <div ref={probHeatmapRef} className="h-[420px]" />
+          <div ref={gapRef} className="h-[380px]" />
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
               <div className="text-xs font-semibold text-slate-600">Correct picks (n={correctStats?.n ?? 0})</div>
