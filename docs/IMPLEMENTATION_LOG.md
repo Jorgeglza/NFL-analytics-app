@@ -295,6 +295,35 @@ Per page: run old app side-by-side (`pda-ie` env), match tables/KPIs/chart serie
   Verified: `tsc --noEmit`, `npm run build`, 58-test Vitest suite all green; browser preview
   click-through of the collapsible, the new charts, and the game inspector (including
   reactivity when switching weeks) with zero console errors.
+- **Performance-tab follow-up (2026-07-25)**: three more rounds of direct feedback.
+  (1) Fixed the predicted-vs-actual scatter's axis labels — they used ECharts' default
+  `nameLocation: "end"` with only 10-20px of grid padding, which is exactly the layout bug
+  the codebase's own established heatmap convention (`SpreadWinPct.tsx`) avoids by always
+  using `nameLocation: "middle"` with an explicit `nameGap` and generous grid padding; applied
+  that same pattern here (`grid: {left:60,right:30,top:40,bottom:60}`, both axis names
+  centered with gap), and added a real chart legend (two named "Correct pick"/"Wrong pick"
+  scatter series instead of one series with inline-only colors) so the blue/red meaning isn't
+  only in the subtitle text.
+  (2) Converted "What's different about the misses?" from a 1D confidence-bucket bar chart
+  into a **2D predicted-vs-actual margin heatmap** (5-point buckets, `buildMarginHeatmap` in
+  `shared.ts`): each cell shows N games, outlined blue when the majority of that cell's games
+  were correct picks and red otherwise (per explicit instruction, an exact 50/50 split renders
+  red — `isCellCorrect()` uses `correctShare > 0.5`, not `>=`), with the same dashed
+  "predicted == actual" diagonal reference line as the scatter, now traced across identical
+  category-axis bucket edges on both axes.
+  (3) Added a **Points / % toggle** to the Performance tab's filter bar (`Segmented`,
+  alongside season/team): "%" mode swaps in probability-flavored parallels of every existing
+  view — a predicted-win-probability-vs-actual-outcome scatter (jittered binary outcome, 50%
+  decision line in place of the diagonal), a **calibration**-by-season table and
+  calibration-by-week chart (avg predicted probability vs. observed win rate — answers "is the
+  % itself accurate," a different question from pick accuracy), and a probability-bucket ×
+  actual-outcome heatmap reusing the same blue/red/tie-goes-red grammar. New `shared.ts`
+  helpers: `buildProbabilityHeatmap`, `calibrationBySeason`, `calibrationByWeek`,
+  `isCellCorrect` (shared by both heatmaps). Verified in a clean browser tab (no console
+  errors — a stale-HMR console error surfaced during iteration and was confirmed non-issue via
+  a fresh tab): both view modes render, toggle switches correctly, all chart/table numbers
+  sane (e.g. correct picks show higher avg confidence than wrong picks, calibration gaps
+  mostly under 5pt). `tsc --noEmit`, `npm run build`, 58-test suite all green.
 - Research artifacts (`data/predictive_model/*.csv`, `metrics.json`, `report.txt` — the
   per-round result tables that back every number in `docs/predictive-model.md`) are now
   **git-tracked** (2026-07-25) — removed from `.gitignore` and committed (~63 KB). Only
