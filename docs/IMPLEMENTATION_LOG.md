@@ -353,6 +353,16 @@ Per page: run old app side-by-side (`pda-ie` env), match tables/KPIs/chart serie
   missing-spread games get the app's existing neutral gray uncategorized color. Verified in a
   clean browser tab: 4 chart instances in "%" mode (up from 3), zero console errors in either
   mode, `tsc --noEmit`/`npm run build`/58-test suite all green.
+- **Correctness outline on the granular chart (2026-07-25)**: the matchup-type colors alone
+  didn't show which dots were actually correct picks. Added a bold dark outline
+  (`borderColor: "#0f172a"`, `borderWidth: 2`, slightly larger `symbolSize`) to correct picks,
+  no outline on wrong ones — fill color still encodes matchup type, the outline is a second,
+  independent channel for correctness (same "outline = correctness" idea already used by both
+  heatmaps, just applied to individual points instead of aggregated cells). Each category's
+  points are sorted wrong-first/correct-last before rendering so a correct pick's outline is
+  never hidden under an overlapping wrong one from the same series. Tooltip and subtitle/info
+  text updated to explain both channels. Verified: `tsc --noEmit`/`npm run build`/58-test suite
+  green, clean browser tab shows zero console errors in either view mode.
 - Research artifacts (`data/predictive_model/*.csv`, `metrics.json`, `report.txt` — the
   per-round result tables that back every number in `docs/predictive-model.md`) are now
   **git-tracked** (2026-07-25) — removed from `.gitignore` and committed (~63 KB). Only

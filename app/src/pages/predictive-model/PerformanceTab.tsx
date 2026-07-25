@@ -295,20 +295,31 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
   const granularOption = useMemo<EChartsOption | null>(() => {
     const graded = filtered.filter((g) => g.home_win_prob !== null);
     if (!graded.length) return null;
-    const byType = new Map<string, { value: [number, number]; name: string }[]>();
+    type Pt = { value: [number, number]; name: string; correct: boolean; symbolSize: number; itemStyle: { borderColor: string; borderWidth: number } };
+    const byType = new Map<string, Pt[]>();
     graded.forEach((g) => {
       const wt = winType(Number(g.actual_margin), 0, g.spread_line === null ? null : Number(g.spread_line));
       const key = wt ?? UNCATEGORIZED_LABEL;
+      const correct = isCorrect(g);
       if (!byType.has(key)) byType.set(key, []);
       byType.get(key)!.push({
         value: [Number(g.home_win_prob) * 100, Number(g.actual_margin)],
         name: `${g.season} wk${g.week} ${g.away_team}@${g.home_team}`,
+        correct,
+        // Correct picks get a bold dark outline and sit slightly larger so
+        // they visibly stand out over wrong picks — otherwise the fill
+        // color only tells you the matchup type, not who actually won.
+        symbolSize: correct ? 10 : 6,
+        itemStyle: { borderColor: correct ? "#0f172a" : "transparent", borderWidth: correct ? 2 : 0 },
       });
     });
+    // Draw wrong picks first, correct picks last, so a correct pick's bold
+    // outline never gets hidden underneath an overlapping wrong one.
+    byType.forEach((pts) => pts.sort((a, b) => Number(a.correct) - Number(b.correct)));
     const maxAbsMargin = Math.max(20, ...graded.map((g) => Math.abs(Number(g.actual_margin)))) * 1.05;
     const tooltipFormatter = (p: unknown) => {
-      const pt = p as { seriesName: string; data: { name: string; value: [number, number] } };
-      return `${pt.data.name}<br/>${pt.seriesName}<br/>predicted home win prob ${pt.data.value[0].toFixed(0)}%<br/>actual margin ${pt.data.value[1].toFixed(1)} pts`;
+      const pt = p as { seriesName: string; data: Pt };
+      return `${pt.data.name}<br/>${pt.seriesName} — ${pt.data.correct ? "correct pick" : "wrong pick"}<br/>predicted home win prob ${pt.data.value[0].toFixed(0)}%<br/>actual margin ${pt.data.value[1].toFixed(1)} pts`;
     };
     const orderedKeys = [...WIN_TYPE_ORDER, UNCATEGORIZED_LABEL].filter((k) => byType.has(k));
     return {
@@ -340,8 +351,7 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
         ...orderedKeys.map((key) => ({
           name: key,
           type: "scatter" as const,
-          symbolSize: 6,
-          itemStyle: { color: key === UNCATEGORIZED_LABEL ? UNCATEGORIZED_COLOR : WIN_TYPE_COLORS[key as WinType], opacity: 0.7 },
+          itemStyle: { color: key === UNCATEGORIZED_LABEL ? UNCATEGORIZED_COLOR : WIN_TYPE_COLORS[key as WinType], opacity: 0.8 },
           data: byType.get(key) ?? [],
           z: 2,
         })),
@@ -522,10 +532,10 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
           title={
             <span className="inline-flex items-center">
               Predicted probability vs. actual margin — by matchup type
-              <InfoDot text="Every game individually (no bucketing) — x = predicted home win probability, y = the real final-score margin. The vertical line marks the 50% pick threshold; the horizontal line marks an actual tie. Colors match Game Picks / Win Types / Spread Win % elsewhere in the app: which side was favored by the closing spread, and whether that favorite actually covered — not the model's own prediction." />
+              <InfoDot text="Every game individually (no bucketing) — x = predicted home win probability, y = the real final-score margin. The vertical line marks the 50% pick threshold; the horizontal line marks an actual tie. Fill color matches Game Picks / Win Types / Spread Win % elsewhere in the app: which side was favored by the closing spread. The bold dark outline is separate — it marks games the model picked correctly (predicted side matched the actual winner); no outline means it picked wrong." />
             </span>
           }
-          subtitle="Each dot is one game, colored by home/away favorite/underdog (closing spread) — same categories and colors as Game Picks and Win Types."
+          subtitle="Each dot is one game, colored by home/away favorite/underdog (closing spread). A bold outline = the model's pick was correct; no outline = wrong."
         >
           <div ref={granularRef} className="h-[480px]" />
         </Card>
