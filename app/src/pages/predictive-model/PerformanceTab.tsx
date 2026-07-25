@@ -25,6 +25,10 @@ import {
   categoryOf,
   categoryStats,
   categoryStatsByWeek,
+  FAVORITE_LOCATION_ORDER,
+  favoriteLocationOf,
+  favoriteLocationStats,
+  favoriteLocationStatsByWeek,
   filterGames,
   isCellCorrect,
   isCorrect,
@@ -59,6 +63,7 @@ function lighten(hex: string, amount = 0.6): string {
 }
 
 type Mode = "Points" | "%";
+type Grouping = "Outcome" | "Pregame";
 
 /** Small hover-only info marker — matches the app's existing convention of a
  * native `title` attribute for "nothing obvious until hovered" hints. */
@@ -154,6 +159,7 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
   const [season, setSeason] = useState(ALL_SEASONS);
   const [team, setTeam] = useState(ALL_TEAMS);
   const [mode, setMode] = useState<Mode>("Points");
+  const [grouping, setGrouping] = useState<Grouping>("Outcome");
   const [activeCategories, setActiveCategories] = useState<Set<Category>>(new Set(CATEGORY_ORDER));
   const toggleCategory = (c: Category) =>
     setActiveCategories((prev) => {
@@ -170,6 +176,15 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
   const acc = accuracyOf(filtered);
   const ats = atsAccuracyOf(filtered);
   const catStats = useMemo(() => categoryStats(filtered), [filtered]);
+  const favStats = useMemo(() => favoriteLocationStats(filtered), [filtered]);
+  // "Outcome" (default) crosses the spread's favorite with the actual
+  // winner (4 buckets, only knowable post-game); "Pregame" groups by
+  // favorite location alone (2 buckets, knowable before kickoff) — for
+  // isolating pre-game model accuracy without outcome leakage in the
+  // grouping itself.
+  const activeCatOrder = grouping === "Outcome" ? CATEGORY_ORDER : FAVORITE_LOCATION_ORDER;
+  const activeCategoryOf = grouping === "Outcome" ? categoryOf : favoriteLocationOf;
+  const activeCatStats = grouping === "Outcome" ? catStats : favStats;
 
   // --- Points mode: predicted vs. actual margin ---
   const scatterOption = useMemo<EChartsOption | null>(() => {
@@ -332,7 +347,7 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
     };
     const byType = new Map<Category, Pt[]>();
     graded.forEach((g) => {
-      const key = categoryOf(g);
+      const key = activeCategoryOf(g);
       const correct = isCorrect(g);
       if (!byType.has(key)) byType.set(key, []);
       byType.get(key)!.push({
@@ -373,7 +388,7 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
     };
     // The category KPI row above doubles as the legend/filter (per request),
     // so no chart legend here — only active categories get a series at all.
-    const orderedKeys = CATEGORY_ORDER.filter((k) => byType.has(k) && activeCategories.has(k));
+    const orderedKeys = activeCatOrder.filter((k) => byType.has(k) && activeCategories.has(k));
     return {
       grid: { left: 60, right: 30, top: 10, bottom: 60, containLabel: false },
       tooltip: { formatter: tooltipFormatter },
@@ -407,7 +422,7 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
         })),
       ],
     } as EChartsOption;
-  }, [filtered, activeCategories]);
+  }, [filtered, activeCategories, grouping, activeCategoryOf, activeCatOrder]);
   const granularRef = useECharts(granularOption);
 
   // Same categories, broken down by week — does the model do better/worse
@@ -417,10 +432,13 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
   // a lighter tint) grouped side by side within that week's row — same
   // "stack shows the split, color contrast shows the accuracy" idea as the
   // category KPI chips above, just broken out per week instead of pooled.
-  const catByWeek = useMemo(() => categoryStatsByWeek(filtered), [filtered]);
+  const catByWeek = useMemo(
+    () => (grouping === "Outcome" ? categoryStatsByWeek(filtered) : favoriteLocationStatsByWeek(filtered)),
+    [filtered, grouping],
+  );
   const catByWeekOption = useMemo<EChartsOption | null>(() => {
     if (!catByWeek.length) return null;
-    const activeOrdered = CATEGORY_ORDER.filter((c) => activeCategories.has(c));
+    const activeOrdered = activeCatOrder.filter((c) => activeCategories.has(c));
     if (!activeOrdered.length) return null;
     const weekLabels = catByWeek.map((r) => `Wk${r.week}`);
     type CellDatum = { value: number; category: Category; correct: number; wrong: number; n: number };
@@ -474,7 +492,7 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
       yAxis: { type: "value", name: "Games (N)", nameLocation: "middle", nameGap: 32 },
       series,
     } as EChartsOption;
-  }, [catByWeek, activeCategories]);
+  }, [catByWeek, activeCategories, activeCatOrder]);
   const catByWeekRef = useECharts(catByWeekOption);
 
   const bySeasonTable = useMemo(() => {
@@ -647,15 +665,38 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
       {mode === "%" && (
         <Card
           title={
-            <span className="inline-flex items-center">
-              Predicted probability vs. actual margin — by matchup type
-              <InfoDot text="Every game individually (no bucketing) — x = predicted home win probability, y = the real final-score margin. The vertical line marks the 50% pick threshold; the horizontal line marks an actual tie. Fill color matches Game Picks / Win Types / Spread Win % elsewhere in the app: which side was favored by the closing spread. The bold dark outline is separate — it marks games the model picked correctly (predicted side matched the actual winner); no outline means it picked wrong." />
-            </span>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <span className="inline-flex items-center">
+                {grouping === "Outcome"
+                  ? "Predicted probability vs. actual margin — by matchup type"
+                  : "Predicted probability vs. actual margin — by pre-game favorite"}
+                <InfoDot
+                  text={
+                    grouping === "Outcome"
+                      ? "Every game individually (no bucketing) — x = predicted home win probability, y = the real final-score margin. The vertical line marks the 50% pick threshold; the horizontal line marks an actual tie. Fill color matches Game Picks / Win Types / Spread Win % elsewhere in the app: which side was favored by the closing spread, crossed with who actually won. The bold dark outline is separate — it marks games the model picked correctly (predicted side matched the actual winner); no outline means it picked wrong."
+                      : "Every game individually (no bucketing) — x = predicted home win probability, y = the real final-score margin. Fill color shows only which side the closing spread favored (home or away) — known before kickoff, unlike the matchup-type view, which also depends on who actually won. This isolates pre-game model accuracy by favorite location. The bold dark outline marks games the model picked correctly; no outline means it picked wrong."
+                  }
+                />
+              </span>
+              <Segmented
+                label="Group by"
+                options={[
+                  { value: "Outcome" as Grouping, label: "Matchup type" },
+                  { value: "Pregame" as Grouping, label: "Pre-game only" },
+                ]}
+                value={grouping}
+                onChange={setGrouping}
+              />
+            </div>
           }
-          subtitle="Each dot is one game, colored by home/away favorite/underdog (closing spread, same as Game Picks/Win Types). A bold outline = the model's pick was correct; no outline = wrong. Click a category below to show/hide it."
+          subtitle={
+            grouping === "Outcome"
+              ? "Each dot is one game, colored by home/away favorite/underdog (closing spread, same as Game Picks/Win Types). A bold outline = the model's pick was correct; no outline = wrong. Click a category below to show/hide it."
+              : "Each dot is one game, colored only by which side (home or away) the closing spread favored — known before kickoff, with no dependency on the result. A bold outline = the model's pick was correct; no outline = wrong. Click a category below to show/hide it."
+          }
         >
           <div className="mb-4 flex flex-wrap gap-2">
-            {catStats.map((s) => {
+            {activeCatStats.map((s) => {
               const active = activeCategories.has(s.category);
               return (
                 <button

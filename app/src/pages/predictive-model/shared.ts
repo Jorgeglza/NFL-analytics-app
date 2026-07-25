@@ -4,7 +4,7 @@
 // docs/predictive-model-decision.md for the research + model choice behind
 // this page.
 import type { Row } from "../../lib/data/loader";
-import { winType, CATEGORY_CODES, type WinType } from "../../lib/logic/winType";
+import { favorite, winType, CATEGORY_CODES, type WinType } from "../../lib/logic/winType";
 
 export const ALL_SEASONS = "All seasons";
 export const ALL_TEAMS = "All teams";
@@ -275,6 +275,41 @@ export function categoryStats(games: Row[]): CategoryStat[] {
 export function categoryStatsByWeek(games: Row[]): { week: number; stats: CategoryStat[] }[] {
   const weeks = Array.from(new Set(games.map((g) => Number(g.week)))).sort((a, b) => a - b);
   return weeks.map((week) => ({ week, stats: categoryStats(games.filter((g) => Number(g.week) === week)) }));
+}
+
+export type FavoriteLocation = Extract<WinType, "Favorite home" | "Favorite away">;
+
+export const FAVORITE_LOCATION_ORDER: (FavoriteLocation | typeof UNCATEGORIZED_CATEGORY)[] = [
+  "Favorite home",
+  "Favorite away",
+  UNCATEGORIZED_CATEGORY,
+];
+
+/** Pre-game-only classification: which side the closing spread favors, with
+ * no dependency on who actually won (unlike `categoryOf()`, which crosses
+ * favorite with the actual winner). "Underdog" has no pre-game meaning, so
+ * this only has 2 real buckets — for evaluating the model on information
+ * known before kickoff. */
+export function favoriteLocationOf(g: Row): FavoriteLocation | typeof UNCATEGORIZED_CATEGORY {
+  const f = favorite(g.spread_line === null ? null : Number(g.spread_line));
+  if (f === "home") return "Favorite home";
+  if (f === "away") return "Favorite away";
+  return UNCATEGORIZED_CATEGORY;
+}
+
+/** Same shape as `categoryStats()`, grouped by pre-game favorite location instead. */
+export function favoriteLocationStats(games: Row[]): CategoryStat[] {
+  return FAVORITE_LOCATION_ORDER.map((category) => {
+    const rows = games.filter((g) => favoriteLocationOf(g) === category);
+    const correct = rows.filter(isCorrect).length;
+    return { category, n: rows.length, correct, wrong: rows.length - correct, acc: accuracyOf(rows) };
+  });
+}
+
+/** Same shape as `categoryStatsByWeek()`, grouped by pre-game favorite location instead. */
+export function favoriteLocationStatsByWeek(games: Row[]): { week: number; stats: CategoryStat[] }[] {
+  const weeks = Array.from(new Set(games.map((g) => Number(g.week)))).sort((a, b) => a - b);
+  return weeks.map((week) => ({ week, stats: favoriteLocationStats(games.filter((g) => Number(g.week) === week)) }));
 }
 
 /** Compact comparison of what differs between correct and incorrect picks. */
