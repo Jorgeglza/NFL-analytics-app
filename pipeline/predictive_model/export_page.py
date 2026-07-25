@@ -128,6 +128,8 @@ def run(games: pd.DataFrame):
                 "week": int(row["week"]),
                 "home_team": row["home_team"],
                 "away_team": row["away_team"],
+                "home_score": None if pd.isna(row["home_score"]) else int(row["home_score"]),
+                "away_score": None if pd.isna(row["away_score"]) else int(row["away_score"]),
                 "predicted_margin": float(predicted_margin[i]),
                 "actual_margin": float(row["home_margin"]),
                 "home_win_prob": float(p_win_cdf[i]),

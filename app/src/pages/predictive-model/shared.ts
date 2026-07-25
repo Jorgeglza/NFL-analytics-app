@@ -4,7 +4,7 @@
 // docs/predictive-model-decision.md for the research + model choice behind
 // this page.
 import type { Row } from "../../lib/data/loader";
-import { winType, type WinType } from "../../lib/logic/winType";
+import { winType, CATEGORY_CODES, type WinType } from "../../lib/logic/winType";
 
 export const ALL_SEASONS = "All seasons";
 export const ALL_TEAMS = "All teams";
@@ -70,6 +70,14 @@ export function matchupLabel(g: Row): string {
   const teamSpan = (code: string, bold: boolean, green: boolean) =>
     `<span style="font-weight:${bold ? 700 : 400};${green ? "color:#059669;" : ""}">${code}</span>`;
   return `${teamSpan(away, !predictedHome, actualAway)}@${teamSpan(home, predictedHome, actualHome)}`;
+}
+
+/** "AWAY-HOME" final score, in the same left-to-right order as
+ * `matchupLabel()`'s "AWAY@HOME" so the two lines read as one column pair
+ * when stacked in a tooltip. Null if scores aren't available. */
+export function scoreLabel(g: Row): string | null {
+  if (g.away_score === null || g.home_score === null) return null;
+  return `${g.away_score}-${g.home_score}`;
 }
 
 /** Straight-up accuracy per week number (pooled across whatever games are passed in). */
@@ -233,6 +241,12 @@ export const CATEGORY_ORDER: (WinType | typeof UNCATEGORIZED_CATEGORY)[] = [
 export function categoryOf(g: Row): WinType | typeof UNCATEGORIZED_CATEGORY {
   const wt = winType(Number(g.actual_margin), 0, g.spread_line === null ? null : Number(g.spread_line));
   return wt ?? UNCATEGORIZED_CATEGORY;
+}
+
+/** Short code for a category — "Favorite home" -> "FH", etc, same
+ * abbreviations as `CATEGORY_CODES` elsewhere in the app. */
+export function categoryCode(category: WinType | typeof UNCATEGORIZED_CATEGORY): string {
+  return category === UNCATEGORIZED_CATEGORY ? "—" : CATEGORY_CODES[category];
 }
 
 export interface CategoryStat {

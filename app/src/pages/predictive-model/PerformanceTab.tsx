@@ -21,6 +21,7 @@ import {
   calibrationByWeek,
   calibrationBySeason,
   CATEGORY_ORDER,
+  categoryCode,
   categoryOf,
   categoryStats,
   categoryStatsByWeek,
@@ -31,6 +32,7 @@ import {
   missComparison,
   pct,
   reliabilityBuckets,
+  scoreLabel,
   seasonOptions,
   teamOptions,
   UNCATEGORIZED_CATEGORY,
@@ -318,7 +320,16 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
   const granularOption = useMemo<EChartsOption | null>(() => {
     const graded = filtered.filter((g) => g.home_win_prob !== null);
     if (!graded.length) return null;
-    type Pt = { value: [number, number]; name: string; correct: boolean; symbolSize: number; itemStyle: { borderColor: string; borderWidth: number } };
+    type Pt = {
+      value: [number, number];
+      name: string;
+      score: string | null;
+      category: Category;
+      correct: boolean;
+      predictedMargin: number;
+      symbolSize: number;
+      itemStyle: { borderColor: string; borderWidth: number };
+    };
     const byType = new Map<Category, Pt[]>();
     graded.forEach((g) => {
       const key = categoryOf(g);
@@ -327,7 +338,10 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
       byType.get(key)!.push({
         value: [Number(g.home_win_prob) * 100, Number(g.actual_margin)],
         name: `${g.season} wk${g.week} ${matchupLabel(g)}`,
+        score: scoreLabel(g),
+        category: key,
         correct,
+        predictedMargin: Number(g.predicted_margin),
         // Correct picks get a bold dark outline and sit slightly larger so
         // they visibly stand out over wrong picks — otherwise the fill
         // color only tells you the matchup type, not who actually won.
@@ -340,8 +354,19 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
     byType.forEach((pts) => pts.sort((a, b) => Number(a.correct) - Number(b.correct)));
     const maxAbsMargin = Math.max(20, ...graded.map((g) => Math.abs(Number(g.actual_margin)))) * 1.05;
     const tooltipFormatter = (p: unknown) => {
-      const pt = p as { seriesName: string; data: Pt };
-      return `${pt.data.name}<br/>${pt.seriesName} — ${pt.data.correct ? "correct pick" : "wrong pick"}<br/>predicted home win prob ${pt.data.value[0].toFixed(0)}%<br/>actual margin ${pt.data.value[1].toFixed(1)} pts`;
+      const pt = (p as { data: Pt }).data;
+      // Line 1: matchup (predicted winner bold, actual winner green).
+      // Line 2: final score, same away-home order as line 1's away@home.
+      // Line 3: category code, bold + green only when the pick was correct.
+      const scoreLine = pt.score !== null ? `<br/>${pt.score}` : "";
+      const codeStyle = pt.correct ? "font-weight:700;color:#059669;" : "";
+      const codeLine = `<br/><span style="${codeStyle}">${categoryCode(pt.category)}</span>`;
+      return (
+        `${pt.name}${scoreLine}${codeLine}` +
+        `<br/>predicted home win prob ${pt.value[0].toFixed(0)}%` +
+        `<br/>predicted margin ${pt.predictedMargin >= 0 ? "+" : ""}${pt.predictedMargin.toFixed(1)} pts` +
+        `<br/>actual margin ${pt.value[1].toFixed(1)} pts`
+      );
     };
     // The category KPI row above doubles as the legend/filter (per request),
     // so no chart legend here — only active categories get a series at all.

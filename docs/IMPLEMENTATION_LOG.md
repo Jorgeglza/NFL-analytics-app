@@ -401,6 +401,23 @@ Per page: run old app side-by-side (`pda-ie` env), match tables/KPIs/chart serie
   clean browser tab confirmed chips render with their original accuracy/n numbers, toggling a
   chip dims it (`opacity-40`) and updates both the granular scatter and the weekly chart, zero
   console errors.
+- **Granular tooltip: score, category code, predicted margin (2026-07-25)**: the granular
+  %-mode chart's per-game hover only showed the matchup name, predicted probability, and
+  actual margin. `pipeline/predictive_model/export_page.py` now also exports raw
+  `home_score`/`away_score` per game (present in `features.build_game_table()`'s output
+  already, just not previously carried into `games.json`) — re-ran the export
+  (`games.json` 148KB → 160KB). Tooltip is now 4 lines: matchup name (bold predicted winner /
+  green actual winner, from the earlier round), the final score directly below in the same
+  away-home order (`shared.ts`'s new `scoreLabel()`), the category code (`categoryCode()`,
+  reusing `lib/logic/winType.ts`'s existing `CATEGORY_CODES` — "FH"/"FA"/"UH"/"UA" — bold and
+  green only when that pick was correct), then predicted win probability, predicted margin
+  (newly added), and actual margin. Verified: `tsc --noEmit`/`npm run build`/58-test suite
+  green, clean browser tab loads the updated `games.json` with zero console errors; the score
+  fields themselves spot-checked directly in the regenerated JSON (e.g. PHI 18 – ATL 12,
+  `actual_margin` 6.0, consistent). Tooltip hover content itself couldn't be pixel-verified —
+  this environment's browser tool can't screenshot or coordinate-click/hover on canvas
+  elements (same limitation noted earlier this session), so this rests on code review + a
+  clean render rather than a visual check.
 - Research artifacts (`data/predictive_model/*.csv`, `metrics.json`, `report.txt` — the
   per-round result tables that back every number in `docs/predictive-model.md`) are now
   **git-tracked** (2026-07-25) — removed from `.gitignore` and committed (~63 KB). Only
