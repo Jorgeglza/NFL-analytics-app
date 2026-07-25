@@ -4,6 +4,7 @@
 // docs/predictive-model-decision.md for the research + model choice behind
 // this page.
 import type { Row } from "../../lib/data/loader";
+import { winType, type WinType } from "../../lib/logic/winType";
 
 export const ALL_SEASONS = "All seasons";
 export const ALL_TEAMS = "All teams";
@@ -189,6 +190,55 @@ function calibrationRow(rows: Row[]): { n: number; avgPredicted: number; observe
   const avgPredicted = graded.length ? graded.reduce((s, g) => s + Number(g.home_win_prob), 0) / graded.length : 0;
   const observedRate = graded.length ? graded.reduce((s, g) => s + Number(g.home_win), 0) / graded.length : 0;
   return { n: graded.length, avgPredicted, observedRate };
+}
+
+// Matches Game Picks / Win Types / Spread Win % everywhere else in the app —
+// same closing-spread-derived categories, no local reclassification logic.
+// "Uncategorized" (ties, or games with no spread_line) gets the app's
+// existing neutral gray rather than a made-up 5th color.
+export const UNCATEGORIZED_CATEGORY = "Uncategorized (tie / no spread)";
+export const UNCATEGORIZED_COLOR = "#e0e0e0";
+export const CATEGORY_ORDER: (WinType | typeof UNCATEGORIZED_CATEGORY)[] = [
+  "Favorite home",
+  "Favorite away",
+  "Underdog home",
+  "Underdog away",
+  UNCATEGORIZED_CATEGORY,
+];
+
+/** Classifies a game by the closing spread (`spread_line`, home-perspective
+ * — negative means the home team was favored, same convention as
+ * `lib/logic/winType.ts` and the schedule table it's ported from) crossed
+ * with the actual winner. `winType()` normally takes raw home/away scores,
+ * but since it only compares their sign, passing `(actual_margin, 0)`
+ * reproduces the identical classification from the margin already on
+ * hand — no separate score fields needed. */
+export function categoryOf(g: Row): WinType | typeof UNCATEGORIZED_CATEGORY {
+  const wt = winType(Number(g.actual_margin), 0, g.spread_line === null ? null : Number(g.spread_line));
+  return wt ?? UNCATEGORIZED_CATEGORY;
+}
+
+export interface CategoryStat {
+  category: WinType | typeof UNCATEGORIZED_CATEGORY;
+  n: number;
+  acc: number | null;
+}
+
+/** Per-category (closing-spread favorite/underdog x home/away) game count
+ * and the model's straight-up pick accuracy within that category. */
+export function categoryStats(games: Row[]): CategoryStat[] {
+  return CATEGORY_ORDER.map((category) => {
+    const rows = games.filter((g) => categoryOf(g) === category);
+    return { category, n: rows.length, acc: accuracyOf(rows) };
+  });
+}
+
+/** Same per-category accuracy, broken out by week — "does the model do
+ * better or worse on home favorites (or any other category) as the season
+ * progresses." */
+export function categoryStatsByWeek(games: Row[]): { week: number; stats: CategoryStat[] }[] {
+  const weeks = Array.from(new Set(games.map((g) => Number(g.week)))).sort((a, b) => a - b);
+  return weeks.map((week) => ({ week, stats: categoryStats(games.filter((g) => Number(g.week) === week)) }));
 }
 
 /** Compact comparison of what differs between correct and incorrect picks. */

@@ -363,6 +363,26 @@ Per page: run old app side-by-side (`pda-ie` env), match tables/KPIs/chart serie
   never hidden under an overlapping wrong one from the same series. Tooltip and subtitle/info
   text updated to explain both channels. Verified: `tsc --noEmit`/`npm run build`/58-test suite
   green, clean browser tab shows zero console errors in either view mode.
+- **Category KPIs + weekly breakdown on the granular chart (2026-07-25)**: first confirmed the
+  colors were already correctly closing-spread-derived — `spread_line` in
+  `pipeline/predictive_model/features.py`'s game table comes straight from the `schedule`
+  table's `spread_line` (home-perspective, negated at load — `pipeline/nfl_pipeline/
+  transform.py`'s `load_schedule_df`), the same nflverse closing-line field and sign
+  convention `lib/logic/winType.ts` and Game Picks already use; no bug, no change needed
+  there. Added: (1) a clickable KPI chip row above the granular chart — one per category
+  (`shared.ts`'s new `categoryStats()`), showing straight-up accuracy and n, doubling as the
+  chart's category filter/legend (clicking dims a chip and drops that category's series from
+  the chart — the native ECharts legend was removed since these chips now do that job, plus
+  show numbers a bare legend can't); (2) a grouped bar chart below it, "Accuracy by category,
+  per week" (`categoryStatsByWeek()`), same categories/colors/toggle state, answering "does
+  the model do better/worse on (say) home favorites as the season progresses." First real
+  output was itself a useful sanity check: Favorite home/away sit at 89.6%/79.8% accuracy vs.
+  Underdog home/away at 27.5%/17.6% (pooled, all seasons) — exactly the pattern expected from
+  a model whose predictions correlate with the market (it calls favorites right most of the
+  time and, definitionally, upsets almost never), which also confirms the categorization is
+  wired to the spread correctly. Verified in a clean browser tab: 5 chart instances, chip
+  click toggles `opacity-40` styling and removes/restores the corresponding chart series with
+  zero console errors, `tsc --noEmit`/`npm run build`/58-test suite all green.
 - Research artifacts (`data/predictive_model/*.csv`, `metrics.json`, `report.txt` — the
   per-round result tables that back every number in `docs/predictive-model.md`) are now
   **git-tracked** (2026-07-25) — removed from `.gitignore` and committed (~63 KB). Only

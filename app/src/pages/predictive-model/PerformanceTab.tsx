@@ -10,7 +10,7 @@ import type { EChartsOption } from "echarts";
 import type { Row } from "../../lib/data/loader";
 import { useECharts } from "../../components/charts/useECharts";
 import { Card, FilterGroup, Kpi, Segmented, tableWrapCls, theadCls, trCls } from "../../components/ui";
-import { winType, WIN_TYPE_COLORS, type WinType } from "../../lib/logic/winType";
+import { WIN_TYPE_COLORS, type WinType } from "../../lib/logic/winType";
 import {
   ALL_SEASONS,
   ALL_TEAMS,
@@ -20,6 +20,10 @@ import {
   buildMarginHeatmap,
   calibrationByWeek,
   calibrationBySeason,
+  CATEGORY_ORDER,
+  categoryOf,
+  categoryStats,
+  categoryStatsByWeek,
   filterGames,
   isCellCorrect,
   isCorrect,
@@ -28,19 +32,16 @@ import {
   reliabilityBuckets,
   seasonOptions,
   teamOptions,
+  UNCATEGORIZED_CATEGORY,
+  UNCATEGORIZED_COLOR,
   type Heatmap,
 } from "./shared";
 
 const CALIBRATION_TOLERANCE_PCT = 0.1; // >10pt gap between predicted and observed is "miscalibrated"
 
-// Matches Game Picks / Win Types / Spread Win % everywhere else in the app —
-// same source-of-truth colors, no local hex duplication (the app's own
-// design-system note: importing a page-local copy of these was a standing
-// DRY problem). "Uncategorized" (ties, or games with no spread_line) gets
-// the app's existing neutral gray rather than a made-up 5th color.
-const UNCATEGORIZED_LABEL = "Uncategorized (tie / no spread)";
-const UNCATEGORIZED_COLOR = "#e0e0e0";
-const WIN_TYPE_ORDER: WinType[] = ["Favorite home", "Favorite away", "Underdog home", "Underdog away"];
+type Category = WinType | typeof UNCATEGORIZED_CATEGORY;
+const colorOf = (c: Category) => (c === UNCATEGORIZED_CATEGORY ? UNCATEGORIZED_COLOR : WIN_TYPE_COLORS[c as WinType]);
+const shortLabel = (c: Category) => (c === UNCATEGORIZED_CATEGORY ? "Tie / no spread" : c);
 
 type Mode = "Points" | "%";
 
@@ -138,6 +139,14 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
   const [season, setSeason] = useState(ALL_SEASONS);
   const [team, setTeam] = useState(ALL_TEAMS);
   const [mode, setMode] = useState<Mode>("Points");
+  const [activeCategories, setActiveCategories] = useState<Set<Category>>(new Set(CATEGORY_ORDER));
+  const toggleCategory = (c: Category) =>
+    setActiveCategories((prev) => {
+      const next = new Set(prev);
+      if (next.has(c)) next.delete(c);
+      else next.add(c);
+      return next;
+    });
 
   const seasons = useMemo(() => seasonOptions(games), [games]);
   const teams = useMemo(() => teamOptions(games), [games]);
@@ -145,6 +154,7 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
 
   const acc = accuracyOf(filtered);
   const ats = atsAccuracyOf(filtered);
+  const catStats = useMemo(() => categoryStats(filtered), [filtered]);
 
   // --- Points mode: predicted vs. actual margin ---
   const scatterOption = useMemo<EChartsOption | null>(() => {
@@ -296,10 +306,9 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
     const graded = filtered.filter((g) => g.home_win_prob !== null);
     if (!graded.length) return null;
     type Pt = { value: [number, number]; name: string; correct: boolean; symbolSize: number; itemStyle: { borderColor: string; borderWidth: number } };
-    const byType = new Map<string, Pt[]>();
+    const byType = new Map<Category, Pt[]>();
     graded.forEach((g) => {
-      const wt = winType(Number(g.actual_margin), 0, g.spread_line === null ? null : Number(g.spread_line));
-      const key = wt ?? UNCATEGORIZED_LABEL;
+      const key = categoryOf(g);
       const correct = isCorrect(g);
       if (!byType.has(key)) byType.set(key, []);
       byType.get(key)!.push({
@@ -321,17 +330,17 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
       const pt = p as { seriesName: string; data: Pt };
       return `${pt.data.name}<br/>${pt.seriesName} — ${pt.data.correct ? "correct pick" : "wrong pick"}<br/>predicted home win prob ${pt.data.value[0].toFixed(0)}%<br/>actual margin ${pt.data.value[1].toFixed(1)} pts`;
     };
-    const orderedKeys = [...WIN_TYPE_ORDER, UNCATEGORIZED_LABEL].filter((k) => byType.has(k));
+    // The category KPI row above doubles as the legend/filter (per request),
+    // so no chart legend here — only active categories get a series at all.
+    const orderedKeys = CATEGORY_ORDER.filter((k) => byType.has(k) && activeCategories.has(k));
     return {
-      grid: { left: 60, right: 30, top: 40, bottom: 60, containLabel: false },
-      legend: { top: 0, data: orderedKeys },
+      grid: { left: 60, right: 30, top: 10, bottom: 60, containLabel: false },
       tooltip: { formatter: tooltipFormatter },
       xAxis: { type: "value", name: "Predicted home win probability (%)", nameLocation: "middle", nameGap: 32, min: 0, max: 100 },
       yAxis: { type: "value", name: "Actual margin (home − away, pts)", nameLocation: "middle", nameGap: 42, nameRotate: 90, min: -maxAbsMargin, max: maxAbsMargin },
       series: [
         {
           type: "line",
-          name: "Reference lines",
           data: [[50, -maxAbsMargin], [50, maxAbsMargin]],
           lineStyle: { color: "#94a3b8", type: "dashed", width: 1 },
           symbol: "none",
@@ -351,14 +360,46 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
         ...orderedKeys.map((key) => ({
           name: key,
           type: "scatter" as const,
-          itemStyle: { color: key === UNCATEGORIZED_LABEL ? UNCATEGORIZED_COLOR : WIN_TYPE_COLORS[key as WinType], opacity: 0.8 },
+          itemStyle: { color: colorOf(key), opacity: 0.8 },
           data: byType.get(key) ?? [],
           z: 2,
         })),
       ],
     } as EChartsOption;
-  }, [filtered]);
+  }, [filtered, activeCategories]);
   const granularRef = useECharts(granularOption);
+
+  // Same categories, broken down by week — does the model do better/worse
+  // on (say) home favorites as the season progresses, not just in aggregate.
+  const catByWeek = useMemo(() => categoryStatsByWeek(filtered), [filtered]);
+  const catByWeekOption = useMemo<EChartsOption | null>(() => {
+    if (!catByWeek.length) return null;
+    const activeOrdered = CATEGORY_ORDER.filter((c) => activeCategories.has(c));
+    return {
+      grid: { left: 10, right: 20, top: 10, bottom: 10, containLabel: true },
+      tooltip: {
+        trigger: "axis",
+        formatter: (p: unknown) => {
+          const arr = p as { seriesName: string; dataIndex: number }[];
+          const week = catByWeek[arr[0].dataIndex].week;
+          const lines = arr.map((s) => {
+            const stat = catByWeek[s.dataIndex].stats.find((st) => st.category === s.seriesName);
+            return `${s.seriesName}: ${pct(stat?.acc ?? null)} (n=${stat?.n ?? 0})`;
+          });
+          return [`Week ${week}`, ...lines].join("<br/>");
+        },
+      },
+      xAxis: { type: "category", data: catByWeek.map((r) => `Wk${r.week}`), name: "Week" },
+      yAxis: { type: "value", name: "Accuracy", min: 0, max: 1, axisLabel: { formatter: (v: number) => `${(v * 100).toFixed(0)}%` } },
+      series: activeOrdered.map((category) => ({
+        name: category,
+        type: "bar" as const,
+        itemStyle: { color: colorOf(category) },
+        data: catByWeek.map((r) => r.stats.find((s) => s.category === category)?.acc ?? null),
+      })),
+    } as EChartsOption;
+  }, [catByWeek, activeCategories]);
+  const catByWeekRef = useECharts(catByWeekOption);
 
   const bySeasonTable = useMemo(() => {
     const seasonsAsc = Array.from(new Set(filtered.map((g) => Number(g.season)))).sort((a, b) => a - b);
@@ -535,9 +576,35 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
               <InfoDot text="Every game individually (no bucketing) — x = predicted home win probability, y = the real final-score margin. The vertical line marks the 50% pick threshold; the horizontal line marks an actual tie. Fill color matches Game Picks / Win Types / Spread Win % elsewhere in the app: which side was favored by the closing spread. The bold dark outline is separate — it marks games the model picked correctly (predicted side matched the actual winner); no outline means it picked wrong." />
             </span>
           }
-          subtitle="Each dot is one game, colored by home/away favorite/underdog (closing spread). A bold outline = the model's pick was correct; no outline = wrong."
+          subtitle="Each dot is one game, colored by home/away favorite/underdog (closing spread, same as Game Picks/Win Types). A bold outline = the model's pick was correct; no outline = wrong. Click a category below to show/hide it."
         >
+          <div className="mb-4 flex flex-wrap gap-2">
+            {catStats.map((s) => {
+              const active = activeCategories.has(s.category);
+              return (
+                <button
+                  key={s.category}
+                  onClick={() => toggleCategory(s.category)}
+                  title={s.category}
+                  className={`flex min-w-32 flex-1 items-center gap-2 rounded-xl border px-3 py-2 text-left transition-opacity ${
+                    active ? "border-slate-200 bg-white shadow-sm" : "border-slate-100 bg-slate-50 opacity-40"
+                  }`}
+                >
+                  <span className="h-3 w-3 shrink-0 rounded-full" style={{ background: colorOf(s.category) }} />
+                  <span className="min-w-0">
+                    <div className="truncate text-xs font-semibold text-slate-700">{shortLabel(s.category)}</div>
+                    <div className="text-[11px] text-slate-500">{pct(s.acc)} · n={s.n}</div>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
           <div ref={granularRef} className="h-[480px]" />
+          <div className="mt-4">
+            <h4 className="mb-1 text-sm font-semibold text-slate-700">Accuracy by category, per week</h4>
+            <p className="mb-2 text-xs text-slate-500">Same categories as above (toggle above to show/hide here too) — does the model favor one matchup type more as the season goes on?</p>
+            <div ref={catByWeekRef} className="h-[320px]" />
+          </div>
         </Card>
       )}
 
