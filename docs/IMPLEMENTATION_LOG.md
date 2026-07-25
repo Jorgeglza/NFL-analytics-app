@@ -340,6 +340,19 @@ Per page: run old app side-by-side (`pda-ie` env), match tables/KPIs/chart serie
   (`pct(g.home_win_prob)` alongside the existing predicted/actual margin line) per direct
   request. Verified in a clean browser tab: 3 chart instances render in both modes, zero
   console errors, `tsc --noEmit`/`npm run build`/58-test suite all green.
+- **Granular per-game "%" chart (2026-07-25)**: the reliability diagram is bucketed (10 games'
+  worth of confidence per dot); added a second "%" mode chart, "Predicted probability vs.
+  actual margin — by matchup type," plotting every individual game (x = predicted home win
+  probability, y = actual margin — continuous, so no jitter hack needed). Colored by the same
+  home/away favorite/underdog categories used everywhere else in the app (Game Picks, Win
+  Types, Spread Win %) — imports `WIN_TYPE_COLORS`/`winType()` directly from
+  `lib/logic/winType.ts` rather than duplicating hex values (the established DRY convention
+  per that file's own comments). `winType()` normally takes raw home/away scores, but since it
+  only compares their sign, calling it as `winType(actual_margin, 0, spread_line)` reproduces
+  the exact same classification from the margin already on hand — no new data needed. Ties/
+  missing-spread games get the app's existing neutral gray uncategorized color. Verified in a
+  clean browser tab: 4 chart instances in "%" mode (up from 3), zero console errors in either
+  mode, `tsc --noEmit`/`npm run build`/58-test suite all green.
 - Research artifacts (`data/predictive_model/*.csv`, `metrics.json`, `report.txt` — the
   per-round result tables that back every number in `docs/predictive-model.md`) are now
   **git-tracked** (2026-07-25) — removed from `.gitignore` and committed (~63 KB). Only

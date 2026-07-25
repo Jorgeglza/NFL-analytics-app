@@ -10,6 +10,7 @@ import type { EChartsOption } from "echarts";
 import type { Row } from "../../lib/data/loader";
 import { useECharts } from "../../components/charts/useECharts";
 import { Card, FilterGroup, Kpi, Segmented, tableWrapCls, theadCls, trCls } from "../../components/ui";
+import { winType, WIN_TYPE_COLORS, type WinType } from "../../lib/logic/winType";
 import {
   ALL_SEASONS,
   ALL_TEAMS,
@@ -31,6 +32,15 @@ import {
 } from "./shared";
 
 const CALIBRATION_TOLERANCE_PCT = 0.1; // >10pt gap between predicted and observed is "miscalibrated"
+
+// Matches Game Picks / Win Types / Spread Win % everywhere else in the app —
+// same source-of-truth colors, no local hex duplication (the app's own
+// design-system note: importing a page-local copy of these was a standing
+// DRY problem). "Uncategorized" (ties, or games with no spread_line) gets
+// the app's existing neutral gray rather than a made-up 5th color.
+const UNCATEGORIZED_LABEL = "Uncategorized (tie / no spread)";
+const UNCATEGORIZED_COLOR = "#e0e0e0";
+const WIN_TYPE_ORDER: WinType[] = ["Favorite home", "Favorite away", "Underdog home", "Underdog away"];
 
 type Mode = "Points" | "%";
 
@@ -274,6 +284,72 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
   }, [reliability]);
   const reliabilityRef = useECharts(reliabilityOption);
 
+  // Granular per-game view: the reliability diagram above is bucketed (10
+  // games' worth of confidence collapse into one dot); this plots every
+  // individual game's predicted probability against its actual margin
+  // (continuous, so no jitter hack needed — unlike a binary-outcome axis),
+  // colored by the same home/away favorite/underdog categories used
+  // everywhere else in the app (Game Picks, Win Types, Spread Win %) so this
+  // reads consistently with the rest of the deployment rather than
+  // introducing a new color language just for this page.
+  const granularOption = useMemo<EChartsOption | null>(() => {
+    const graded = filtered.filter((g) => g.home_win_prob !== null);
+    if (!graded.length) return null;
+    const byType = new Map<string, { value: [number, number]; name: string }[]>();
+    graded.forEach((g) => {
+      const wt = winType(Number(g.actual_margin), 0, g.spread_line === null ? null : Number(g.spread_line));
+      const key = wt ?? UNCATEGORIZED_LABEL;
+      if (!byType.has(key)) byType.set(key, []);
+      byType.get(key)!.push({
+        value: [Number(g.home_win_prob) * 100, Number(g.actual_margin)],
+        name: `${g.season} wk${g.week} ${g.away_team}@${g.home_team}`,
+      });
+    });
+    const maxAbsMargin = Math.max(20, ...graded.map((g) => Math.abs(Number(g.actual_margin)))) * 1.05;
+    const tooltipFormatter = (p: unknown) => {
+      const pt = p as { seriesName: string; data: { name: string; value: [number, number] } };
+      return `${pt.data.name}<br/>${pt.seriesName}<br/>predicted home win prob ${pt.data.value[0].toFixed(0)}%<br/>actual margin ${pt.data.value[1].toFixed(1)} pts`;
+    };
+    const orderedKeys = [...WIN_TYPE_ORDER, UNCATEGORIZED_LABEL].filter((k) => byType.has(k));
+    return {
+      grid: { left: 60, right: 30, top: 40, bottom: 60, containLabel: false },
+      legend: { top: 0, data: orderedKeys },
+      tooltip: { formatter: tooltipFormatter },
+      xAxis: { type: "value", name: "Predicted home win probability (%)", nameLocation: "middle", nameGap: 32, min: 0, max: 100 },
+      yAxis: { type: "value", name: "Actual margin (home − away, pts)", nameLocation: "middle", nameGap: 42, nameRotate: 90, min: -maxAbsMargin, max: maxAbsMargin },
+      series: [
+        {
+          type: "line",
+          name: "Reference lines",
+          data: [[50, -maxAbsMargin], [50, maxAbsMargin]],
+          lineStyle: { color: "#94a3b8", type: "dashed", width: 1 },
+          symbol: "none",
+          silent: true,
+          tooltip: { show: false },
+          z: 1,
+        },
+        {
+          type: "line",
+          data: [[0, 0], [100, 0]],
+          lineStyle: { color: "#94a3b8", type: "dashed", width: 1 },
+          symbol: "none",
+          silent: true,
+          tooltip: { show: false },
+          z: 1,
+        },
+        ...orderedKeys.map((key) => ({
+          name: key,
+          type: "scatter" as const,
+          symbolSize: 6,
+          itemStyle: { color: key === UNCATEGORIZED_LABEL ? UNCATEGORIZED_COLOR : WIN_TYPE_COLORS[key as WinType], opacity: 0.7 },
+          data: byType.get(key) ?? [],
+          z: 2,
+        })),
+      ],
+    } as EChartsOption;
+  }, [filtered]);
+  const granularRef = useECharts(granularOption);
+
   const bySeasonTable = useMemo(() => {
     const seasonsAsc = Array.from(new Set(filtered.map((g) => Number(g.season)))).sort((a, b) => a - b);
     return seasonsAsc.map((s) => {
@@ -438,6 +514,20 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
           subtitle="Bucketed by predicted probability. On the dashed diagonal = perfectly calibrated. Blue = within 10pt of the diagonal, red = off by more."
         >
           <div ref={reliabilityRef} className="h-[480px]" />
+        </Card>
+      )}
+
+      {mode === "%" && (
+        <Card
+          title={
+            <span className="inline-flex items-center">
+              Predicted probability vs. actual margin — by matchup type
+              <InfoDot text="Every game individually (no bucketing) — x = predicted home win probability, y = the real final-score margin. The vertical line marks the 50% pick threshold; the horizontal line marks an actual tie. Colors match Game Picks / Win Types / Spread Win % elsewhere in the app: which side was favored by the closing spread, and whether that favorite actually covered — not the model's own prediction." />
+            </span>
+          }
+          subtitle="Each dot is one game, colored by home/away favorite/underdog (closing spread) — same categories and colors as Game Picks and Win Types."
+        >
+          <div ref={granularRef} className="h-[480px]" />
         </Card>
       )}
 
