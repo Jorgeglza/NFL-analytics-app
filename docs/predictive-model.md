@@ -866,6 +866,37 @@ shows one.** Options going forward:
    on 7 seasons (n=1,871) vs. p=0.13-0.18 on 2 seasons — the first result in this session to
    clear conventional significance. See Round 8 above.
 
+## P3: folded into the Matchup Previews consensus as a 7th model (2026-07-25)
+
+Per explicit user decision, the model is now a 7th input (`"predictive"`) alongside
+`blend`/`trend`/`ml`/`elo`/`pyth`/`consensus` in the shared Matchup Previews engine
+(`app/src/pages/game-analysis/previews/engine.ts`) — **despite the "no confirmed edge"
+finding above**, which is preserved and surfaced in the UI (Models Guide card, and a small
+disclosure note on every tab that shows the model), not hidden.
+
+This is a pure frontend data-loading change, not a re-implementation: `engine.ts`'s
+`buildPredictiveIndex()` reads the already-exported `app/public/data/predictive_model/games.json`
+(historical per-game `home_win_prob`, closed-form normal-CDF, produced by `export_page.py`)
+into a `${season}|${week}|${away_team}|${home_team}` lookup. No feature engineering or model
+fitting was ported to TypeScript.
+
+**Deliberately deferred (not built in this pass):**
+1. **Live/upcoming-game prediction.** The model has no `predict_upcoming()` capability —
+   it only ever scored historical games. Any unplayed/future week (and any season before
+   the export's first covered season) has no entry in the lookup, so `probBundle()`
+   resolves it to `null` and the consensus average silently excludes it for that game —
+   the same graceful-degradation pattern `pyth`/grades already use early in a season.
+   Building a true live-prediction step (fit on all completed data through the latest
+   finished week, score the upcoming week, export) is future work.
+2. **Automation.** `pipeline/predictive_model/` still has zero GitHub Actions wiring —
+   stays fully manual (`python pipeline/predictive_model/export_page.py`) per the
+   package's original isolation decision. Wiring a refresh into `weekly-refresh.yml`
+   (alongside a live-prediction step, once built) is future work. The frontend already
+   degrades gracefully if the export is missing/stale/fails to load (the "predictive
+   model data unavailable this session" note replaces the model column entirely rather
+   than showing broken/null values), so this can be automated later without a frontend
+   change.
+
 ## Files
 
 - `pipeline/predictive_model/config.py` — isolated dirs, test-season config.

@@ -17,6 +17,7 @@ import {
   type GradesIndex,
   type TeamWeekIndex,
   type EloIndex,
+  type PredictiveIndex,
 } from "./engine";
 
 interface Pick {
@@ -93,6 +94,7 @@ function buildHeatmap(
   xAxisLabels: string[],
   tooltipUnit: string,
   tooltipValues: (string | number)[],
+  modelKeys: [MetricKey, string][],
 ): { option: EChartsOption; domainLo: number; domainHi: number } | null {
   if (!entries.length) return null;
   const data: { value: [number, number, number]; n: number; correct: number }[] = [];
@@ -116,13 +118,13 @@ function buildHeatmap(
       formatter: (p: unknown) => {
         const d = p as { data: { value: [number, number, number]; n: number; correct: number } };
         const [xi, yi] = d.data.value;
-        const label = MODEL_KEYS[yi][1];
+        const label = modelKeys[yi][1];
         const pct = d.data.value[2];
         return `${label} — ${tooltipUnit} ${tooltipValues[xi]}<br/>${pct < 0 ? "No games" : `${pct.toFixed(0)}% (${d.data.correct}/${d.data.n})`}`;
       },
     },
     xAxis: { type: "category", data: xAxisLabels, position: "bottom", axisLabel: { fontSize: 10 }, splitArea: { show: false } },
-    yAxis: { type: "category", data: MODEL_KEYS.map(([, l]) => l), axisLabel: { fontSize: 11 } },
+    yAxis: { type: "category", data: modelKeys.map(([, l]) => l), axisLabel: { fontSize: 11 } },
     visualMap: { show: false, min: 0, max: 100 },
     series: [
       {
@@ -171,23 +173,30 @@ export default function ModelPickerTab({
   gradesIdx,
   twIdx,
   eloIdx,
+  predIdx,
+  predictiveUnavailable = false,
+  predictiveCoverage = null,
 }: {
   schedule: Row[];
   hist: HistAgg;
   gradesIdx: GradesIndex;
   twIdx: TeamWeekIndex;
   eloIdx: EloIndex;
+  predIdx?: PredictiveIndex;
+  predictiveUnavailable?: boolean;
+  predictiveCoverage?: { min: number; max: number } | null;
 }) {
+  const modelKeys = useMemo(() => (predictiveUnavailable ? MODEL_KEYS.filter(([k]) => k !== "predictive") : MODEL_KEYS), [predictiveUnavailable]);
   const records = useMemo<Rec[]>(() => {
     const reg = schedule.filter((r) => r.game_type === "REG");
     return reg.map((g) => {
       const s = Number(g.season);
       const w = Number(g.week);
-      const b = probBundle(g, s, w, hist, gradesIdx, twIdx, eloIdx);
+      const b = probBundle(g, s, w, hist, gradesIdx, twIdx, eloIdx, predIdx);
       const actual = resultWinner(g);
       const favSide = favoriteSide(g.spread_line == null ? null : Number(g.spread_line));
       const picks = {} as Rec["picks"];
-      for (const [key] of MODEL_KEYS) {
+      for (const [key] of modelKeys) {
         const [pA, pH] = b[key];
         let side: "home" | "away" | null = null;
         let conf: number | null = null;
@@ -199,7 +208,7 @@ export default function ModelPickerTab({
       }
       return { season: s, week: w, favSide, actual, picks };
     });
-  }, [schedule, hist, gradesIdx, twIdx, eloIdx]);
+  }, [schedule, hist, gradesIdx, twIdx, eloIdx, predIdx, modelKeys]);
 
   const seasons = useMemo(() => [...new Set(records.map((r) => r.season))].sort((a, b) => b - a), [records]);
   const latestWithResults = useMemo(() => {
@@ -213,7 +222,7 @@ export default function ModelPickerTab({
 
   // ---------- overall KPIs (all seasons, all time) ----------
   const overall = useMemo(() => {
-    const rows = MODEL_KEYS.map(([key, label]) => {
+    const rows = modelKeys.map(([key, label]) => {
       const picks = records.map((r) => r.picks[key]);
       const a = accOf(picks);
       const confs = picks.map((p) => p.conf).filter((c): c is number => c != null);
@@ -228,12 +237,12 @@ export default function ModelPickerTab({
     const bestAcc = Math.max(...rows.map((r) => r.pct ?? -1));
     const bestBrier = Math.min(...rows.filter((r) => r.brier != null).map((r) => r.brier!));
     return rows.map((r) => ({ ...r, isBestAcc: r.pct != null && r.pct === bestAcc, isBestBrier: r.brier != null && r.brier === bestBrier }));
-  }, [records]);
+  }, [records, modelKeys]);
 
   // ---------- scenario matrix (all seasons, all time) ----------
   const scenarioMatrix = useMemo(
     () =>
-      MODEL_KEYS.map(([key, label]) => ({
+      modelKeys.map(([key, label]) => ({
         key,
         label,
         cells: SCENARIOS.map((sc) => {
@@ -241,7 +250,7 @@ export default function ModelPickerTab({
           return { scenario: sc.key, ...accOf(rows) };
         }),
       })),
-    [records],
+    [records, modelKeys],
   );
 
   // ---------- per-week accuracy for the selected season ----------
@@ -249,10 +258,10 @@ export default function ModelPickerTab({
     const weeks = [...new Set(records.filter((r) => r.season === sel).map((r) => r.week))].sort((a, b) => a - b);
     return weeks.map((w) => {
       const rows = records.filter((r) => r.season === sel && r.week === w);
-      const perModel = MODEL_KEYS.map(([key]) => accOf(rows.map((r) => r.picks[key])));
+      const perModel = modelKeys.map(([key]) => accOf(rows.map((r) => r.picks[key])));
       return { week: w, perModel };
     });
-  }, [records, sel]);
+  }, [records, sel, modelKeys]);
 
   const lineOption = useMemo<EChartsOption | null>(() => {
     if (!weekly.length) return null;
@@ -275,7 +284,7 @@ export default function ModelPickerTab({
       },
       xAxis: { type: "category", data: weeks.map(String), name: "Week", nameLocation: "middle", nameGap: 24, axisLabel: { fontSize: 10 } },
       yAxis: { type: "value", min: 0, max: 100, name: "Accuracy %", nameTextStyle: { fontSize: 10 }, axisLabel: { fontSize: 10 } },
-      series: MODEL_KEYS.map(([key, label], i) => ({
+      series: modelKeys.map(([key, label], i) => ({
         name: label,
         type: "line" as const,
         data: weekly.map((w) => (w.perModel[i].pct == null ? null : +w.perModel[i].pct!.toFixed(1))),
@@ -285,11 +294,11 @@ export default function ModelPickerTab({
         itemStyle: { color: MODEL_COLORS[key] },
       })),
     };
-  }, [weekly]);
+  }, [weekly, modelKeys]);
 
   const heat = useMemo(
-    () => buildHeatmap(weekly, weekly.map((w) => `Wk${w.week}`), "Week", weekly.map((w) => w.week)),
-    [weekly],
+    () => buildHeatmap(weekly, weekly.map((w) => `Wk${w.week}`), "Week", weekly.map((w) => w.week), modelKeys),
+    [weekly, modelKeys],
   );
 
   // ---------- accuracy trend aggregated by season (all-time, not one season) ----------
@@ -302,11 +311,11 @@ export default function ModelPickerTab({
     const weeks = [...new Set(records.map((r) => r.week))].sort((a, b) => a - b);
     return weeks.map((w) => {
       const rows = records.filter((r) => r.week === w);
-      const perModel = MODEL_KEYS.map(([key]) => accOf(rows.map((r) => r.picks[key])));
+      const perModel = modelKeys.map(([key]) => accOf(rows.map((r) => r.picks[key])));
       const seasonsInWeek = new Set(rows.map((r) => r.season)).size;
       return { week: w, perModel, seasonsInWeek };
     });
-  }, [records]);
+  }, [records, modelKeys]);
 
   const weekAllSeasonsOption = useMemo<EChartsOption | null>(() => {
     if (!weekAllSeasons.length) return null;
@@ -330,7 +339,7 @@ export default function ModelPickerTab({
       },
       xAxis: { type: "category", data: weeks.map(String), name: "Week", nameLocation: "middle", nameGap: 24, axisLabel: { fontSize: 10 } },
       yAxis: { type: "value", min: 0, max: 100, name: "Accuracy %", nameTextStyle: { fontSize: 10 }, axisLabel: { fontSize: 10 } },
-      series: MODEL_KEYS.map(([key, label], i) => ({
+      series: modelKeys.map(([key, label], i) => ({
         name: label,
         type: "line" as const,
         data: weekAllSeasons.map((w) => (w.perModel[i].pct == null ? null : +w.perModel[i].pct!.toFixed(1))),
@@ -340,7 +349,7 @@ export default function ModelPickerTab({
         itemStyle: { color: MODEL_COLORS[key] },
       })),
     };
-  }, [weekAllSeasons]);
+  }, [weekAllSeasons, modelKeys]);
 
   // Full-season story: one point per season, each model's accuracy across
   // that entire season — is a model getting better or worse over the years.
@@ -348,10 +357,10 @@ export default function ModelPickerTab({
     const ss = [...seasons].sort((a, b) => a - b);
     return ss.map((s) => {
       const rows = records.filter((r) => r.season === s);
-      const perModel = MODEL_KEYS.map(([key]) => accOf(rows.map((r) => r.picks[key])));
+      const perModel = modelKeys.map(([key]) => accOf(rows.map((r) => r.picks[key])));
       return { season: s, perModel };
     });
-  }, [records, seasons]);
+  }, [records, seasons, modelKeys]);
 
   const seasonLineOption = useMemo<EChartsOption | null>(() => {
     if (!seasonAcc.length) return null;
@@ -374,7 +383,7 @@ export default function ModelPickerTab({
       },
       xAxis: { type: "category", data: xs.map(String), name: "Season", nameLocation: "middle", nameGap: 24, axisLabel: { fontSize: 10 } },
       yAxis: { type: "value", min: 0, max: 100, name: "Accuracy %", nameTextStyle: { fontSize: 10 }, axisLabel: { fontSize: 10 } },
-      series: MODEL_KEYS.map(([key, label], i) => ({
+      series: modelKeys.map(([key, label], i) => ({
         name: label,
         type: "line" as const,
         data: seasonAcc.map((s) => (s.perModel[i].pct == null ? null : +s.perModel[i].pct!.toFixed(1))),
@@ -384,11 +393,11 @@ export default function ModelPickerTab({
         itemStyle: { color: MODEL_COLORS[key] },
       })),
     };
-  }, [seasonAcc]);
+  }, [seasonAcc, modelKeys]);
 
   const seasonHeat = useMemo(
-    () => buildHeatmap(seasonAcc, seasonAcc.map((s) => String(s.season)), "Season", seasonAcc.map((s) => s.season)),
-    [seasonAcc],
+    () => buildHeatmap(seasonAcc, seasonAcc.map((s) => String(s.season)), "Season", seasonAcc.map((s) => s.season), modelKeys),
+    [seasonAcc, modelKeys],
   );
 
   const lineRef = useECharts(lineOption);
@@ -504,7 +513,7 @@ export default function ModelPickerTab({
           <div className="mb-1.5 text-xs font-semibold text-slate-600">Heatmap — accuracy % per model, week by week ({sel})</div>
           {heat ? (
             <>
-              <div ref={heatRef} style={{ height: Math.max(220, MODEL_KEYS.length * 34 + 60) }} />
+              <div ref={heatRef} style={{ height: Math.max(220, modelKeys.length * 34 + 60) }} />
               <div className="mt-1.5 text-[10px] text-slate-400">Color scale stretched to this view's spread ({Math.round(heat.domainLo)}%–{Math.round(heat.domainHi)}%) — values outside it clamp to the end colors.</div>
             </>
           ) : (
@@ -518,7 +527,7 @@ export default function ModelPickerTab({
           <div className="mb-1.5 text-xs font-semibold text-slate-600">Heatmap — accuracy % per model, full season by full season</div>
           {seasonHeat ? (
             <>
-              <div ref={seasonHeatRef} style={{ height: Math.max(220, MODEL_KEYS.length * 34 + 60) }} />
+              <div ref={seasonHeatRef} style={{ height: Math.max(220, modelKeys.length * 34 + 60) }} />
               <div className="mt-1.5 text-[10px] text-slate-400">Color scale stretched to this view's spread ({Math.round(seasonHeat.domainLo)}%–{Math.round(seasonHeat.domainHi)}%) — values outside it clamp to the end colors.</div>
             </>
           ) : (
@@ -526,6 +535,11 @@ export default function ModelPickerTab({
           )}
         </div>
       )}
+      <p className="text-[11px] text-slate-400">
+        {predictiveUnavailable
+          ? "⚠ Predictive model: data unavailable this session — excluded from every chart/table above."
+          : `⚠ Predictive model: historical only${predictiveCoverage ? ` (seasons ${predictiveCoverage.min}–${predictiveCoverage.max})` : ""}; no prediction yet for upcoming games — excluded automatically where it has no data.`}
+      </p>
     </div>
   );
 }

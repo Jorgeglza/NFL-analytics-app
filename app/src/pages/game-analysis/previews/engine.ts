@@ -10,7 +10,7 @@ import { buildEloIndex, scheduleToEloGames, type EloEntry } from "../../../lib/l
 import { pythWinPct, log5 } from "../../../lib/logic/pythagorean";
 import { WIN_TYPE_COLORS } from "../../../lib/logic/winType";
 
-export type MetricKey = "consensus" | "blend" | "trend" | "ml" | "elo" | "pyth";
+export type MetricKey = "consensus" | "blend" | "trend" | "ml" | "elo" | "pyth" | "predictive";
 export const MODEL_KEYS: [MetricKey, string][] = [
   ["consensus", "Average"],
   ["blend", "Market-calibrated"],
@@ -18,6 +18,7 @@ export const MODEL_KEYS: [MetricKey, string][] = [
   ["ml", "ML Fair"],
   ["elo", "Elo"],
   ["pyth", "Pythagorean"],
+  ["predictive", "Predictive (margin reg.)"],
 ];
 export const MODEL_COLORS: Record<MetricKey, string> = {
   consensus: "#002f6c",
@@ -26,6 +27,7 @@ export const MODEL_COLORS: Record<MetricKey, string> = {
   ml: "#3C9A5F",
   elo: "#7c3aed",
   pyth: "#C8102E",
+  predictive: "#6B7280",
 };
 
 export const favoriteSide = (spread: number | null): "home" | "away" | null =>
@@ -183,6 +185,28 @@ export function buildScheduleEloIndex(schedule: Row[]): EloIndex {
   return buildEloIndex(scheduleToEloGames(schedule));
 }
 
+// ---------- predictive model (margin regression) — historical-only, precomputed ----------
+// Reuses app/public/data/predictive_model/games.json (pipeline/predictive_model/export_page.py),
+// which already carries a closed-form home_win_prob per historical game. No feature/model
+// porting to TS: this is a lookup, not a re-implementation. Games not covered (any
+// upcoming/unplayed week, or seasons before the export's first test season) simply have no
+// entry — probBundle resolves that to null, which the consensus nanmean already skips.
+// See docs/predictive-model.md / docs/predictive-model-decision.md for the research behind it.
+export type PredictiveIndex = Map<string, number>; // key -> home_win_prob
+
+export function predictiveKey(season: number | string, week: number | string, awayTeam: string, homeTeam: string): string {
+  return `${season}|${week}|${awayTeam}|${homeTeam}`;
+}
+
+export function buildPredictiveIndex(rows: Row[]): PredictiveIndex {
+  const idx: PredictiveIndex = new Map();
+  for (const r of rows) {
+    if (r.home_win_prob == null) continue;
+    idx.set(predictiveKey(Number(r.season), Number(r.week), String(r.away_team), String(r.home_team)), Number(r.home_win_prob));
+  }
+  return idx;
+}
+
 // ---------- probability bundle ----------
 export interface ProbBundle {
   blend: [number | null, number | null]; // (away, home)
@@ -190,6 +214,7 @@ export interface ProbBundle {
   ml: [number | null, number | null];
   elo: [number | null, number | null];
   pyth: [number | null, number | null];
+  predictive: [number | null, number | null];
   consensus: [number | null, number | null];
 }
 
@@ -201,6 +226,7 @@ export function probBundle(
   gradesIdx: GradesIndex,
   twIdx: TeamWeekIndex,
   eloIdx?: EloIndex,
+  predIdx?: PredictiveIndex,
 ): ProbBundle {
   const away = String(game.away_team);
   const home = String(game.home_team);
@@ -254,12 +280,16 @@ export function probBundle(
   const pAwayPyth = pythAwayExp != null && pythHomeExp != null ? log5(pythAwayExp, pythHomeExp) : null;
   const pHomePyth = pAwayPyth == null ? null : 1 - pAwayPyth;
 
+  // Predictive (margin regression) — precomputed lookup, historical-only (see above).
+  const pHomePred = predIdx?.get(predictiveKey(season, week, away, home)) ?? null;
+  const pAwayPred = pHomePred == null ? null : 1 - pHomePred;
+
   const nanmean = (vals: (number | null)[]): number | null => {
     const v = vals.filter((x): x is number => x != null);
     return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null;
   };
-  const lm = nanmean([pAwayBlend, pAwayTrend, pAwayMl, pAwayElo, pAwayPyth]);
-  const rm = nanmean([pHomeBlend, pHomeTrend, pHomeMl, pHomeElo, pHomePyth]);
+  const lm = nanmean([pAwayBlend, pAwayTrend, pAwayMl, pAwayElo, pAwayPyth, pAwayPred]);
+  const rm = nanmean([pHomeBlend, pHomeTrend, pHomeMl, pHomeElo, pHomePyth, pHomePred]);
   let cons: [number | null, number | null] = [null, null];
   if (lm != null && rm != null && lm + rm > 0) cons = [lm / (lm + rm), rm / (lm + rm)];
 
@@ -269,6 +299,7 @@ export function probBundle(
     ml: [pAwayMl, pHomeMl],
     elo: [pAwayElo, pHomeElo],
     pyth: [pAwayPyth, pHomePyth],
+    predictive: [pAwayPred, pHomePred],
     consensus: cons,
   };
 }

@@ -27,6 +27,7 @@ import {
   type GradesIndex,
   type TeamWeekIndex,
   type EloIndex,
+  type PredictiveIndex,
 } from "./engine";
 
 const fmtMl = (ml: number | null) => (ml == null ? "—" : ml > 0 ? `+${Math.round(ml)}` : String(Math.round(ml)));
@@ -85,6 +86,9 @@ export default function MatchupTab({
   gradesIdx,
   twIdx,
   eloIdx,
+  predIdx,
+  predictiveUnavailable = false,
+  predictiveCoverage = null,
   initialSelection,
 }: {
   schedule: Row[];
@@ -94,9 +98,13 @@ export default function MatchupTab({
   gradesIdx: GradesIndex;
   twIdx: TeamWeekIndex;
   eloIdx: EloIndex;
+  predIdx?: PredictiveIndex;
+  predictiveUnavailable?: boolean;
+  predictiveCoverage?: { min: number; max: number } | null;
   /** Preselect a game (e.g. jumped here from a Week Preview card) — takes priority over URL params. */
   initialSelection?: { season: string; week: string; game: string } | null;
 }) {
+  const modelKeys = useMemo(() => (predictiveUnavailable ? MODEL_KEYS.filter(([k]) => k !== "predictive") : MODEL_KEYS), [predictiveUnavailable]);
   const [searchParams] = useSearchParams();
   const reg = useMemo(() => schedule.filter((r) => r.game_type === "REG"), [schedule]);
   const seasons = useMemo(() => [...new Set(reg.map((r) => Number(r.season)))].sort((a, b) => b - a), [reg]);
@@ -182,8 +190,8 @@ export default function MatchupTab({
 
   // ---- all-model bundle for the verdict strip ----
   const bundle = useMemo(
-    () => (selGame ? probBundle(selGame, s, w, hist, gradesIdx, twIdx, eloIdx) : null),
-    [selGame, s, w, hist, gradesIdx, twIdx, eloIdx],
+    () => (selGame ? probBundle(selGame, s, w, hist, gradesIdx, twIdx, eloIdx, predIdx) : null),
+    [selGame, s, w, hist, gradesIdx, twIdx, eloIdx, predIdx],
   );
 
   // ---- key stats for the decision card (season-to-date thru week-1) ----
@@ -428,7 +436,7 @@ export default function MatchupTab({
       {bundle && (
         <div className="rounded-2xl border border-slate-200 bg-white shadow-sm" style={{ borderTop: "4px solid #002f6c" }}>
           <div className="flex flex-wrap items-stretch gap-2 p-3">
-            {MODEL_KEYS.map(([k, lbl]) => {
+            {modelKeys.map(([k, lbl]) => {
               const [pA, pH] = bundle[k];
               const hasP = pA != null && pH != null;
               const pickT = hasP ? (pA! >= pH! ? away : home) : null;
@@ -588,14 +596,33 @@ export default function MatchupTab({
               <div className="text-[10px] text-slate-400">From points scored vs allowed through W{wkPlayed} — scoring margin predicts wins.</div>
             </ModelBlock>
 
+            {!predictiveUnavailable && (
+              <ModelBlock color={MODEL_COLORS.predictive} title="Predictive (margin reg.)" pick={pickOf(bundle.predictive)} prob={probOf(bundle.predictive)}>
+                <ProbBar label="Predicted home win prob." p={bundle.predictive[1]} color={MODEL_COLORS.predictive} />
+                <div className="text-[10px] text-slate-400">
+                  Historical-only walk-forward margin regression (Elo/EPA/injury/rest/weather diffs) — no prediction available for
+                  upcoming/unplayed games{predictiveCoverage ? ` or seasons before ${predictiveCoverage.min}` : ""}.
+                  Research found <b>no confirmed edge over the market</b> (see Models Guide).
+                </div>
+              </ModelBlock>
+            )}
+
             <ModelBlock color={MODEL_COLORS.consensus} title="Average (consensus)" pick={pickOf(bundle.consensus)} prob={probOf(bundle.consensus)}>
-              {(["blend", "trend", "ml", "elo", "pyth"] as const).map((k) => (
-                <ProbBar key={k} label={MODEL_KEYS.find(([mk]) => mk === k)?.[1] ?? k} p={bundle[k][1]} color={MODEL_COLORS[k]} />
+              {modelKeys.filter(([k]) => k !== "consensus").map(([k, lbl]) => (
+                <ProbBar key={k} label={lbl} p={bundle[k][1]} color={MODEL_COLORS[k]} />
               ))}
-              <div className="text-[10px] text-slate-400">Equal-weight mean of the five models — historically the best calibrated.</div>
+              <div className="text-[10px] text-slate-400">Equal-weight mean of every model with data for this game — historically the best calibrated.</div>
             </ModelBlock>
           </div>
         </div>
+      )}
+      {!predictiveUnavailable && (
+        <p className="text-[11px] text-slate-400">
+          ⚠ Predictive model: historical only{predictiveCoverage ? ` (seasons ${predictiveCoverage.min}–${predictiveCoverage.max})` : ""}; no prediction yet for upcoming games — excluded automatically from those picks/averages.
+        </p>
+      )}
+      {predictiveUnavailable && (
+        <p className="text-[11px] text-slate-400">⚠ Predictive model: data unavailable this session — excluded from the model list and Average above.</p>
       )}
 
       {/* Additional stats — stat comparison + history */}

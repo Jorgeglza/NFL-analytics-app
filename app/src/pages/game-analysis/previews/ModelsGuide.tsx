@@ -2,7 +2,7 @@
 // Matchup Previews, with a live worked example: pick any game and see the
 // actual inputs each model consumed and the probability it produced.
 import { useEffect, useMemo, useState } from "react";
-import { getSchedule, getGrades, getTeamWeek, getMeta, type Row } from "../../../lib/data/loader";
+import { getSchedule, getGrades, getTeamWeek, getMeta, getPredictiveModelGames, getPredictiveModelMeta, type Row } from "../../../lib/data/loader";
 import { Select } from "../../../components/filters/Select";
 import { Loading } from "../../../components/Loading";
 import { Card, FilterGroup } from "../../../components/ui";
@@ -23,6 +23,9 @@ import {
   kickoffMs,
   probBundle,
   MODEL_COLORS,
+  MODEL_KEYS,
+  buildPredictiveIndex,
+  type PredictiveIndex,
 } from "./engine";
 
 const pctf = (p: number | null | undefined, d = 1) => (p == null ? "—" : `${(100 * p).toFixed(d)}%`);
@@ -37,7 +40,7 @@ function ModelCard({
 }: {
   color: string;
   title: string;
-  what: string;
+  what: React.ReactNode;
   inputs: string[];
   children: React.ReactNode; // worked example
 }) {
@@ -71,6 +74,9 @@ export default function ModelsGuide() {
   const [season, setSeason] = useState("");
   const [week, setWeek] = useState("");
   const [gameId, setGameId] = useState("");
+  const [predIdx, setPredIdx] = useState<PredictiveIndex | null>(null);
+  const [predictiveUnavailable, setPredictiveUnavailable] = useState(false);
+  const [predictiveCoverage, setPredictiveCoverage] = useState<{ min: number; max: number } | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -82,6 +88,12 @@ export default function ModelsGuide() {
       );
       setTeamWeekBySeason(new Map(tw));
     })();
+    Promise.all([getPredictiveModelGames(), getPredictiveModelMeta()])
+      .then(([rows, m]) => {
+        setPredIdx(buildPredictiveIndex(rows));
+        setPredictiveCoverage(m.test_seasons.length ? { min: Math.min(...m.test_seasons), max: Math.max(...m.test_seasons) } : null);
+      })
+      .catch(() => setPredictiveUnavailable(true));
   }, []);
 
   const reg = useMemo(() => schedule.filter((r) => r.game_type === "REG"), [schedule]);
@@ -135,9 +147,9 @@ export default function ModelsGuide() {
     const pythA = ppA ? pythWinPct(ppA.pf, ppA.pa) : null;
     const pythH = ppH ? pythWinPct(ppH.pf, ppH.pa) : null;
     const pAwayPyth = pythA != null && pythH != null ? log5(pythA, pythH) : null;
-    const bundle = probBundle(game, s, w, hist, gradesIdx, twIdx, eloIdx);
+    const bundle = probBundle(game, s, w, hist, gradesIdx, twIdx, eloIdx, predIdx ?? undefined);
     return { away, home, spread, fav, bucket, market, gA, gH, pModelAway, pMarketHome, pHomeBlend, fa, fh, edge, mlA, mlH, fair, eloE, ppA, ppH, pythA, pythH, pAwayPyth, bundle };
-  }, [game, hist, gradesIdx, twIdx, eloIdx, s, w, wkPlayed]);
+  }, [game, hist, gradesIdx, twIdx, eloIdx, s, w, wkPlayed, predIdx]);
 
   if (!schedule.length || !teamWeekBySeason || !ex) return <Loading label="Loading all seasons…" />;
 
@@ -248,17 +260,44 @@ export default function ModelsGuide() {
           <Res team={pickOf(ex.bundle.pyth)} p={ex.bundle.pyth[0] != null && ex.bundle.pyth[1] != null ? Math.max(ex.bundle.pyth[0], ex.bundle.pyth[1]) : null} />
         </ModelCard>
 
+        {!predictiveUnavailable && (
+          <ModelCard
+            color={MODEL_COLORS.predictive}
+            title="Predictive (margin regression)"
+            what={
+              <>
+                A walk-forward linear regression that fits point margin (home score − away score) from 41 pre-game features
+                (Elo, rolling EPA/success rate, injuries, rest, weather, divisional game). Win probability comes from a fitted
+                normal residual distribution around the predicted margin. <b>Research finding: no confirmed edge over the
+                market</b> — see the <a className="underline" href="#/data/predictive_model">Predictive Model page</a> and{" "}
+                <code>docs/predictive-model.md</code> for the full investigation. Historical only — no prediction is produced
+                for upcoming/unplayed games yet, so it silently sits out of the Average for those.
+              </>
+            }
+            inputs={[
+              "Elo rating differential (dominant feature by an order of magnitude)",
+              "Rolling EPA / success-rate / explosive-play-rate differentials (last 3 games)",
+              "Rest days, divisional game, weather (temp/wind/roof), QB-starter continuity, injury counts",
+              `Coverage: seasons ${predictiveCoverage ? `${predictiveCoverage.min}–${predictiveCoverage.max}` : "—"} only (precomputed by the pipeline, not computed live in the browser)`,
+            ]}
+          >
+            <div>Predicted home win probability (precomputed): <b>{pctf(ex.bundle.predictive[1])}</b></div>
+            <div className="text-slate-400">{ex.bundle.predictive[1] == null ? "No prediction for this game (outside coverage or unplayed)." : "Loaded from the export's precomputed normal-CDF probability — nothing is refit in the browser."}</div>
+            <Res team={pickOf(ex.bundle.predictive)} p={ex.bundle.predictive[0] != null && ex.bundle.predictive[1] != null ? Math.max(ex.bundle.predictive[0], ex.bundle.predictive[1]) : null} />
+          </ModelCard>
+        )}
+
         <ModelCard
           color={MODEL_COLORS.consensus}
           title="Average (consensus)"
           what="The simple mean of every model that has data for the game, re-normalized so the two sides sum to 100%. Historically the best calibrated: on ~2,300 games its accuracy rises steadily with its confidence (53% in the 50–55% band up to 81% in the 80%+ band)."
           inputs={[
-            "All five model probabilities above (missing ones are skipped)",
+            "All six model probabilities above (missing ones — including Predictive outside its coverage — are skipped)",
             "Equal weights — no model is trusted more than another",
           ]}
         >
           <div>
-            {(["blend", "trend", "ml", "elo", "pyth"] as const).map((k) => (
+            {MODEL_KEYS.filter(([k]) => k !== "consensus" && !(predictiveUnavailable && k === "predictive")).map(([k]) => (
               <span key={k} className="mr-3 inline-flex items-center gap-1">
                 <span className="inline-block h-2 w-2 rounded-full" style={{ background: MODEL_COLORS[k] }} />
                 {pctf(ex.bundle[k][1], 0)}

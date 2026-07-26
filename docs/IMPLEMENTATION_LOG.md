@@ -90,6 +90,16 @@ Per page: run old app side-by-side (`pda-ie` env), match tables/KPIs/chart serie
   kept separate from Model Picker, if a walk-forward ATS edge appeared) — tabled pending a
   decision on `docs/predictive-model.md`'s follow-up options (snap-count-weighted injury
   severity, richer tracking features, accept free-data ceiling, or more held-out seasons).
+- ✅ P2: exploration page built anyway (`/data/predictive_model`, historical-only) — see
+  below.
+- ✅ P3 (2026-07-25): folded into the Matchup Previews consensus as a 7th model
+  (`"predictive"` in `engine.ts`'s `MODEL_KEYS`/`probBundle`), per explicit user decision
+  to include it despite the "no edge" finding. Historical-only (reuses the existing
+  `predictive_model/games.json` export as a lookup — no live/upcoming-game prediction, no
+  TS model port); games outside coverage are silently excluded from that game's average,
+  and the whole model gracefully disappears from the UI (with a small disclosure note) if
+  the export fails to load. Live prediction + weekly-refresh automation are explicitly
+  deferred — see `docs/predictive-model.md`'s "P3" section.
 - ⛔ Follow-up (2026-07-24): added Next Gen Stats (tracking-derived: time-to-throw, CPOE,
   aggressiveness, rush yards over expected, separation/cushion, YAC above expectation;
   2016-2025) + FTN charting (motion/play-action/RPO/box-count/blitz/drop rate; 2022-2025

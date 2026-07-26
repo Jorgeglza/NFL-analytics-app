@@ -3,9 +3,9 @@
 // trend features and grades for any game.
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { getSchedule, getGrades, getTeamWeek, getTeamWeekRanks, getMeta, type Row } from "../../../lib/data/loader";
+import { getSchedule, getGrades, getTeamWeek, getTeamWeekRanks, getMeta, getPredictiveModelGames, getPredictiveModelMeta, type Row } from "../../../lib/data/loader";
 import { getTeamMetaMap, type TeamMeta } from "../../../lib/team/meta";
-import { buildHist, buildGradesIndex, buildTeamWeekIndex, buildScheduleEloIndex } from "./engine";
+import { buildHist, buildGradesIndex, buildTeamWeekIndex, buildScheduleEloIndex, buildPredictiveIndex, type PredictiveIndex } from "./engine";
 import { Loading } from "../../../components/Loading";
 import { usePageTitle } from "../../../lib/hooks/usePageTitle";
 import WeekPreviewTab from "./WeekPreviewTab";
@@ -31,6 +31,13 @@ export default function MatchupPreviews() {
   const [teamWeekBySeason, setTeamWeekBySeason] = useState<Map<number, Row[]> | null>(null);
   const [ranksBySeason, setRanksBySeason] = useState<Map<number, Row[]>>(new Map());
   const [matchupSelection, setMatchupSelection] = useState<{ season: string; week: string; game: string } | null>(null);
+  // Predictive model (7th input to the consensus) — historical-only, precomputed lookup.
+  // Loaded separately from the rest so a missing/malformed export never blocks the other
+  // 6 models: predictiveUnavailable becomes true only on load failure, not on a plain
+  // "no prediction for this game" miss (that's handled silently inside probBundle).
+  const [predIdx, setPredIdx] = useState<PredictiveIndex | null>(null);
+  const [predictiveUnavailable, setPredictiveUnavailable] = useState(false);
+  const [predictiveCoverage, setPredictiveCoverage] = useState<{ min: number; max: number } | null>(null);
 
   const openMatchup = (season: string, week: string, game: string) => {
     setMatchupSelection({ season, week, game });
@@ -59,6 +66,12 @@ export default function MatchupPreviews() {
       );
       setRanksBySeason(new Map(rkEntries));
     })();
+    Promise.all([getPredictiveModelGames(), getPredictiveModelMeta()])
+      .then(([rows, m]) => {
+        setPredIdx(buildPredictiveIndex(rows));
+        setPredictiveCoverage(m.test_seasons.length ? { min: Math.min(...m.test_seasons), max: Math.max(...m.test_seasons) } : null);
+      })
+      .catch(() => setPredictiveUnavailable(true));
   }, []);
 
   const hist = useMemo(() => (schedule.length ? buildHist(schedule) : null), [schedule]);
@@ -100,10 +113,60 @@ export default function MatchupPreviews() {
         <Loading label="Loading all seasons…" />
       ) : (
         <>
-          {tab === "Week Preview" && <WeekPreviewTab schedule={schedule} meta={meta} hist={hist} gradesIdx={gradesIdx} twIdx={twIdx} eloIdx={eloIdx} onOpenMatchup={openMatchup} />}
-          {tab === "Matchup" && <MatchupTab schedule={schedule} ranks={ranksBySeason} meta={meta} hist={hist} gradesIdx={gradesIdx} twIdx={twIdx} eloIdx={eloIdx} initialSelection={matchupSelection} />}
-          {tab === "Model Overview" && <ModelOverviewTab schedule={schedule} meta={meta} hist={hist} gradesIdx={gradesIdx} twIdx={twIdx} eloIdx={eloIdx} />}
-          {tab === "Model Picker" && <ModelPickerTab schedule={schedule} hist={hist} gradesIdx={gradesIdx} twIdx={twIdx} eloIdx={eloIdx} />}
+          {tab === "Week Preview" && (
+            <WeekPreviewTab
+              schedule={schedule}
+              meta={meta}
+              hist={hist}
+              gradesIdx={gradesIdx}
+              twIdx={twIdx}
+              eloIdx={eloIdx}
+              predIdx={predIdx ?? undefined}
+              predictiveUnavailable={predictiveUnavailable}
+              predictiveCoverage={predictiveCoverage}
+              onOpenMatchup={openMatchup}
+            />
+          )}
+          {tab === "Matchup" && (
+            <MatchupTab
+              schedule={schedule}
+              ranks={ranksBySeason}
+              meta={meta}
+              hist={hist}
+              gradesIdx={gradesIdx}
+              twIdx={twIdx}
+              eloIdx={eloIdx}
+              predIdx={predIdx ?? undefined}
+              predictiveUnavailable={predictiveUnavailable}
+              predictiveCoverage={predictiveCoverage}
+              initialSelection={matchupSelection}
+            />
+          )}
+          {tab === "Model Overview" && (
+            <ModelOverviewTab
+              schedule={schedule}
+              meta={meta}
+              hist={hist}
+              gradesIdx={gradesIdx}
+              twIdx={twIdx}
+              eloIdx={eloIdx}
+              predIdx={predIdx ?? undefined}
+              predictiveUnavailable={predictiveUnavailable}
+              predictiveCoverage={predictiveCoverage}
+            />
+          )}
+          {tab === "Model Picker" && (
+            <ModelPickerTab
+              schedule={schedule}
+              hist={hist}
+              gradesIdx={gradesIdx}
+              twIdx={twIdx}
+              eloIdx={eloIdx}
+              predIdx={predIdx ?? undefined}
+              predictiveUnavailable={predictiveUnavailable}
+              predictiveCoverage={predictiveCoverage}
+            />
+          )}
         </>
       )}
     </div>

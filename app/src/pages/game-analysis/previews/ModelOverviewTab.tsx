@@ -15,6 +15,7 @@ import {
   type GradesIndex,
   type TeamWeekIndex,
   type EloIndex,
+  type PredictiveIndex,
 } from "./engine";
 
 interface Rec {
@@ -37,6 +38,9 @@ export default function ModelOverviewTab({
   gradesIdx,
   twIdx,
   eloIdx,
+  predIdx,
+  predictiveUnavailable = false,
+  predictiveCoverage = null,
 }: {
   schedule: Row[];
   meta: Map<string, TeamMeta>;
@@ -44,7 +48,11 @@ export default function ModelOverviewTab({
   gradesIdx: GradesIndex;
   twIdx: TeamWeekIndex;
   eloIdx: EloIndex;
+  predIdx?: PredictiveIndex;
+  predictiveUnavailable?: boolean;
+  predictiveCoverage?: { min: number; max: number } | null;
 }) {
+  const modelKeys = useMemo(() => (predictiveUnavailable ? MODEL_KEYS.filter(([k]) => k !== "predictive") : MODEL_KEYS), [predictiveUnavailable]);
   const [grouping, setGrouping] = useState<"season" | "week">("season");
   const [primary, setPrimary] = useState<MetricKey>("consensus");
   const [order, setOrder] = useState<"time" | "rank">("time");
@@ -56,10 +64,10 @@ export default function ModelOverviewTab({
     return reg.map((g) => {
       const s = Number(g.season);
       const w = Number(g.week);
-      const b = probBundle(g, s, w, hist, gradesIdx, twIdx, eloIdx);
+      const b = probBundle(g, s, w, hist, gradesIdx, twIdx, eloIdx, predIdx);
       const actual = resultWinner(g);
       const picks = {} as Rec["picks"];
-      for (const [key] of MODEL_KEYS) {
+      for (const [key] of modelKeys) {
         const [pA, pH] = b[key];
         let side: string | null = null;
         let team: string | null = null;
@@ -84,7 +92,7 @@ export default function ModelOverviewTab({
         picks,
       };
     });
-  }, [schedule, hist, gradesIdx, twIdx, eloIdx]);
+  }, [schedule, hist, gradesIdx, twIdx, eloIdx, predIdx, modelKeys]);
 
   const filtered = useMemo(() => {
     let df = records;
@@ -232,7 +240,7 @@ export default function ModelOverviewTab({
       <div className="flex flex-wrap items-stretch gap-3">
         <FilterGroup label="Model — which picks are graded">
           <div className="flex flex-wrap gap-2">
-            {MODEL_KEYS.map(([k, lbl]) => (
+            {modelKeys.map(([k, lbl]) => (
               <button key={k} onClick={() => setPrimary(k)} className={`rounded-full px-3 py-1.5 text-sm ${primary === k ? "bg-[#002f6c] text-white shadow-sm" : "bg-slate-100 text-slate-600 hover:text-slate-900"}`}>
                 {lbl}
               </button>
@@ -322,6 +330,11 @@ export default function ModelOverviewTab({
         ))}
         {!matrices.length && <div className="py-8 text-center text-sm text-slate-400">No games meet the filters.</div>}
       </div>
+      <p className="text-[11px] text-slate-400">
+        {predictiveUnavailable
+          ? "⚠ Predictive model: data unavailable this session — excluded from the model list and Average above."
+          : `⚠ Predictive model: historical only${predictiveCoverage ? ` (seasons ${predictiveCoverage.min}–${predictiveCoverage.max})` : ""}; no prediction yet for upcoming games — excluded automatically from those picks/averages.`}
+      </p>
     </div>
   );
 }

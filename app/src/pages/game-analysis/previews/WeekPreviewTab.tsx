@@ -21,6 +21,7 @@ import {
   type GradesIndex,
   type TeamWeekIndex,
   type EloIndex,
+  type PredictiveIndex,
   type ProbBundle,
 } from "./engine";
 
@@ -70,6 +71,9 @@ export default function WeekPreviewTab({
   gradesIdx,
   twIdx,
   eloIdx,
+  predIdx,
+  predictiveUnavailable = false,
+  predictiveCoverage = null,
   onOpenMatchup,
 }: {
   schedule: Row[];
@@ -78,9 +82,13 @@ export default function WeekPreviewTab({
   gradesIdx: GradesIndex;
   twIdx: TeamWeekIndex;
   eloIdx: EloIndex;
+  predIdx?: PredictiveIndex;
+  predictiveUnavailable?: boolean;
+  predictiveCoverage?: { min: number; max: number } | null;
   /** Jump to the Matchup tab for a specific game (season, week, game_id). */
   onOpenMatchup?: (season: string, week: string, game: string) => void;
 }) {
+  const modelKeys = useMemo(() => (predictiveUnavailable ? MODEL_KEYS.filter(([k]) => k !== "predictive") : MODEL_KEYS), [predictiveUnavailable]);
   const reg = useMemo(() => schedule.filter((r) => r.game_type === "REG"), [schedule]);
   const seasons = useMemo(() => [...new Set(reg.map((r) => Number(r.season)))].sort((a, b) => b - a), [reg]);
   const [season, setSeason] = useState("");
@@ -102,7 +110,7 @@ export default function WeekPreviewTab({
     const s = Number(sel);
     const w = Number(selWeek);
     const rows = games.map((g) => {
-      const bundle = probBundle(g, s, w, hist, gradesIdx, twIdx, eloIdx);
+      const bundle = probBundle(g, s, w, hist, gradesIdx, twIdx, eloIdx, predIdx);
       const [pL, pR] = bundle[primary];
       const conf = pL != null && pR != null ? Math.max(pL, pR) : -1;
       const leadSide = pL != null && pR != null ? (pL >= pR ? "away" : "home") : null;
@@ -111,12 +119,12 @@ export default function WeekPreviewTab({
     if (sortMode === "confidence") rows.sort((a, b) => b.conf - a.conf || kickoffMs(a.g) - kickoffMs(b.g));
     if (sortMode === "disagree") rows.sort((a, b) => b.disagree - a.disagree || kickoffMs(a.g) - kickoffMs(b.g));
     return rows;
-  }, [reg, sel, selWeek, primary, sortMode, hist, gradesIdx, twIdx, eloIdx]);
+  }, [reg, sel, selWeek, primary, sortMode, hist, gradesIdx, twIdx, eloIdx, predIdx]);
 
   // Per-model accuracy on this week's completed games (request #1): how did
   // EACH model do, not just the primary one.
   const modelAcc = useMemo(() => {
-    return MODEL_KEYS.map(([k, lbl]) => {
+    return modelKeys.map(([k, lbl]) => {
       let c = 0;
       let n = 0;
       for (const r of cards) {
@@ -129,7 +137,7 @@ export default function WeekPreviewTab({
       }
       return { key: k, label: lbl, correct: c, total: n };
     });
-  }, [cards]);
+  }, [cards, modelKeys]);
   const anyCompleted = modelAcc.some((m) => m.total > 0);
 
   const { winCounts } = useMemo(() => {
@@ -159,7 +167,7 @@ export default function WeekPreviewTab({
         </FilterGroup>
         <FilterGroup label="Model — which pick counts">
           <div className="flex flex-wrap gap-2">
-            {MODEL_KEYS.map(([k, lbl]) => (
+            {modelKeys.map(([k, lbl]) => (
               <button key={k} onClick={() => setPrimary(k)} className={`rounded-full px-3 py-1.5 text-sm ${primary === k ? "bg-[#002f6c] text-white shadow-sm" : "bg-slate-100 text-slate-600 hover:text-slate-900"}`}>
                 {lbl}
               </button>
@@ -279,6 +287,11 @@ export default function WeekPreviewTab({
         })}
         {!cards.length && <div className="py-8 text-center text-sm text-slate-400">No games found for this week.</div>}
       </div>
+      <p className="text-[11px] text-slate-400">
+        {predictiveUnavailable
+          ? "⚠ Predictive model: data unavailable this session — excluded from the model list and Average above."
+          : `⚠ Predictive model: historical only${predictiveCoverage ? ` (seasons ${predictiveCoverage.min}–${predictiveCoverage.max})` : ""}; no prediction yet for upcoming games — excluded automatically from those picks/averages.`}
+      </p>
     </div>
   );
 }
