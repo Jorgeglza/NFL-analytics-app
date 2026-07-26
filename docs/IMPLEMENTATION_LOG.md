@@ -436,26 +436,53 @@ Per page: run old app side-by-side (`pda-ie` env), match tables/KPIs/chart serie
   unverifiable without rerunning 8 rounds of scripts — committing them costs nothing at
   build/runtime since `data/` isn't part of the app bundle (only `app/public/data/` is).
 
-### P3 — Live/upcoming-week predictions (independent track, follows P2) ☐
-- Not started. Scope (per user, 2026-07-25): add a `predict_upcoming()` capability to
-  `pipeline/predictive_model/` so the margin-regression model can score the *current* week's
-  scheduled-but-unplayed games, then surface those predictions in **two** places:
-  1. The existing Model Picker tab (`app/src/pages/game-analysis/previews/ModelPickerTab.tsx`,
-     part of Matchup Previews) — add margin-regression as another model in its comparison.
-  2. The `/data/predictive_model` page built in P2 — likely a new tab or a section on
-     Overview showing this week's predicted margins/probabilities, distinct from the
-     historical backtest tabs.
-- Needed pipeline work (identified during P2 planning, not yet built): (a) build the same
-  ROUND4 diff-feature row for scheduled-but-unplayed games — `features.build_game_table()`
-  currently filters to `home_score.notna()`, blocking this; the underlying *team*-level
-  features are already leakage-safe/pregame, so this is a filter change + a new assembly
-  path, not a feature-engineering change; (b) persist the fitted `lin_reg` pipeline (residual
-  pool + sigma included) instead of refitting fresh every run, so a weekly job can just
-  predict, not retrain; (c) decide whether this runs on the weekly GitHub Actions cron (a
-  meaningful change to this package's "manual only" isolation rule) or stays manual like the
-  rest of P1/P2.
-- Plan not yet written — write one (with Explore/Plan agents per the usual workflow) before
-  implementing.
+### P3 — Live/upcoming-week predictions (independent track, follows P2)
+- ✅ Pipeline automation done (2026-07-25/26). Scope split per user decision: this round
+  covers *only* the pipeline/automation side (item (c) below resolved as "own independent
+  weekly cron"); surfacing predictions in the Model Picker tab
+  (`app/src/pages/game-analysis/previews/ModelPickerTab.tsx`) and as a live-week section on
+  the `/data/predictive_model` page remains a separate, not-yet-started follow-up.
+- Built: `features.build_upcoming_game_table(season, week)` + `features.next_unplayed_week()`
+  — reuses `build_team_features()` unchanged (every per-team feature already excludes the
+  current week's own result via `shift(1)`, so this is a filter change on `build_game_table`'s
+  `home_score.isna()` side, not a feature-engineering change, confirmed by cross-checking its
+  output against `build_game_table()`'s for the same games with scores masked — byte-identical
+  `elo`/`diff_elo` etc.). New `pipeline/predictive_model/export_upcoming.py` fits `lin_reg` on
+  all completed REG games and scores the next unplayed week, writing
+  `app/public/data/predictive_model/upcoming.json` + `upcoming_meta.json` (kept separate from
+  `games.json` so `engine.ts`'s existing `predictiveIdx` — historical-only — is untouched).
+  Item (b) from the original scope note (persist the fitted pipeline instead of refitting)
+  turned out unnecessary: this stays a batch CI export like every other page's JSON, so
+  refitting once per scheduled run is cheap and simpler than persisting model artifacts.
+- Automation: new `.github/workflows/predictive-refresh.yml`, twice-weekly cron (Tuesday
+  14:00 UTC — early pass, right after `weekly-refresh.yml`'s Tuesday commit, though injury/
+  starting-QB data for the upcoming week is largely not posted yet; Friday 18:00 UTC —
+  re-scores the same week after the NFL's official Friday injury report finalizes). Fully
+  independent of `weekly-refresh.yml`: separate file, separate schedule, commit scoped only
+  to the two `upcoming*.json` files, read-only against `data/nfl.sqlite`. Same auto-commit +
+  explicit `gh workflow run deploy.yml` dispatch pattern (`GITHUB_TOKEN` commits don't trigger
+  push-based workflows).
+- Verified: local dry run against the real `data/nfl.sqlite` correctly found zero unplayed
+  games (offseason — 2026 schedule not fetched yet, `current_season()`'s August cutover
+  hasn't hit) and wrote a valid empty `{"cols":[],"rows":[]}` rather than erroring. Separately,
+  end-to-end smoke-tested by monkeypatching `load_schedule()` to mask a real played week
+  (2025 week 10) as unplayed: `export_upcoming.main()` ran fetch→fit→predict→export cleanly,
+  produced 14 games with sane `predicted_margin`/`home_win_prob`/`home_covers_prob` values
+  consistent with the real spread lines for that week. Not yet dispatched live in GitHub
+  Actions (nothing to score until the 2026 season enters `SEASONS` in August) — do that as a
+  `workflow_dispatch` smoke test once games are scheduled.
+- **Bug caught during review, fixed before push**: `_qb_continuity`'s `qb_changed` flag
+  (`features.py`) compared `qb_id != prev_qb_id` without also requiring `qb_id.notna()`.
+  Harmless for `build_game_table()` (always-played games always have an announced/recorded
+  QB), but `build_upcoming_game_table()` can call this on a genuinely future game whose
+  starting QB isn't announced yet — pandas' `NaN != x` evaluates `True`, so an unannounced QB
+  was being mislabeled "changed" instead of "unknown, no signal." Added the `qb_id.notna()`
+  guard; re-ran both the masked-week feature cross-check (still byte-identical to
+  `build_game_table()`) and the real dry run against `data/nfl.sqlite` after the fix.
+- Committed and pushed to `main` (2026-07-26) so the `predictive-refresh.yml` cron schedule
+  is live — GitHub Actions only evaluates `on.schedule` triggers for workflow files present
+  on the default branch.
+- Plan: `C:\Users\Jorge\.claude\plans\need-to-plan-the-cheerful-papert.md`.
 
 ## Session notes (newest first)
 

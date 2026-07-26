@@ -1,0 +1,45 @@
+name: predictive-model-refresh
+
+on:
+  schedule:
+    - cron: "0 14 * * 2" # Tuesday 14:00 UTC (after weekly-refresh.yml's data commit)
+    - cron: "0 18 * * 5" # Friday 18:00 UTC (after the NFL's official injury report)
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write # to trigger deploy.yml after the data commit
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install pinned dependencies
+        run: |
+          pip install pandas==3.0.0 numpy==1.26.4 scikit-learn==1.8.0 nflreadpy==0.1.2 pyarrow joblib scipy
+          pip install --no-deps nfl_data_py==0.3.3 appdirs fastparquet
+
+      - name: Run predictive-model export
+        run: python pipeline/predictive_model/export_upcoming.py
+
+      - name: Commit updated predictions
+        id: autocommit
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "data: predictive model weekly refresh"
+          file_pattern: "app/public/data/predictive_model/upcoming.json app/public/data/predictive_model/upcoming_meta.json"
+
+      # Commits pushed with GITHUB_TOKEN do not fire push-triggered workflows,
+      # so the Pages deploy must be dispatched explicitly.
+      - name: Trigger deploy
+        if: steps.autocommit.outputs.changes_detected == 'true'
+        run: gh workflow run deploy.yml --ref main
+        env:
+          GH_TOKEN: ${{ github.token }}

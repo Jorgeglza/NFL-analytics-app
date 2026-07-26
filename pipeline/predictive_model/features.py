@@ -242,7 +242,15 @@ def _qb_continuity(schedule: pd.DataFrame) -> pd.DataFrame:
     both["_order"] = pd.to_datetime(both["gameday"], errors="coerce").astype("int64") + both["week"].astype(float) / 1000
     both = both.sort_values(["team", "_order"])
     both["prev_qb_id"] = both.groupby("team")["qb_id"].shift(1)
-    both["qb_changed"] = ((both["prev_qb_id"].notna()) & (both["qb_id"] != both["prev_qb_id"])).astype(int)
+    # Require both ids known: pandas' NaN != x is True, so without the
+    # qb_id.notna() guard an unannounced starter (always NaN for genuinely
+    # future/scheduled games -- never happens for already-played games, so
+    # this was invisible until build_upcoming_game_table started calling this
+    # on schedule-only rows) would be mislabeled "changed" instead of
+    # "unknown, treat as no signal."
+    both["qb_changed"] = (
+        both["prev_qb_id"].notna() & both["qb_id"].notna() & (both["qb_id"] != both["prev_qb_id"])
+    ).astype(int)
     return both[["team", "season", "week", "game_id", "qb_changed"]]
 
 
@@ -561,6 +569,75 @@ def build_game_table(seasons) -> pd.DataFrame:
     # Evaluation-only baselines (never fed into the ML feature set): the
     # market's own vig-free moneyline prob and the existing app's Elo model,
     # so the trained model can be judged against both, not in a vacuum.
+    elo_idx = build_elo_index(schedule)[["game_id", "elo_p_home"]]
+    games = games.merge(elo_idx, on="game_id", how="left")
+    games["market_home_fair"] = _fair_home_prob(games["away_moneyline"], games["home_moneyline"])
+
+    return games
+
+
+def next_unplayed_week(seasons) -> tuple[int, int] | None:
+    """(season, week) of the earliest REG-season game with no final score yet,
+    within the given seasons -- the "upcoming week" the live-prediction export
+    scores. None if every game in `seasons` is already played."""
+    schedule = load_schedule()
+    unplayed = schedule[
+        (schedule["game_type"] == "REG")
+        & schedule["season"].isin(seasons)
+        & schedule["home_score"].isna()
+    ]
+    if unplayed.empty:
+        return None
+    row = unplayed.sort_values(["season", "week"]).iloc[0]
+    return int(row["season"]), int(row["week"])
+
+
+def build_upcoming_game_table(season: int, week: int) -> pd.DataFrame:
+    """Same shape/columns as build_game_table's feature side (home_/away_/diff_
+    columns, context columns, market_home_fair, elo_p_home), but for one
+    specific (season, week) of scheduled-but-unplayed REG games instead of
+    completed ones. No home_margin/home_win/home_covers targets -- those
+    require a final score, which by definition doesn't exist yet.
+
+    Reuses build_team_features() unchanged: every per-team feature already
+    excludes the current week's own result (shift(1) throughout), so scoring
+    an unplayed week is a filter change here, not a feature-engineering
+    change -- the same leakage-safety guarantees apply.
+    """
+    schedule = load_schedule()
+    games = schedule[
+        (schedule["game_type"] == "REG")
+        & (schedule["season"] == season)
+        & (schedule["week"] == week)
+        & schedule["home_score"].isna()
+    ].copy()
+    if games.empty:
+        return games
+
+    team_feats = build_team_features([season])
+    hf = team_feats.rename(columns={c: f"home_{c}" for c in ALL_FEATURE_COLS}).rename(columns={"team": "home_team"})
+    af = team_feats.rename(columns={c: f"away_{c}" for c in ALL_FEATURE_COLS}).rename(columns={"team": "away_team"})
+
+    games = games.merge(
+        hf[["home_team", "season", "week", "game_id"] + [f"home_{c}" for c in ALL_FEATURE_COLS]],
+        on=["home_team", "season", "week", "game_id"],
+        how="left",
+    )
+    games = games.merge(
+        af[["away_team", "season", "week", "game_id"] + [f"away_{c}" for c in ALL_FEATURE_COLS]],
+        on=["away_team", "season", "week", "game_id"],
+        how="left",
+    )
+
+    for c in ALL_FEATURE_COLS:
+        games[f"diff_{c}"] = games[f"home_{c}"] - games[f"away_{c}"]
+
+    games["is_dome"] = games["roof"].isin(DOME_ROOFS).astype(int)
+    games["wind"] = games["wind"].fillna(0)
+    games["temp"] = games["temp"].fillna(games["temp"].median()) if games["temp"].notna().any() else games["temp"].fillna(60)
+    games["rest_diff"] = games["home_rest"].fillna(7) - games["away_rest"].fillna(7)
+    games["div_game"] = games["div_game"].fillna(0).astype(int)
+
     elo_idx = build_elo_index(schedule)[["game_id", "elo_p_home"]]
     games = games.merge(elo_idx, on="game_id", how="left")
     games["market_home_fair"] = _fair_home_prob(games["away_moneyline"], games["home_moneyline"])

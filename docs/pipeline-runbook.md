@@ -47,6 +47,24 @@ Note: GitHub pauses cron schedules after ~60 days without repo activity; the
 weekly data commits keep it alive, but a long streak of failed runs could stall
 it — check the Actions tab if the site's data looks old.
 
+## Predictive-model live refresh (CI)
+`.github/workflows/predictive-refresh.yml` runs twice weekly (Tuesday 14:00 UTC and
+Friday 18:00 UTC, both `workflow_dispatch`-able) and is fully independent of
+`weekly-refresh.yml`: it only reads `data/nfl.sqlite` (read-only) and fits/scores the
+`pipeline/predictive_model/` margin-regression model against the next scheduled-but-
+unplayed REG week, writing `app/public/data/predictive_model/upcoming.json` +
+`upcoming_meta.json`. Tuesday's run is an early pass (injury/starting-QB data for the
+upcoming week is largely not posted yet); Friday's run re-scores the same week after the
+NFL's official injury report finalizes, overwriting Tuesday's output for that week.
+Same auto-commit + explicit `deploy.yml` dispatch pattern as `weekly-refresh.yml`, scoped
+only to the two `upcoming*.json` files so it never touches `data/nfl.sqlite` or any other
+page's data.
+
+Manual run:
+```bash
+pipeline/.venv/Scripts/python pipeline/predictive_model/export_upcoming.py
+```
+
 ## Data source notes
 - 2015–2024 load via nfl_data_py; 2025+ falls back to nflreadpy (nfl_data_py's
   endpoint 404s). Newer nflreadpy schemas ship `game_id`/`game_type` columns —
