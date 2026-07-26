@@ -13,12 +13,12 @@ import { WIN_TYPE_COLORS } from "../../../lib/logic/winType";
 export type MetricKey = "consensus" | "blend" | "trend" | "ml" | "elo" | "pyth" | "predictive";
 export const MODEL_KEYS: [MetricKey, string][] = [
   ["consensus", "Average"],
-  ["blend", "Market-calibrated"],
-  ["trend", "Trend Edge"],
   ["ml", "ML Fair"],
+  ["blend", "Market-calibrated"],
+  ["predictive", "Predictive (margin reg.)"],
   ["elo", "Elo"],
   ["pyth", "Pythagorean"],
-  ["predictive", "Predictive (margin reg.)"],
+  ["trend", "Trend Edge"],
 ];
 export const MODEL_COLORS: Record<MetricKey, string> = {
   consensus: "#002f6c",
