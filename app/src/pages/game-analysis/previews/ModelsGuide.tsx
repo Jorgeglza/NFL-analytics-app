@@ -6,7 +6,7 @@ import { getSchedule, getGrades, getTeamWeek, getMeta, getPredictiveModelGames, 
 import { Select } from "../../../components/filters/Select";
 import { Loading } from "../../../components/Loading";
 import { Card, FilterGroup } from "../../../components/ui";
-import { gradeModelProb, blendProbs, BLEND_MARKET_W, BLEND_MODEL_W } from "../../../lib/logic/probBlend";
+import { MIN_N_BUCKET, MARKET_BUCKET_W, ATS_WINDOW, homeCoverFairProb, vigLeanProbHome, atsTrendProbHome } from "../../../lib/logic/probBlend";
 import { edgeComposite, EDGE_WEIGHTS, EDGE_SCALE } from "../../../lib/logic/edgeComposite";
 import { fairProbs, impliedProb } from "../../../lib/logic/moneyline";
 import { pythWinPct, log5, PYTH_EXP } from "../../../lib/logic/pythagorean";
@@ -18,6 +18,7 @@ import {
   buildScheduleEloIndex,
   bucketLabel,
   marketRate,
+  atsRate,
   favoriteSide,
   defaultWeekNearToday,
   kickoffMs,
@@ -126,9 +127,15 @@ export default function ModelsGuide() {
     const market = bucket && fav ? marketRate(hist, bucket, fav, s, w) : null;
     const gA = gradesIdx.avgOverall(away, s, wkPlayed);
     const gH = gradesIdx.avgOverall(home, s, wkPlayed);
-    const pModelAway = gradeModelProb(gA, gH);
     const pMarketHome = market == null || fav == null ? null : fav === "home" ? market.pHat : 1 - market.pHat;
-    const pHomeBlend = blendProbs(pMarketHome, pModelAway == null ? null : 1 - pModelAway);
+    const homeCoverFair = homeCoverFairProb(
+      game.away_spread_odds == null ? null : Number(game.away_spread_odds),
+      game.home_spread_odds == null ? null : Number(game.home_spread_odds),
+    );
+    const pVigLeanHome = vigLeanProbHome(homeCoverFair);
+    const atsHome = atsRate(hist, home, s, wkPlayed);
+    const atsAway = atsRate(hist, away, s, wkPlayed);
+    const pAtsTrendHome = atsTrendProbHome(atsHome != null && atsAway != null ? atsHome - atsAway : null);
     const fa = { ...twIdx.features(away, s, wkPlayed), grade: gA };
     const fh = { ...twIdx.features(home, s, wkPlayed), grade: gH };
     const edge = edgeComposite(fa, fh);
@@ -148,7 +155,7 @@ export default function ModelsGuide() {
     const pythH = ppH ? pythWinPct(ppH.pf, ppH.pa) : null;
     const pAwayPyth = pythA != null && pythH != null ? log5(pythA, pythH) : null;
     const bundle = probBundle(game, s, w, hist, gradesIdx, twIdx, eloIdx, predIdx ?? undefined);
-    return { away, home, spread, fav, bucket, market, gA, gH, pModelAway, pMarketHome, pHomeBlend, fa, fh, edge, mlA, mlH, fair, eloE, ppA, ppH, pythA, pythH, pAwayPyth, bundle };
+    return { away, home, spread, fav, bucket, market, gA, gH, pMarketHome, homeCoverFair, pVigLeanHome, atsHome, atsAway, pAtsTrendHome, fa, fh, edge, mlA, mlH, fair, eloE, ppA, ppH, pythA, pythH, pAwayPyth, bundle };
   }, [game, hist, gradesIdx, twIdx, eloIdx, s, w, wkPlayed, predIdx]);
 
   if (!schedule.length || !teamWeekBySeason || !ex) return <Loading label="Loading all seasons…" />;
@@ -179,35 +186,38 @@ export default function ModelsGuide() {
         <ModelCard
           color={MODEL_COLORS.blend}
           title="Market-calibrated"
-          what="Starts from how often favorites with this exact spread have won historically, then blends in the grading model's opinion. 60% market history + 40% grades."
+          what={`Mostly how often favorites at this exact spread have won historically, plus a ${Math.round((1 - MARKET_BUCKET_W) * 100)}% dose of two market reads ML Fair doesn't see: the spread bet's own vig lean and each team's recent against-the-spread trend. A pure grading-model blend was tried and dropped (didn't beat pure market history); a pure vig+ATS model was also tried and dropped (too weak alone) — this minority-dose version keeps bucket history's accuracy while staying distinct from ML Fair.`}
           inputs={[
             "The betting spread → a 1-point bucket (e.g. −7.0 to −6.0) and which side is favored",
-            "Historical favorite win % in that bucket (Wilson-smoothed, this week excluded)",
-            "Both teams' average Overall Grade through the previous week (logistic with scale 0.085)",
+            `Historical favorite win % in that bucket (Wilson-smoothed, this week excluded) — weight ${Math.round(MARKET_BUCKET_W * 100)}%`,
+            `Spread-odds vig lean: vig-free "home covers" probability from the spread's own odds (e.g. away −111 / home +101)`,
+            `Team ATS trend: each team's cover rate over its last ${ATS_WINDOW} played games, home minus away`,
+            `The two extras are averaged, then given the remaining ${Math.round((1 - MARKET_BUCKET_W) * 100)}% weight`,
+            `Sample size flagged as low-confidence below ${MIN_N_BUCKET} historical games`,
           ]}
         >
           <div>Spread {ex.spread == null ? "—" : ex.spread.toFixed(1)} → bucket <b>{ex.bucket ?? "—"}</b>, favorite: <b>{ex.fav === "home" ? home : ex.fav === "away" ? away : "—"}</b></div>
-          <div>History: favorites in this bucket won <b>{pctf(ex.market?.pHat ?? null)}</b> of <b>{ex.market?.n ?? "—"}</b> games</div>
-          <div>Grades thru W{wkPlayed}: {away} <b>{numf(ex.gA, 1)}</b> vs {home} <b>{numf(ex.gH, 1)}</b> → grade model says {away} <b>{pctf(ex.pModelAway)}</b></div>
-          <div>Blend: {BLEND_MARKET_W} × {pctf(ex.pMarketHome)} (market, home) + {BLEND_MODEL_W} × {pctf(ex.pModelAway == null ? null : 1 - ex.pModelAway)} (grades, home)</div>
+          <div>History: favorites in this bucket won <b>{pctf(ex.market?.pHat ?? null)}</b> of <b>{ex.market?.n ?? "—"}</b> games{(ex.market?.n ?? 0) < MIN_N_BUCKET ? " (low-N)" : ""}</div>
+          <div>Vig lean: home covers <b>{pctf(ex.homeCoverFair)}</b> (fair) → home win read <b>{pctf(ex.pVigLeanHome)}</b></div>
+          <div>ATS trend (L{ATS_WINDOW}): {home} <b>{pctf(ex.atsHome)}</b> vs {away} <b>{pctf(ex.atsAway)}</b> → home win read <b>{pctf(ex.pAtsTrendHome)}</b></div>
           <Res team={pickOf(ex.bundle.blend)} p={ex.bundle.blend[0] != null && ex.bundle.blend[1] != null ? Math.max(ex.bundle.blend[0], ex.bundle.blend[1]) : null} />
         </ModelCard>
 
         <ModelCard
           color={MODEL_COLORS.trend}
           title="Trend Edge"
-          what="A recent-form composite: five differences (away minus home), each weighted, summed into an edge and squashed into a probability. Captures who is playing well right now."
+          what="A recent-form composite: five differences (away minus home), each weighted, summed into an edge and squashed into a probability. Captures who is playing well right now. Variables, windows and weights are fit from a backtest against actual game outcomes (2015-2025), not hand-picked — see docs/IMPLEMENTATION_LOG.md."
           inputs={[
-            `Overall grade difference (weight ${EDGE_WEIGHTS.grade})`,
-            `Points margin, mean of last 3 games (${EDGE_WEIGHTS.pmL3})`,
-            `EPA differential, mean of last 3 (${EDGE_WEIGHTS.epaL3})`,
-            `Points-margin slope over last 5 — improving or fading (${EDGE_WEIGHTS.pmSlope})`,
-            `Turnover margin, mean of last 3 (${EDGE_WEIGHTS.tomL3})`,
+            `Overall grade difference, season-to-date (weight ${EDGE_WEIGHTS.grade})`,
+            `Points margin, mean of last 6 games (${EDGE_WEIGHTS.pmL6})`,
+            `EPA differential, mean of last 6 (${EDGE_WEIGHTS.epaL6})`,
+            `Win rate, mean of last 6 (${EDGE_WEIGHTS.winL6})`,
+            `Turnover margin, mean of last 6 (${EDGE_WEIGHTS.tomL6})`,
             `Logistic scale ${EDGE_SCALE} converts the summed edge to a probability`,
           ]}
         >
-          <div>{away}: grade {numf(ex.gA, 1)}, PM-L3 {numf(ex.fa.pmL3)}, EPA-L3 {numf(ex.fa.epaL3)}, slope {numf(ex.fa.pmSlope)}, TO-L3 {numf(ex.fa.tomL3)}</div>
-          <div>{home}: grade {numf(ex.gH, 1)}, PM-L3 {numf(ex.fh.pmL3)}, EPA-L3 {numf(ex.fh.epaL3)}, slope {numf(ex.fh.pmSlope)}, TO-L3 {numf(ex.fh.tomL3)}</div>
+          <div>{away}: grade {numf(ex.gA, 1)}, PM-L6 {numf(ex.fa.pmL6)}, EPA-L6 {numf(ex.fa.epaL6)}, Win%-L6 {numf(ex.fa.winL6)}, TO-L6 {numf(ex.fa.tomL6)}</div>
+          <div>{home}: grade {numf(ex.gH, 1)}, PM-L6 {numf(ex.fh.pmL6)}, EPA-L6 {numf(ex.fh.epaL6)}, Win%-L6 {numf(ex.fh.winL6)}, TO-L6 {numf(ex.fh.tomL6)}</div>
           <div>Weighted edge (away − home): <b>{numf(ex.edge.edge)}</b> → 1 / (1 + e^(−{EDGE_SCALE} × edge))</div>
           <Res team={pickOf(ex.bundle.trend)} p={Math.max(ex.bundle.trend[0]!, ex.bundle.trend[1]!)} />
         </ModelCard>

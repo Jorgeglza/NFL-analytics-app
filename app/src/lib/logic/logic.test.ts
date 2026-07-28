@@ -5,7 +5,7 @@ import golden from "./__fixtures__/golden.json";
 import { wilson } from "./wilson";
 import { winType } from "./winType";
 import { impliedProb, fairProbs } from "./moneyline";
-import { gradeModelProb, blendProbs } from "./probBlend";
+import { nFactor, confidence, MIN_N_BUCKET, MARKET_BUCKET_W, homeCoverFairProb, vigLeanProbHome, atsTrendProbHome, marketCalibratedProbHome } from "./probBlend";
 import { edgeComposite, meanLastN, slopeLastN, EDGE_SCALE } from "./edgeComposite";
 import { parseGameId, opponentLabel } from "./gameId";
 import { squashRatio, mismatchScore, mismatchEdge } from "./ranks";
@@ -44,19 +44,49 @@ describe("moneyline", () => {
   }
 });
 
-describe("gradeModelProb + blend", () => {
-  for (const c of golden.gradeModel) {
-    it(`${c.gradeAway} vs ${c.gradeHome}`, () => {
-      const p = gradeModelProb(c.gradeAway, c.gradeHome)!;
-      close(p, c.pAway);
-      // blend of market p_home=0.6 with model p_home=(1-pAway)
-      close(blendProbs(0.6, 1 - p)!, c.blendWithMarket0_6);
-    });
-  }
-  it("falls back when one side missing", () => {
-    expect(blendProbs(0.7, null)).toBe(0.7);
-    expect(blendProbs(null, 0.3)).toBe(0.3);
-    expect(blendProbs(null, null)).toBeNull();
+describe("probBlend (nFactor / confidence)", () => {
+  it("nFactor scales linearly to 1 at MIN_N_BUCKET, then saturates", () => {
+    expect(nFactor(0)).toBe(0);
+    close(nFactor(MIN_N_BUCKET / 2), 0.5);
+    expect(nFactor(MIN_N_BUCKET)).toBe(1);
+    expect(nFactor(MIN_N_BUCKET * 10)).toBe(1);
+  });
+  it("confidence scales with both edge and bucket sample size", () => {
+    // p=0.5 (no edge) -> 0 confidence regardless of N
+    expect(confidence(0.5, MIN_N_BUCKET)).toBe(0);
+    // full edge (p=1) at N>=MIN_N_BUCKET -> 100
+    close(confidence(1, MIN_N_BUCKET), 100);
+    // full edge at N=0 still gets the 0.7 floor factor
+    close(confidence(1, 0), 70);
+  });
+});
+
+describe("Market-calibrated extras (vig lean + ATS trend)", () => {
+  it("homeCoverFairProb removes the vig symmetrically", () => {
+    // away -111 / home +101 (juice leaning slightly toward home covering)
+    const p = homeCoverFairProb(-111, 101);
+    expect(p).not.toBeNull();
+    close(p!, 1 - homeCoverFairProb(101, -111)!); // swapping sides swaps the fair prob
+  });
+  it("vigLeanProbHome/atsTrendProbHome return null on missing input, 0.5 at zero lean", () => {
+    expect(vigLeanProbHome(null)).toBeNull();
+    close(vigLeanProbHome(0.5)!, 0.5); // no lean -> coin flip
+    expect(atsTrendProbHome(null)).toBeNull();
+    close(atsTrendProbHome(0)!, 0.5); // no ATS diff -> coin flip
+  });
+  it("marketCalibratedProbHome falls back to pure bucket when extras are unavailable", () => {
+    expect(marketCalibratedProbHome(null, 0.6, 0.6)).toBeNull();
+    close(marketCalibratedProbHome(0.65, null, null)!, 0.65);
+  });
+  it("marketCalibratedProbHome weights bucket at MARKET_BUCKET_W when both extras present", () => {
+    const pBucket = 0.7, pVig = 0.6, pAts = 0.4;
+    const expected = MARKET_BUCKET_W * pBucket + (1 - MARKET_BUCKET_W) * ((pVig + pAts) / 2);
+    close(marketCalibratedProbHome(pBucket, pVig, pAts)!, expected);
+  });
+  it("marketCalibratedProbHome averages over just one extra when the other is missing", () => {
+    const pBucket = 0.7, pVig = 0.6;
+    const expected = MARKET_BUCKET_W * pBucket + (1 - MARKET_BUCKET_W) * pVig;
+    close(marketCalibratedProbHome(pBucket, pVig, null)!, expected);
   });
 });
 

@@ -138,32 +138,6 @@
    "overround": 0.045454545454545414
   }
  ],
- "gradeModel": [
-  {
-   "gradeAway": 60.0,
-   "gradeHome": 50.0,
-   "pAway": 0.700567142473973,
-   "blendWithMarket0_6": 0.4797731430104108
-  },
-  {
-   "gradeAway": 50.0,
-   "gradeHome": 60.0,
-   "pAway": 0.29943285752602705,
-   "blendWithMarket0_6": 0.6402268569895893
-  },
-  {
-   "gradeAway": 55.5,
-   "gradeHome": 55.5,
-   "pAway": 0.5,
-   "blendWithMarket0_6": 0.56
-  },
-  {
-   "gradeAway": 70.2,
-   "gradeHome": 41.9,
-   "pAway": 0.9172457456464407,
-   "blendWithMarket0_6": 0.3931017017414237
-  }
- ],
  "slopes": [
   {
    "values": [
@@ -219,37 +193,37 @@
    "gradeAway": 60,
    "gradeHome": 50,
    "away": {
-    "pmL3": 5,
-    "epaL3": 0.1,
-    "tomL3": 1,
-    "pmSlope": 0.5
+    "pmL6": 5,
+    "epaL6": 0.1,
+    "winL6": 0.6,
+    "tomL6": 1
    },
    "home": {
-    "pmL3": 2,
-    "epaL3": -0.05,
-    "tomL3": -1,
-    "pmSlope": 0.2
+    "pmL6": 2,
+    "epaL6": -0.05,
+    "winL6": 0.4,
+    "tomL6": -1
    },
-   "edge": 4.91,
-   "pAway": 0.643181567501221
+   "edge": 3.107,
+   "pAway": 0.5572276232435766
   },
   {
    "gradeAway": 45,
    "gradeHome": 55,
    "away": {
-    "pmL3": -3,
-    "epaL3": -0.2,
-    "tomL3": 0,
-    "pmSlope": -1
+    "pmL6": -3,
+    "epaL6": -0.2,
+    "winL6": 0.2,
+    "tomL6": 0
    },
    "home": {
-    "pmL3": 4,
-    "epaL3": 0.3,
-    "tomL3": 2,
-    "pmSlope": 0.8
+    "pmL6": 4,
+    "epaL6": 0.3,
+    "winL6": 0.8,
+    "tomL6": 2
    },
-   "edge": -6.129999999999999,
-   "pAway": 0.32396705095680206
+   "edge": -4.192,
+   "pAway": 0.42306396923947437
   }
  ],
  "spreadBuckets": [

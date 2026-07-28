@@ -486,6 +486,125 @@ Per page: run old app side-by-side (`pda-ie` env), match tables/KPIs/chart serie
 
 ## Session notes (newest first)
 
+### 2026-07-27 — Market-calibrated: vig-lean + team-ATS extras (85/15) so it's not just ML Fair
+- Follow-up to the pure-market change below. Feedback: pure bucket history is too similar to
+  ML Fair for ensemble purposes (both just answer "what does the market think") — needed an
+  original ingredient distinct enough to justify Market-calibrated as its own model.
+- Explored 4 directions (spread-odds vig lean, team-specific ATS trend, situational/div_game
+  bucketing, Vegas-implied team totals) and backtested the two the user picked, at first as a
+  straight 50/50 replacement of bucket history (`market_v2_backtest.js`, scratch, not
+  committed), over ~2,700-2,884 REG games 2015-2025 with the relevant data available:
+  - **Spread-odds vig lean** (vig-free "home covers" prob from `away_spread_odds`/
+    `home_spread_odds`, centered at 0): AUC 0.538 standalone, and the *raw* direction is
+    inverted (home-leaning juice weakly predicts home *losing*) — sign-corrected via the fitted
+    logistic scale (`VIG_SCALE=-10.15`) rather than hardcoded. Likely public-money noise more
+    than sharp signal, but present.
+  - **Team ATS trend** (rolling cover rate, home − away): tested L3/L5/L8/L10/L16 windows —
+    AUC rises monotonically with window length same as Trend Edge's finding, topping out at
+    AUC 0.557 for L16 (~full season). Makes sense: ATS records are close to random by
+    construction (the spread is built to make covering a coin flip regardless of team quality).
+  - **50/50 replacement of bucket history**: AUC 0.562, Brier 0.248, hit-rate 53.6% — far below
+    pure bucket history's AUC 0.690 / Brier 0.214 / hit-rate 66.5% on the same games. Reported
+    this to the user rather than shipping a near-coin-flip model.
+  - **Division-game adjustment**: dropped. Favorite win rate is 65.95% in div games vs. 65.06%
+    non-div (n≈1,000 each) — statistically indistinguishable from noise. It only shows up
+    faintly in *cover* rate (47.96% vs 49.21%), which isn't the target variable this model
+    predicts (win probability, not ATS). No adjustment applied; documented as a tested-and-null
+    result rather than silently omitted, same treatment as the Predictive model's "no confirmed
+    edge" finding.
+  - **Grid search, w·bucket + (1−w)·[vig+ATS average]**: hit-rate and Brier stay ~flat from
+    w=1.0 down to w=0.85 (66.53% hit-rate unchanged, Brier 0.2139→0.2170), then degrade faster
+    below w=0.8 (hit-rate drops to 63.9% at w=0.75, 56.0% at w=0.5). Picked **w=0.85** — keeps
+    bucket history's accuracy essentially intact while giving the two extras real (15%) weight.
+- Implementation: `probBlend.ts` gained `MARKET_BUCKET_W=0.85`, `ATS_WINDOW=16`,
+  `VIG_SCALE=-10.15`, `ATS_SCALE=0.535`, `homeCoverFairProb` (reuses `moneyline.ts`'s
+  `fairProbs` — it's generic American-odds vig removal, not moneyline-specific),
+  `vigLeanProbHome`, `atsTrendProbHome`, `marketCalibratedProbHome` (falls back gracefully:
+  pure bucket if both extras missing, weighted-in whichever extras exist otherwise). `engine.ts`
+  `HistAgg`/`buildHist` now also accumulate each team's per-season ATS cover history in the same
+  pass as the bucket counts (added `atsByTeamSeason` + `atsRate()`) — threading through the
+  existing `hist` parameter meant zero signature changes needed at any of `probBundle`'s 5 call
+  sites (`ModelOverviewTab`, `WeekPreviewTab`, `MatchupTab`, `ModelsGuide`, `ModelPickerTab`).
+  `MatchupTab.tsx`'s pick-engine card and `ModelsGuide.tsx`'s worked example both now show the
+  bucket-history bar plus the two extra bars with their own probabilities, so the blend is
+  visible, not just the final number. Also dropped several now-dead fields (`pHome`/`pAway`/
+  `pickTeam`/`conf`) from `MatchupTab`'s `engine` useMemo that were leftover from the earlier
+  grade-blend version and had no remaining reader.
+- `npm test` (60/60 — added a `describe("Market-calibrated extras")` block covering the vig/ATS
+  logistic helpers and the fallback/weighting behavior of `marketCalibratedProbHome`),
+  `tsc --noEmit`, `npm run build` all clean. Verified in the browser pane: Matchup tab's
+  Market-calibrated card shows all three component bars (bucket history, vig lean, ATS trend)
+  with the 85%/15% weight note; Models Guide's worked example prints the vig-fair-cover % and
+  both teams' ATS-L16 rates alongside the blended result.
+
+### 2026-07-27 — Market-calibrated: removed the grade blend entirely (backtested)
+- Follow-up to the recalibration below, per explicit user direction: "remove the blend...
+  see the results, if accuracy is good keep; if it decreases, blend to a lesser degree with
+  ML fair instead."
+- Extended `market_calib_backtest.js` (scratch, not committed) to compare, over 2,877 REG
+  games 2015-2025 with market history available: **pure market** (Wilson-smoothed bucket rate,
+  no blend) vs. the just-shipped **N-adaptive grade blend** vs. a grid of **market/ML-Fair**
+  blends (1.0→0.0 in 0.1 steps):
+  - Pure market vs. grade blend: AUC 0.6886 vs 0.6981 (slightly worse), but **Brier 0.2144 vs
+    0.2192 and hit-rate 66.46% vs 64.82% (both better)** — on the metrics that matter for a
+    pick engine (calibration + correct picks), removing the grade blend didn't hurt.
+  - Every market/ML-Fair blend ratio tested beat pure market on every metric (best: AUC up to
+    0.718, Brier down to 0.2124) — confirms the fallback plan (blend with ML Fair, not grades)
+    would have been the right move had accuracy actually dropped.
+  - On the thin-bucket subset (n<25, 148 games) — the exact case the earlier N-adaptive fix
+    targeted — pure market actually has the best AUC (0.8385) of the three, ahead of both the
+    grade blend (0.8112) and an ML-Fair blend (0.8208); the market/ML-Fair blend edges it out
+    only on hit-rate (85.81% vs 84.46%) and Brier.
+- **Decision: kept pure market, no blend.** `probBlend.ts` now exports only bucket-bin
+  constants + `nFactor`/`confidence` (display-only); `gradeModelProb`, `blendProbs`,
+  `BLEND_MARKET_W`, `BLEND_MODEL_W`, `MODEL_SCALE` all removed (dead — Market-calibrated was
+  their only consumer; Trend Edge's grade feature uses the raw grade value directly, not this
+  logistic). `engine.ts` `probBundle`'s market-calibrated branch is now just the bucket's
+  Wilson rate; `MatchupTab.tsx`'s pick-engine card drops the "Grade model" bar and blend-ratio
+  note (single "Bucket history" bar + low-N risk flag); `ModelsGuide.tsx` copy/worked example
+  updated to describe pure market history. Left a comment in `probBlend.ts` pointing at the ML
+  Fair fallback plan and the backtest numbers for whoever revisits this.
+- `npm test` (55/55, two describe blocks replaced: the grade-model/blend golden tests are gone
+  since there's nothing left to test there; added direct `nFactor`/`confidence` unit tests),
+  `tsc --noEmit`, `npm run build` all clean. Verified in the browser pane: Models Guide's
+  Market-calibrated card and Matchup tab's pick-engine card both render the pure-market number
+  with no blend UI.
+
+### 2026-07-27 — Recalibrated Market-calibrated + Trend Edge models (Matchup Previews)
+- **Market-calibrated** (`lib/logic/probBlend.ts`): the market side's blend weight is now
+  adaptive to the historical bucket's sample size instead of a fixed 60/40 split — confirmed
+  via `schedule.json` that extreme-spread buckets (e.g. `-17.0 to -16.0`) have as few as 1-17
+  historical games, so the fixed 60% market weight was overstating confidence there even after
+  Wilson smoothing. New: `w = BLEND_MARKET_W · min(1, n_bucket/MIN_N_BUCKET)`, `p =
+  w·p_market + (1-w)·p_model`. At `n_bucket >= 25` this is identical to the old fixed 60/40 —
+  no change for well-populated buckets. `confidence()` and `blendProbs()` now share one
+  `nFactor(n)` helper (was duplicated inline in `MatchupTab.tsx` too).
+- **Trend Edge** (`lib/logic/edgeComposite.ts`): variables, windows and weights were previously
+  hand-picked with no empirical backing. Ran an AUC backtest (scratch Node script, not
+  committed) over all REG games 2015-2025 against `schedule.json` outcomes, `team_week/*.json`
+  (~20 candidate stats × L2-L6 mean windows + L4-L6 slope windows), and `grades.json`:
+  - The old "PM-slope" momentum term (weight 0.10) backtested at AUC ~0.51-0.52 — essentially
+    coin-flip — across every window tested. Dropped, replaced with recent win rate (`win`,
+    L6), which backtested at AUC 0.642.
+  - Every stat family tested (points_margin, epa_diff, win, total_yards, completion_pct, …)
+    scored higher at longer windows; L3 was never the best window for anything. Switched all
+    surviving mean features from L3 to L6.
+  - Final 5: grade (season-to-date, unchanged), points_margin-L6, epa_diff-L6, win-L6,
+    turnover_margin-L6. Weight of each = its own AUC lift (AUC−0.5) normalized to sum to 1
+    (avoids the sign-flip a joint multi-feature logistic regression produced on
+    turnover_margin due to collinearity with the other 3 form stats) →
+    `{grade: 0.21, pmL6: 0.23, epaL6: 0.22, winL6: 0.22, tomL6: 0.12}`. `EDGE_SCALE` refit via
+    1D Platt scaling: 0.12 → 0.074.
+  - Backtest comparison, 2,595 REG games (2015-2025, week ≥ 2): AUC 0.6431 → 0.6520, Brier
+    0.2452 → 0.2343 (lower is better), hit-rate 60.81% → 61.12%.
+- Updated call sites (`engine.ts` `probBundle`/`buildTeamWeekIndex`, `MatchupTab.tsx`'s pick
+  engine + Trend Edge bar chart, `ModelsGuide.tsx`'s worked examples and both `ModelCard`
+  copy blocks) and `docs/logic-reference.md` §5. Regenerated the `edgeComposite` golden
+  fixtures in `logic.test.ts`/`golden.json` (field names changed: `pmL3`/`epaL3`/`tomL3`/
+  `pmSlope` → `pmL6`/`epaL6`/`winL6`/`tomL6`) and added shrinkage-specific `blendProbs` tests.
+  All 7 other models (ML Fair, Elo, Pythagorean, Predictive, Average) and every other page are
+  untouched. `npm test` 59/59 green, `tsc --noEmit` clean.
+
 ### 2026-07-27 — Season Outlook: click-to-zoom Monte Carlo detail modal
 - Playoff Probability tab (`season-outlook/PlayoffTab.tsx`) rows are now clickable, opening a
   new `season-outlook/DetailModal.tsx` (modeled on Power Rankings' `DetailModal.tsx`, same

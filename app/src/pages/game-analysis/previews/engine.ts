@@ -2,8 +2,15 @@
 // helpers duplicated across week_preview_tab.py / matchup_previews_tab.py /
 // model_overview_tab.py. Uses lib/logic for the math.
 import type { Row } from "../../../lib/data/loader";
-import { gradeModelProb, blendProbs, BIN_SIZE_DEFAULT } from "../../../lib/logic/probBlend";
-import { edgeComposite, meanLastN, slopeLastN, EDGE_SCALE, type TrendFeatures } from "../../../lib/logic/edgeComposite";
+import {
+  BIN_SIZE_DEFAULT,
+  ATS_WINDOW,
+  homeCoverFairProb,
+  vigLeanProbHome,
+  atsTrendProbHome,
+  marketCalibratedProbHome,
+} from "../../../lib/logic/probBlend";
+import { edgeComposite, meanLastN, EDGE_SCALE, type TrendFeatures } from "../../../lib/logic/edgeComposite";
 import { impliedProb, fairProbs } from "../../../lib/logic/moneyline";
 import { wilson } from "../../../lib/logic/wilson";
 import { buildEloIndex, scheduleToEloGames, type EloEntry } from "../../../lib/logic/elo";
@@ -50,11 +57,19 @@ export interface HistAgg {
   // key `${bucket}|${side}` -> per-game entries so a (season,week) can be excluded
   counts: Map<string, { n: number; wins: number }>;
   perWeek: Map<string, Map<string, { n: number; wins: number }>>; // `${season}|${week}` -> same-key partial
+  // `${team}|${season}` -> ATS cover history sorted by week, for the Market-calibrated extras
+  atsByTeamSeason: Map<string, { week: number; covered: number }[]>;
 }
 
 export function buildHist(schedule: Row[]): HistAgg {
   const counts = new Map<string, { n: number; wins: number }>();
   const perWeek = new Map<string, Map<string, { n: number; wins: number }>>();
+  const atsByTeamSeason = new Map<string, { week: number; covered: number }[]>();
+  const pushAts = (team: string, season: number, week: number, covered: number) => {
+    const key = `${team}|${season}`;
+    if (!atsByTeamSeason.has(key)) atsByTeamSeason.set(key, []);
+    atsByTeamSeason.get(key)!.push({ week, covered });
+  };
   for (const g of schedule) {
     if (g.game_type !== "REG" || g.spread_line == null) continue;
     const spread = Number(g.spread_line);
@@ -74,8 +89,26 @@ export function buildHist(schedule: Row[]): HistAgg {
     pc.n++;
     pc.wins += win;
     pw.set(key, pc);
+
+    const coverMarginHome = Number(g.home_score) - Number(g.away_score) + spread;
+    if (coverMarginHome !== 0) {
+      const homeCovered = coverMarginHome > 0 ? 1 : 0;
+      const season = Number(g.season);
+      const week = Number(g.week);
+      pushAts(String(g.home_team), season, week, homeCovered);
+      pushAts(String(g.away_team), season, week, 1 - homeCovered);
+    }
   }
-  return { counts, perWeek };
+  for (const rows of atsByTeamSeason.values()) rows.sort((a, b) => a.week - b.week);
+  return { counts, perWeek, atsByTeamSeason };
+}
+
+/** Team's ATS cover rate over its last `n` played games this season, through week `wk`. */
+export function atsRate(hist: HistAgg, team: string, season: number, wk: number, n = ATS_WINDOW): number | null {
+  const rows = (hist.atsByTeamSeason.get(`${team}|${season}`) ?? []).filter((r) => r.week <= wk);
+  const v = rows.slice(-n).map((r) => r.covered);
+  if (!v.length) return null;
+  return v.reduce((a, b) => a + b, 0) / v.length;
 }
 
 /** Wilson-centered p̂ + N for a bucket/side, excluding one season-week. */
@@ -166,13 +199,13 @@ export function buildTeamWeekIndex(teamWeekBySeason: Map<number, Row[]>): TeamWe
     features: (team, season, wk) => {
       const rows = rowsFor(team, season).filter((r) => Number(r.week) <= wk);
       const col = (c: string) => rows.map((r) => Number(r[c])).filter(Number.isFinite);
-      // old code coerces NaN feature means to 0
+      // NaN feature means coerce to 0, matching the existing convention
       return {
         grade: null, // grade passed separately into edgeComposite
-        pmL3: meanLastN(col("points_margin"), 3) ?? 0,
-        epaL3: meanLastN(col("epa_diff"), 3) ?? 0,
-        tomL3: meanLastN(col("turnover_margin"), 3) ?? 0,
-        pmSlope: slopeLastN(col("points_margin"), 5) ?? 0,
+        pmL6: meanLastN(col("points_margin"), 6) ?? 0,
+        epaL6: meanLastN(col("epa_diff"), 6) ?? 0,
+        winL6: meanLastN(col("win"), 6) ?? 0,
+        tomL6: meanLastN(col("turnover_margin"), 6) ?? 0,
       };
     },
   };
@@ -233,20 +266,29 @@ export function probBundle(
   const spread = game.spread_line == null ? null : Number(game.spread_line);
   const fav = favoriteSide(spread);
 
+  const wkPlayed = Math.max(0, week - 1);
+
+  // Market-calibrated: mostly the bucket's Wilson-smoothed historical rate, plus
+  // a minority dose of spread-odds vig lean + team ATS trend (see probBlend.ts).
   let pMarketHome: number | null = null;
   if (spread != null && fav != null) {
     const m = marketRate(hist, bucketLabel(spread), fav, season, week);
     if (m) pMarketHome = fav === "home" ? m.pHat : 1 - m.pHat;
   }
+  const homeCoverFair = homeCoverFairProb(
+    game.away_spread_odds == null ? null : Number(game.away_spread_odds),
+    game.home_spread_odds == null ? null : Number(game.home_spread_odds),
+  );
+  const pVigLeanHome = vigLeanProbHome(homeCoverFair);
+  const atsHome = atsRate(hist, home, season, wkPlayed);
+  const atsAway = atsRate(hist, away, season, wkPlayed);
+  const atsDiffHome = atsHome != null && atsAway != null ? atsHome - atsAway : null;
+  const pAtsTrendHome = atsTrendProbHome(atsDiffHome);
+  const pHomeBlend = marketCalibratedProbHome(pMarketHome, pVigLeanHome, pAtsTrendHome);
+  const pAwayBlend = pHomeBlend == null ? null : 1 - pHomeBlend;
 
-  const wkPlayed = Math.max(0, week - 1);
   const gAway = gradesIdx.avgOverall(away, season, wkPlayed);
   const gHome = gradesIdx.avgOverall(home, season, wkPlayed);
-  const pModelAway = gradeModelProb(gAway, gHome);
-  const pModelHome = pModelAway == null ? null : 1 - pModelAway;
-
-  const pHomeBlend = blendProbs(pMarketHome, pModelHome);
-  const pAwayBlend = pHomeBlend == null ? null : 1 - pHomeBlend;
 
   const fa = { ...twIdx.features(away, season, wkPlayed), grade: gAway };
   const fh = { ...twIdx.features(home, season, wkPlayed), grade: gHome };

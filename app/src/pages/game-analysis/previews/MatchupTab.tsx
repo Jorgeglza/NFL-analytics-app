@@ -10,7 +10,7 @@ import { FilterGroup } from "../../../components/ui";
 import { TeamLogoLink } from "../../../components/team/TeamLogoLink";
 import { pythWinPct } from "../../../lib/logic/pythagorean";
 import { useECharts } from "../../../components/charts/useECharts";
-import { gradeModelProb, blendProbs, MIN_N_BUCKET } from "../../../lib/logic/probBlend";
+import { MIN_N_BUCKET, MARKET_BUCKET_W, ATS_WINDOW, homeCoverFairProb, vigLeanProbHome, atsTrendProbHome } from "../../../lib/logic/probBlend";
 import { edgeComposite, EDGE_WEIGHTS } from "../../../lib/logic/edgeComposite";
 import { impliedProb, fairProbs } from "../../../lib/logic/moneyline";
 import { opponentLabel } from "../../grading-model/shared";
@@ -19,6 +19,7 @@ import {
   favoriteSide,
   bucketLabel,
   marketRate,
+  atsRate,
   defaultWeekNearToday,
   kickoffMs,
   probBundle,
@@ -143,51 +144,37 @@ export default function MatchupTab({
     return `${Math.round(wins)} - ${rows.length - Math.round(wins)}`;
   };
 
-  // ---- pick engine ----
+  // ---- pick engine (Market-calibrated: bucket history + vig-lean/ATS extras — see probBlend.ts) ----
   const engine = useMemo(() => {
     if (!selGame) return null;
     const spread = selGame.spread_line == null ? null : Number(selGame.spread_line);
     const fav = favoriteSide(spread);
-    let pMarket: number | null = null;
     let nBucket = 0;
     let bucket: string | null = null;
     if (spread != null && fav != null) {
       bucket = bucketLabel(spread);
       const m = marketRate(hist, bucket, fav, s, w);
-      if (m) {
-        pMarket = m.pHat;
-        nBucket = m.n;
-      }
-    }
-    // grades through week-1 only — using week w leaked the game's own grade
-    // into "predictions" for completed games (fixed Session 5)
-    const [lOvr] = gradesIdx.triple(away, s, wkPlayed);
-    const [rOvr] = gradesIdx.triple(home, s, wkPlayed);
-    const pModelAway = gradeModelProb(lOvr, rOvr);
-    const pModelHome = pModelAway == null ? null : 1 - pModelAway;
-    const pMarketHome = pMarket == null ? null : fav === "home" ? pMarket : 1 - pMarket;
-    const pHome = blendProbs(pMarketHome, pModelHome);
-    const pAway = pHome == null ? null : 1 - pHome;
-    let pickTeam: string | null = null;
-    if (pHome != null && pAway != null) pickTeam = pHome >= pAway ? home : away;
-    let conf = 0;
-    if (pHome != null && pAway != null) {
-      const edge = Math.abs(Math.max(pHome, pAway) - 0.5) * 2;
-      const nFactor = Math.min(1, nBucket / Math.max(1, MIN_N_BUCKET));
-      conf = Math.round(100 * edge * (0.7 + 0.3 * nFactor));
+      if (m) nBucket = m.n;
     }
     // bucket details both sides
     const bucketRows = (["home", "away"] as const).map((side) => {
       const m = bucket ? marketRate(hist, bucket, side, s, w) : null;
       return { side, n: m?.n ?? null, p: m?.pHat ?? null };
     });
+    const homeCoverFair = homeCoverFairProb(
+      selGame.away_spread_odds == null ? null : Number(selGame.away_spread_odds),
+      selGame.home_spread_odds == null ? null : Number(selGame.home_spread_odds),
+    );
+    const pVigLeanHome = vigLeanProbHome(homeCoverFair);
+    const atsHome = atsRate(hist, home, s, wkPlayed);
+    const atsAway = atsRate(hist, away, s, wkPlayed);
+    const pAtsTrendHome = atsTrendProbHome(atsHome != null && atsAway != null ? atsHome - atsAway : null);
     const risks: string[] = [];
     if (spread == null) risks.push("No spread for this game (no market prior).");
     if (bucket == null) risks.push("Bucket undefined.");
     if (nBucket < MIN_N_BUCKET) risks.push(`Low-N bucket (N=${nBucket}, min ${MIN_N_BUCKET}).`);
-    if (lOvr == null || rOvr == null) risks.push("Missing grades for one or both teams.");
-    return { spread, fav, bucket, nBucket, pHome, pAway, pickTeam, conf, lOvr, rOvr, bucketRows, risks };
-  }, [selGame, hist, gradesIdx, away, home, s, w]);
+    return { spread, fav, bucket, nBucket, bucketRows, homeCoverFair, pVigLeanHome, atsHome, atsAway, pAtsTrendHome, risks };
+  }, [selGame, hist, away, home, s, w, wkPlayed]);
 
   // ---- all-model bundle for the verdict strip ----
   const bundle = useMemo(
@@ -249,14 +236,14 @@ export default function MatchupTab({
 
   const edgeBarOption = useMemo<EChartsOption | null>(() => {
     if (!trendEdge) return null;
-    const names = ["Grade Δ", "Last3 PM Δ", "Last3 EPA Δ", "PM slope Δ", "Last3 TO margin Δ"];
-    const vals = [trendEdge.parts.gradeD, trendEdge.parts.pmL3D, trendEdge.parts.epaL3D, trendEdge.parts.pmSlopeD, trendEdge.parts.tomL3D];
+    const names = ["Grade Δ", "Last6 PM Δ", "Last6 EPA Δ", "Last6 Win% Δ", "Last6 TO margin Δ"];
+    const vals = [trendEdge.parts.gradeD, trendEdge.parts.pmL6D, trendEdge.parts.epaL6D, trendEdge.parts.winL6D, trendEdge.parts.tomL6D];
     const detail = [
       [trendEdge.gA, trendEdge.gH, EDGE_WEIGHTS.grade],
-      [trendEdge.fa.pmL3, trendEdge.fh.pmL3, EDGE_WEIGHTS.pmL3],
-      [trendEdge.fa.epaL3, trendEdge.fh.epaL3, EDGE_WEIGHTS.epaL3],
-      [trendEdge.fa.pmSlope, trendEdge.fh.pmSlope, EDGE_WEIGHTS.pmSlope],
-      [trendEdge.fa.tomL3, trendEdge.fh.tomL3, EDGE_WEIGHTS.tomL3],
+      [trendEdge.fa.pmL6, trendEdge.fh.pmL6, EDGE_WEIGHTS.pmL6],
+      [trendEdge.fa.epaL6, trendEdge.fh.epaL6, EDGE_WEIGHTS.epaL6],
+      [trendEdge.fa.winL6, trendEdge.fh.winL6, EDGE_WEIGHTS.winL6],
+      [trendEdge.fa.tomL6, trendEdge.fh.tomL6, EDGE_WEIGHTS.tomL6],
     ];
     const f2 = (x: number | null, signed = false) => (x == null || !Number.isFinite(x) ? "—" : `${signed && x >= 0 ? "+" : ""}${x.toFixed(2)}`);
     return {
@@ -396,12 +383,6 @@ export default function MatchupTab({
     if (r?.p == null) return null;
     return engine.fav === "home" ? r.p : 1 - r.p;
   })();
-  const gradeHome: number | null = (() => {
-    if (!engine || engine.lOvr == null || engine.rOvr == null) return null;
-    const pA = gradeModelProb(engine.lOvr, engine.rOvr);
-    return pA == null ? null : 1 - pA;
-  })();
-
   const gradeMetricOf = { Ovr: "Overall Grade", Off: "Offensive Grade", Def: "Defensive Grade" } as const;
 
   const gradeBox = (team: string) => {
@@ -564,9 +545,10 @@ export default function MatchupTab({
           </div>
           <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
             <ModelBlock color={MODEL_COLORS.blend} title="Market-calibrated" pick={pickOf(bundle.blend)} prob={probOf(bundle.blend)}>
-              <ProbBar label={`Bucket history (${engine.bucket ?? "—"})`} p={mktHome} color={MODEL_COLORS.blend} note={`N=${engine.nBucket.toLocaleString()}`} />
-              <ProbBar label={`Grade model (${engine.lOvr ?? "—"} vs ${engine.rOvr ?? "—"})`} p={gradeHome} color={MODEL_COLORS.blend} note="60/40 blend →" />
-              <ProbBar label="Blended result" p={bundle.blend[1]} color={MODEL_COLORS.blend} />
+              <ProbBar label={`Bucket history (${engine.bucket ?? "—"})`} p={mktHome} color={MODEL_COLORS.blend} note={`N=${engine.nBucket.toLocaleString()} · weight ${Math.round(MARKET_BUCKET_W * 100)}%`} />
+              <ProbBar label="Spread-odds vig lean" p={engine.pVigLeanHome} color={MODEL_COLORS.blend} note={engine.homeCoverFair == null ? "no odds" : `home covers ${pct1(engine.homeCoverFair)}`} />
+              <ProbBar label={`Team ATS trend (L${ATS_WINDOW})`} p={engine.pAtsTrendHome} color={MODEL_COLORS.blend} note={engine.atsHome == null || engine.atsAway == null ? "insufficient history" : `${pct1(engine.atsHome)} vs ${pct1(engine.atsAway)}`} />
+              <div className="text-[10px] text-slate-400">Mostly bucket history, plus a {Math.round((1 - MARKET_BUCKET_W) * 100)}% dose of two signals ML Fair doesn't see: the spread's own vig lean and each team's recent against-the-spread trend.</div>
               {(engine.nBucket < MIN_N_BUCKET || engine.risks.length > 0) && (
                 <div className="text-[10px] text-amber-700">{engine.risks.join(" ") || `Low-N bucket (N=${engine.nBucket}).`}</div>
               )}
@@ -574,7 +556,7 @@ export default function MatchupTab({
 
             <ModelBlock color={MODEL_COLORS.trend} title="Trend Edge" pick={pickOf(bundle.trend)} prob={probOf(bundle.trend)}>
               <div ref={edgeRef} className="h-40" />
-              <div className="text-[10px] text-slate-400">Weighted recent-form differences (away − home): grade, last-3 margin & EPA, momentum, turnovers. Hover the bars.</div>
+              <div className="text-[10px] text-slate-400">Weighted recent-form differences (away − home): grade, last-6 margin, EPA, win rate, turnovers. Hover the bars.</div>
             </ModelBlock>
 
             <ModelBlock color={MODEL_COLORS.ml} title="ML Fair" pick={pickOf(bundle.ml)} prob={probOf(bundle.ml)}>
