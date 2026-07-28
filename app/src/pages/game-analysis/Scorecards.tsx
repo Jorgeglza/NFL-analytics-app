@@ -514,6 +514,21 @@ function ScheduleSection({
                                 <div className="space-y-3">
                                   <div>
                                     <SplitBar
+                                      label="Yards (passing vs rushing)"
+                                      a={gv("passing_yards") ?? 0}
+                                      b={gv("rushing_yards") ?? 0}
+                                      la={leagueAvg("passing_yards") ?? 0}
+                                      lb={leagueAvg("rushing_yards") ?? 0}
+                                      aName="Pass"
+                                      bName="Rush"
+                                      accent={OFF_ACCENT}
+                                      rank={null}
+                                      nTeams={0}
+                                    />
+                                    <RawCounts a={gv("passing_yards")} b={gv("rushing_yards")} aLabel="pass yds" bLabel="rush yds" />
+                                  </div>
+                                  <div>
+                                    <SplitBar
                                       label="Play volume (pass attempts vs carries)"
                                       a={gv("attempts") ?? 0}
                                       b={gv("carries") ?? 0}
@@ -542,26 +557,26 @@ function ScheduleSection({
                                     />
                                     <RawCounts a={gv("passing_first_downs")} b={gv("rushing_first_downs")} aLabel="pass 1st downs" bLabel="rush 1st downs" />
                                   </div>
-                                  <div>
-                                    <SplitBar
-                                      label="Yards (passing vs rushing)"
-                                      a={gv("passing_yards") ?? 0}
-                                      b={gv("rushing_yards") ?? 0}
-                                      la={leagueAvg("passing_yards") ?? 0}
-                                      lb={leagueAvg("rushing_yards") ?? 0}
-                                      aName="Pass"
-                                      bName="Rush"
-                                      accent={OFF_ACCENT}
-                                      rank={null}
-                                      nTeams={0}
-                                    />
-                                    <RawCounts a={gv("passing_yards")} b={gv("rushing_yards")} aLabel="pass yds" bLabel="rush yds" />
-                                  </div>
                                 </div>
                               </div>
                               <div className="rounded-xl border border-slate-200 bg-white p-3" style={{ borderTop: `3px solid ${DEF_ACCENT}` }}>
                                 <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Defense (opponent) — this game</div>
                                 <div className="space-y-3">
+                                  <div>
+                                    <SplitBar
+                                      label="Yards allowed (pass vs rush)"
+                                      a={gv("passing_yards_allowed") ?? 0}
+                                      b={gv("rushing_yards_allowed") ?? 0}
+                                      la={leagueAvg("passing_yards_allowed") ?? 0}
+                                      lb={leagueAvg("rushing_yards_allowed") ?? 0}
+                                      aName="Pass"
+                                      bName="Rush"
+                                      accent={DEF_ACCENT}
+                                      rank={null}
+                                      nTeams={0}
+                                    />
+                                    <RawCounts a={gv("passing_yards_allowed")} b={gv("rushing_yards_allowed")} aLabel="pass yds allowed" bLabel="rush yds allowed" />
+                                  </div>
                                   <div>
                                     <SplitBar
                                       label="Play volume faced (pass vs rush)"
@@ -596,21 +611,6 @@ function ScheduleSection({
                                       aLabel="pass 1st downs allowed"
                                       bLabel="rush 1st downs allowed"
                                     />
-                                  </div>
-                                  <div>
-                                    <SplitBar
-                                      label="Yards allowed (pass vs rush)"
-                                      a={gv("passing_yards_allowed") ?? 0}
-                                      b={gv("rushing_yards_allowed") ?? 0}
-                                      la={leagueAvg("passing_yards_allowed") ?? 0}
-                                      lb={leagueAvg("rushing_yards_allowed") ?? 0}
-                                      aName="Pass"
-                                      bName="Rush"
-                                      accent={DEF_ACCENT}
-                                      rank={null}
-                                      nTeams={0}
-                                    />
-                                    <RawCounts a={gv("passing_yards_allowed")} b={gv("rushing_yards_allowed")} aLabel="pass yds allowed" bLabel="rush yds allowed" />
                                   </div>
                                 </div>
                               </div>
@@ -917,22 +917,28 @@ export default function Scorecards() {
         <Card title="Offense style" subtitle="Pass vs rush share of season totals. Dashed marker = league-average pass share." accent={OFF_ACCENT}>
           <div className="space-y-4">
             {([
-              ["Play volume (pass attempts vs carries)", "attempts", "carries"],
-              ["First downs (passing vs rushing)", "passing_first_downs", "rushing_first_downs"],
-              ["Yards (passing vs rushing)", "passing_yards", "rushing_yards"],
-            ] as const).map(([label, aCol, bCol]) => (
-              <SplitBar key={aCol} label={label} a={statOf(df, aCol)?.total ?? 0} b={statOf(df, bCol)?.total ?? 0} la={statOf(teamWeek, aCol)?.total ?? 0} lb={statOf(teamWeek, bCol)?.total ?? 0} aName="Pass" bName="Rush" accent={OFF_ACCENT} rank={shareRank(aCol, bCol)} nTeams={nTeams} />
+              ["Yards (passing vs rushing)", "passing_yards", "rushing_yards", "pass yds", "rush yds"],
+              ["Play volume (pass attempts vs carries)", "attempts", "carries", "pass att", "rush car"],
+              ["First downs (passing vs rushing)", "passing_first_downs", "rushing_first_downs", "pass 1st downs", "rush 1st downs"],
+            ] as const).map(([label, aCol, bCol, aLabel, bLabel]) => (
+              <div key={aCol}>
+                <SplitBar label={label} a={statOf(df, aCol)?.total ?? 0} b={statOf(df, bCol)?.total ?? 0} la={statOf(teamWeek, aCol)?.total ?? 0} lb={statOf(teamWeek, bCol)?.total ?? 0} aName="Pass" bName="Rush" accent={OFF_ACCENT} rank={shareRank(aCol, bCol)} nTeams={nTeams} />
+                <RawCounts a={statOf(df, aCol)?.total ?? null} b={statOf(df, bCol)?.total ?? null} aLabel={aLabel} bLabel={bLabel} />
+              </div>
             ))}
           </div>
         </Card>
         <Card title="Defense style" subtitle="What opponents do against this team, share of season totals. Dashed marker = league average." accent={DEF_ACCENT}>
           <div className="space-y-4">
             {([
-              ["Play volume faced (pass vs rush)", "attempts_allowed", "carries_allowed"],
-              ["First downs allowed (pass vs rush)", "passing_first_downs_allowed", "rushing_first_downs_allowed"],
-              ["Yards allowed (pass vs rush)", "passing_yards_allowed", "rushing_yards_allowed"],
-            ] as const).map(([label, aCol, bCol]) => (
-              <SplitBar key={aCol} label={label} a={statOf(df, aCol)?.total ?? 0} b={statOf(df, bCol)?.total ?? 0} la={statOf(teamWeek, aCol)?.total ?? 0} lb={statOf(teamWeek, bCol)?.total ?? 0} aName="Pass" bName="Rush" accent={DEF_ACCENT} rank={shareRank(aCol, bCol)} nTeams={nTeams} />
+              ["Yards allowed (pass vs rush)", "passing_yards_allowed", "rushing_yards_allowed", "pass yds allowed", "rush yds allowed"],
+              ["Play volume faced (pass vs rush)", "attempts_allowed", "carries_allowed", "pass att faced", "rush car faced"],
+              ["First downs allowed (pass vs rush)", "passing_first_downs_allowed", "rushing_first_downs_allowed", "pass 1st downs allowed", "rush 1st downs allowed"],
+            ] as const).map(([label, aCol, bCol, aLabel, bLabel]) => (
+              <div key={aCol}>
+                <SplitBar label={label} a={statOf(df, aCol)?.total ?? 0} b={statOf(df, bCol)?.total ?? 0} la={statOf(teamWeek, aCol)?.total ?? 0} lb={statOf(teamWeek, bCol)?.total ?? 0} aName="Pass" bName="Rush" accent={DEF_ACCENT} rank={shareRank(aCol, bCol)} nTeams={nTeams} />
+                <RawCounts a={statOf(df, aCol)?.total ?? null} b={statOf(df, bCol)?.total ?? null} aLabel={aLabel} bLabel={bLabel} />
+              </div>
             ))}
           </div>
         </Card>
