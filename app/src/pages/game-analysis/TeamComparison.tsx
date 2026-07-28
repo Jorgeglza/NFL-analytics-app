@@ -6,6 +6,7 @@ import type { EChartsOption } from "echarts";
 import { getTeamWeek, getTeamWeekRanks, getGrades, getSchedule, type Row } from "../../lib/data/loader";
 import { getTeamMetaMap, type TeamMeta } from "../../lib/team/meta";
 import { Select } from "../../components/filters/Select";
+import { TeamLogoLink } from "../../components/team/TeamLogoLink";
 import { useECharts } from "../../components/charts/useECharts";
 import { Loading } from "../../components/Loading";
 import { opponentLabel } from "../grading-model/shared";
@@ -564,7 +565,15 @@ export default function TeamComparison() {
               <div key={t} className="flex items-center gap-10">
                 {i === 1 && <div className="text-3xl font-light text-slate-400">VS</div>}
                 <div className="text-center">
-                  {meta.get(t)?.logo && <img src={meta.get(t)!.logo} alt={t} className="mx-auto h-20" />}
+                  {meta.get(t)?.logo && (
+                    <TeamLogoLink
+                      to={`/game_analysis/scorecards_teams?season=${season}&team=${t}`}
+                      logo={meta.get(t)!.logo}
+                      alt={t}
+                      imgClassName="mx-auto h-20"
+                      title={`Open ${t}'s season scorecard`}
+                    />
+                  )}
                   <div className="mt-1 font-bold">{recordOf(t)}</div>
                 </div>
               </div>

@@ -7,6 +7,7 @@ import type { Row } from "../../../lib/data/loader";
 import type { TeamMeta } from "../../../lib/team/meta";
 import { Select } from "../../../components/filters/Select";
 import { FilterGroup } from "../../../components/ui";
+import { TeamLogoLink } from "../../../components/team/TeamLogoLink";
 import { pythWinPct } from "../../../lib/logic/pythagorean";
 import { useECharts } from "../../../components/charts/useECharts";
 import { gradeModelProb, blendProbs, MIN_N_BUCKET } from "../../../lib/logic/probBlend";
@@ -466,7 +467,15 @@ export default function MatchupTab({
         {[away, home].map((t, i) => (
           <div key={t} className={`flex-1 ${i === 1 ? "lg:order-3" : ""}`}>
             <div className="text-center">
-              {meta.get(t)?.logo && <img src={meta.get(t)!.logo} alt={t} className="mx-auto h-16" />}
+              {meta.get(t)?.logo && (
+                <TeamLogoLink
+                  to={`/game_analysis/team_comparison?team1=${away}&team2=${home}&season=${sel}&week=${selWeek}`}
+                  logo={meta.get(t)!.logo}
+                  alt={t}
+                  imgClassName="mx-auto h-16"
+                  title={`Compare ${away} vs ${home}`}
+                />
+              )}
               <div className="mt-1 font-bold">{recordOf(t)}</div>
             </div>
             {gradeBox(t)}

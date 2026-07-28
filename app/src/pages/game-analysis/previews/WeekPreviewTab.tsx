@@ -4,6 +4,7 @@ import type { Row } from "../../../lib/data/loader";
 import type { TeamMeta } from "../../../lib/team/meta";
 import { Select } from "../../../components/filters/Select";
 import { FilterGroup } from "../../../components/ui";
+import { TeamLogoLink } from "../../../components/team/TeamLogoLink";
 import {
   MODEL_KEYS,
   MODEL_COLORS,
@@ -257,7 +258,18 @@ export default function WeekPreviewTab({
               </div>
               <div className="flex items-center gap-2">
                 <div className="flex-1 text-center">
-                  {meta.get(away)?.logo ? <img src={meta.get(away)!.logo} alt={away} className="mx-auto h-11" /> : <div className="font-bold">{away}</div>}
+                  {meta.get(away)?.logo ? (
+                    <TeamLogoLink
+                      to={`/game_analysis/team_comparison?team1=${away}&team2=${home}&season=${sel}&week=${selWeek}`}
+                      logo={meta.get(away)!.logo}
+                      alt={away}
+                      imgClassName="mx-auto h-11"
+                      title={`Compare ${away} vs ${home}`}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  ) : (
+                    <div className="font-bold">{away}</div>
+                  )}
                   <div className="mt-1 font-bold">{pct(pL)}</div>
                 </div>
                 <div className="flex h-4 flex-[2] overflow-hidden rounded-full border border-slate-100">
@@ -265,7 +277,18 @@ export default function WeekPreviewTab({
                   <div style={{ width: `${pR != null ? Math.round(100 * pR) : 0}%`, background: meta.get(home)?.color ?? "#888" }} />
                 </div>
                 <div className="flex-1 text-center">
-                  {meta.get(home)?.logo ? <img src={meta.get(home)!.logo} alt={home} className="mx-auto h-11" /> : <div className="font-bold">{home}</div>}
+                  {meta.get(home)?.logo ? (
+                    <TeamLogoLink
+                      to={`/game_analysis/team_comparison?team1=${away}&team2=${home}&season=${sel}&week=${selWeek}`}
+                      logo={meta.get(home)!.logo}
+                      alt={home}
+                      imgClassName="mx-auto h-11"
+                      title={`Compare ${away} vs ${home}`}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  ) : (
+                    <div className="font-bold">{home}</div>
+                  )}
                   <div className="mt-1 font-bold">{pct(pR)}</div>
                 </div>
               </div>
