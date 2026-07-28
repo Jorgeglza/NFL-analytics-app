@@ -320,51 +320,59 @@ function GameProbBar({ info, meta, team }: { info: GameInfo; meta: Map<string, T
   );
 }
 
-/** This game's margin against the team's weekly margins through the selected week (no future weeks), current week highlighted. */
-function GameMarginStrip({ df, week, color }: { df: Row[]; week: number; color: string }) {
+/** Total yards this team gained vs. total yards it allowed, week by week through the
+ *  selected game (no future weeks) — actual yard counts on the axis, current week
+ *  highlighted, so it's a direct "how many yards did I get vs. give up" comparison. */
+function GameYardsStrip({ df, week, opp, color }: { df: Row[]; week: number; opp: string; color: string }) {
   const played = useMemo(
     () => df.filter((r) => r.win != null && Number(r.week) <= week).sort((a, b) => Number(a.week) - Number(b.week)),
     [df, week],
   );
   const option = useMemo<EChartsOption>(
     () => ({
-      grid: { left: 6, right: 6, top: 8, bottom: 18 },
+      grid: { left: 34, right: 6, top: 26, bottom: 18 },
+      legend: { top: 0, itemWidth: 12, itemHeight: 10, textStyle: { fontSize: 10 } },
       xAxis: { type: "category", data: played.map((r) => `W${r.week}`), axisLabel: { fontSize: 9 } },
-      yAxis: { type: "value", show: false },
+      yAxis: { type: "value", name: "Yards", nameTextStyle: { fontSize: 9 }, axisLabel: { fontSize: 9 } },
       tooltip: {
         trigger: "axis",
         formatter: (ps: unknown) => {
           const arr = ps as { dataIndex: number }[];
           const r = played[arr[0]?.dataIndex ?? 0];
-          const m = r.points_margin == null ? null : Number(r.points_margin);
-          return `W${r.week}: ${m == null ? "—" : (m > 0 ? "+" : "") + m}`;
+          const forYds = r.total_yards == null ? null : Number(r.total_yards);
+          const agYds = r.total_yards_allowed == null ? null : Number(r.total_yards_allowed);
+          const diff = forYds != null && agYds != null ? forYds - agYds : null;
+          return `W${r.week}<br/>Yards for: ${forYds ?? "—"}<br/>Yards against: ${agYds ?? "—"}${diff == null ? "" : `<br/>Diff: ${diff > 0 ? "+" : ""}${diff}`}`;
         },
       },
       series: [
         {
+          name: "Yards for",
           type: "bar",
-          barMaxWidth: 14,
+          barMaxWidth: 12,
           data: played.map((r) => {
-            const m = r.points_margin == null ? null : Number(r.points_margin);
+            const v = r.total_yards == null ? null : Number(r.total_yards);
             const isCurrent = Number(r.week) === week;
-            return {
-              value: m,
-              itemStyle: {
-                color: m != null && m > 0 ? "#3C9A5F" : m != null && m < 0 ? "#C8102E" : "#94a3b8",
-                borderColor: isCurrent ? color : "transparent",
-                borderWidth: isCurrent ? 2 : 0,
-                borderRadius: 3,
-              },
-            };
+            return { value: v, itemStyle: { color: OFF_ACCENT, borderColor: isCurrent ? color : "transparent", borderWidth: isCurrent ? 2 : 0, borderRadius: 2 } };
+          }),
+        },
+        {
+          name: "Yards against",
+          type: "bar",
+          barMaxWidth: 12,
+          data: played.map((r) => {
+            const v = r.total_yards_allowed == null ? null : Number(r.total_yards_allowed);
+            const isCurrent = Number(r.week) === week;
+            return { value: v, itemStyle: { color: DEF_ACCENT, borderColor: isCurrent ? color : "transparent", borderWidth: isCurrent ? 2 : 0, borderRadius: 2 } };
           }),
         },
       ],
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }),
-    [played.map((r) => `${r.week}:${r.points_margin}`).join(","), week, color],
+    [played.map((r) => `${r.week}:${r.total_yards}:${r.total_yards_allowed}`).join(","), week, opp, color],
   );
   const ref = useECharts(option);
-  return <div ref={ref} className="h-28 w-full" />;
+  return <div ref={ref} className="h-32 w-full" />;
 }
 
 /** Season schedule — every game for the selected team, with results filled in
@@ -615,7 +623,7 @@ function ScheduleSection({
                                 </div>
                               </div>
                             </div>
-                            <div className="grid gap-3 sm:grid-cols-3">
+                            <div className="grid gap-3 sm:grid-cols-2">
                               <div className="rounded-xl border border-slate-200 bg-white p-3">
                                 <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Box score</div>
                                 <MetricRow label="Points (allowed)" value={`${fmt(gv("points") ?? 0, 0)} (${fmt(gv("points_allowed") ?? 0, 0)})`} />
@@ -630,10 +638,12 @@ function ScheduleSection({
                                 <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Market win probability</div>
                                 <GameProbBar info={info} meta={meta} team={team} />
                               </div>
-                              <div className="rounded-xl border border-slate-200 bg-white p-3">
-                                <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Margin through Week {info.week}</div>
-                                <GameMarginStrip df={df} week={info.week} color={color} />
+                            </div>
+                            <div className="rounded-xl border border-slate-200 bg-white p-3">
+                              <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                                Yards for vs. yards against, week by week — actual yard totals through Week {info.week}
                               </div>
+                              <GameYardsStrip df={df} week={info.week} opp={info.opp} color={color} />
                             </div>
                           </div>
                         ) : (
