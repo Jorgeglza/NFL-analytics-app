@@ -310,11 +310,11 @@ function GameProbBar({ info, meta, team }: { info: GameInfo; meta: Map<string, T
   );
 }
 
-/** This game's margin against the team's full-season weekly margins, current week highlighted. */
+/** This game's margin against the team's weekly margins through the selected week (no future weeks), current week highlighted. */
 function GameMarginStrip({ df, week, color }: { df: Row[]; week: number; color: string }) {
   const played = useMemo(
-    () => df.filter((r) => r.win != null).sort((a, b) => Number(a.week) - Number(b.week)),
-    [df],
+    () => df.filter((r) => r.win != null && Number(r.week) <= week).sort((a, b) => Number(a.week) - Number(b.week)),
+    [df, week],
   );
   const option = useMemo<EChartsOption>(
     () => ({
@@ -365,12 +365,14 @@ function ScheduleSection({
   team,
   color,
   df,
+  leagueAvg,
 }: {
   games: GameInfo[];
   meta: Map<string, TeamMeta>;
   team: string;
   color: string;
   df: Row[];
+  leagueAvg: (col: string) => number | null;
 }) {
   const [open, setOpen] = useState<Record<string, boolean>>({});
   if (!games.length) return null;
@@ -395,6 +397,11 @@ function ScheduleSection({
             {games.map((info) => {
               const opp = meta.get(info.opp);
               const isOpen = !!open[info.gameId];
+              const gameRow = df.find((r) => Number(r.week) === info.week);
+              const gv = (col: string): number | null => {
+                const v = gameRow?.[col];
+                return v == null ? null : Number(v);
+              };
               return (
                 <Fragment key={info.gameId}>
                   <tr
@@ -489,43 +496,121 @@ function ScheduleSection({
                   {isOpen && (
                     <tr className="border-t border-slate-100 bg-slate-50/70">
                       <td colSpan={9} className="px-4 py-4">
-                        <div className="grid gap-4 lg:grid-cols-[1fr_1.2fr]">
-                          <div className="space-y-1">
-                            <MetricRow label="Venue" value={String(info.g.stadium ?? "—")} />
-                            <MetricRow label="Roof / Surface" value={`${info.g.roof ?? "—"} / ${info.g.surface ?? "—"}`} />
-                            {info.g.roof === "outdoors" && (
-                              <MetricRow label="Temp / Wind" value={`${info.g.temp ?? "—"}°F / ${info.g.wind ?? "—"} mph`} />
-                            )}
-                            <MetricRow label="Referee" value={String(info.g.referee ?? "—")} />
-                            <MetricRow
-                              label={info.home ? "Opponent QB" : "Home QB"}
-                              value={String(info.home ? info.g.away_qb_name ?? "—" : info.g.home_qb_name ?? "—")}
-                            />
-                            <MetricRow label="Coaches" value={`${info.g.away_coach ?? "—"} @ ${info.g.home_coach ?? "—"}`} />
-                            <MetricRow label="Division game" value={Number(info.g.div_game) === 1 ? "Yes" : "No"} />
-                            {info.played && info.g.total_line != null && (
-                              <MetricRow
-                                label="Total (O/U)"
-                                value={`${info.g.total} vs line ${info.g.total_line} (${
-                                  Number(info.g.total) > Number(info.g.total_line) ? "Over" : Number(info.g.total) < Number(info.g.total_line) ? "Under" : "Push"
-                                })`}
-                              />
-                            )}
-                            {!info.played && (
-                              <MetricRow label="Kickoff" value={`${info.g.gameday ?? "—"} ${info.g.gametime ?? ""} (${info.g.weekday ?? "—"})`} />
-                            )}
+                        {info.played && gameRow ? (
+                          <div className="space-y-3">
+                            <div className="grid gap-4 lg:grid-cols-2">
+                              <div className="rounded-xl border border-slate-200 bg-white p-3" style={{ borderTop: `3px solid ${OFF_ACCENT}` }}>
+                                <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Offense — this game</div>
+                                <div className="space-y-3">
+                                  <SplitBar
+                                    label="Play volume (pass attempts vs carries)"
+                                    a={gv("attempts") ?? 0}
+                                    b={gv("carries") ?? 0}
+                                    la={leagueAvg("attempts") ?? 0}
+                                    lb={leagueAvg("carries") ?? 0}
+                                    aName="Pass"
+                                    bName="Rush"
+                                    accent={OFF_ACCENT}
+                                    rank={null}
+                                    nTeams={0}
+                                  />
+                                  <SplitBar
+                                    label="First downs (passing vs rushing)"
+                                    a={gv("passing_first_downs") ?? 0}
+                                    b={gv("rushing_first_downs") ?? 0}
+                                    la={leagueAvg("passing_first_downs") ?? 0}
+                                    lb={leagueAvg("rushing_first_downs") ?? 0}
+                                    aName="Pass"
+                                    bName="Rush"
+                                    accent={OFF_ACCENT}
+                                    rank={null}
+                                    nTeams={0}
+                                  />
+                                  <SplitBar
+                                    label="Yards (passing vs rushing)"
+                                    a={gv("passing_yards") ?? 0}
+                                    b={gv("rushing_yards") ?? 0}
+                                    la={leagueAvg("passing_yards") ?? 0}
+                                    lb={leagueAvg("rushing_yards") ?? 0}
+                                    aName="Pass"
+                                    bName="Rush"
+                                    accent={OFF_ACCENT}
+                                    rank={null}
+                                    nTeams={0}
+                                  />
+                                </div>
+                              </div>
+                              <div className="rounded-xl border border-slate-200 bg-white p-3" style={{ borderTop: `3px solid ${DEF_ACCENT}` }}>
+                                <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Defense (opponent) — this game</div>
+                                <div className="space-y-3">
+                                  <SplitBar
+                                    label="Play volume faced (pass vs rush)"
+                                    a={gv("attempts_allowed") ?? 0}
+                                    b={gv("carries_allowed") ?? 0}
+                                    la={leagueAvg("attempts_allowed") ?? 0}
+                                    lb={leagueAvg("carries_allowed") ?? 0}
+                                    aName="Pass"
+                                    bName="Rush"
+                                    accent={DEF_ACCENT}
+                                    rank={null}
+                                    nTeams={0}
+                                  />
+                                  <SplitBar
+                                    label="First downs allowed (pass vs rush)"
+                                    a={gv("passing_first_downs_allowed") ?? 0}
+                                    b={gv("rushing_first_downs_allowed") ?? 0}
+                                    la={leagueAvg("passing_first_downs_allowed") ?? 0}
+                                    lb={leagueAvg("rushing_first_downs_allowed") ?? 0}
+                                    aName="Pass"
+                                    bName="Rush"
+                                    accent={DEF_ACCENT}
+                                    rank={null}
+                                    nTeams={0}
+                                  />
+                                  <SplitBar
+                                    label="Yards allowed (pass vs rush)"
+                                    a={gv("passing_yards_allowed") ?? 0}
+                                    b={gv("rushing_yards_allowed") ?? 0}
+                                    la={leagueAvg("passing_yards_allowed") ?? 0}
+                                    lb={leagueAvg("rushing_yards_allowed") ?? 0}
+                                    aName="Pass"
+                                    bName="Rush"
+                                    accent={DEF_ACCENT}
+                                    rank={null}
+                                    nTeams={0}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                            <div className="grid gap-3 sm:grid-cols-3">
+                              <div className="rounded-xl border border-slate-200 bg-white p-3">
+                                <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Box score</div>
+                                <MetricRow label="Points (allowed)" value={`${fmt(gv("points") ?? 0, 0)} (${fmt(gv("points_allowed") ?? 0, 0)})`} />
+                                <MetricRow label="Total yards (allowed)" value={`${fmt(gv("total_yards") ?? 0, 0)} (${fmt(gv("total_yards_allowed") ?? 0, 0)})`} />
+                                <MetricRow label="Turnovers (forced)" value={`${fmt(gv("turnovers") ?? 0, 0)} (${fmt(gv("turnovers_allowed") ?? 0, 0)})`} />
+                              </div>
+                              <div className="rounded-xl border border-slate-200 bg-white p-3">
+                                <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Market win probability</div>
+                                <GameProbBar info={info} meta={meta} team={team} />
+                              </div>
+                              <div className="rounded-xl border border-slate-200 bg-white p-3">
+                                <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Margin through Week {info.week}</div>
+                                <GameMarginStrip df={df} week={info.week} color={color} />
+                              </div>
+                            </div>
                           </div>
+                        ) : (
                           <div className="grid gap-3 sm:grid-cols-2">
                             <div className="rounded-xl border border-slate-200 bg-white p-3">
                               <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Market win probability</div>
                               <GameProbBar info={info} meta={meta} team={team} />
                             </div>
                             <div className="rounded-xl border border-slate-200 bg-white p-3">
-                              <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Margin in season context</div>
-                              <GameMarginStrip df={df} week={info.week} color={color} />
+                              <MetricRow label="Kickoff" value={`${info.g.gameday ?? "—"} ${info.g.gametime ?? ""} (${info.g.weekday ?? "—"})`} />
+                              <MetricRow label="Venue" value={String(info.g.stadium ?? "—")} />
                             </div>
                           </div>
-                        </div>
+                        )}
                       </td>
                     </tr>
                   )}
@@ -843,7 +928,7 @@ export default function Scorecards() {
       </div>
 
       {/* ---------- season schedule ---------- */}
-      <ScheduleSection games={teamGames} meta={meta} team={team} color={color} df={df} />
+      <ScheduleSection games={teamGames} meta={meta} team={team} color={color} df={df} leagueAvg={leagueAvg} />
     </div>
   );
 }
