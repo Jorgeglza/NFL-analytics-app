@@ -282,6 +282,48 @@ function RawCounts({ a, b, aLabel, bLabel }: { a: number | null; b: number | nul
   );
 }
 
+/** Single-game pass/rush comparison led by the actual counts, not a percentage
+ *  share — the bar's width is still proportional (quick visual read) but the
+ *  numbers themselves are the headline, per the ask to focus on what actually
+ *  happened in this game rather than a share-of-total framing. */
+function GameStatBar({
+  label,
+  aVal,
+  bVal,
+  aUnit,
+  bUnit,
+  accent,
+}: {
+  label: string;
+  aVal: number | null;
+  bVal: number | null;
+  aUnit: string;
+  bUnit: string;
+  accent: string;
+}) {
+  const a = aVal ?? 0;
+  const b = bVal ?? 0;
+  if (!(a + b)) return <div className="text-xs text-slate-400">{label}: no data.</div>;
+  const pct = (a / (a + b)) * 100;
+  return (
+    <div>
+      <div className="mb-1 text-xs font-semibold text-slate-600">{label}</div>
+      <div className="flex h-2 overflow-hidden rounded-full bg-slate-200">
+        <div style={{ width: `${pct}%`, background: accent }} />
+        <div className="flex-1" style={{ background: "#cbd5e1" }} />
+      </div>
+      <div className="mt-1 flex items-baseline justify-between">
+        <span className="text-base font-bold tabular-nums" style={{ color: accent }}>
+          {Math.round(a).toLocaleString()} <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400">{aUnit}</span>
+        </span>
+        <span className="text-base font-bold tabular-nums text-slate-500">
+          {Math.round(b).toLocaleString()} <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400">{bUnit}</span>
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function MetricRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between gap-3 py-1 text-xs">
@@ -320,61 +362,6 @@ function GameProbBar({ info, meta, team }: { info: GameInfo; meta: Map<string, T
   );
 }
 
-/** Total yards this team gained vs. total yards it allowed, week by week through the
- *  selected game (no future weeks) — actual yard counts on the axis, current week
- *  highlighted, so it's a direct "how many yards did I get vs. give up" comparison. */
-function GameYardsStrip({ df, week, opp, color }: { df: Row[]; week: number; opp: string; color: string }) {
-  const played = useMemo(
-    () => df.filter((r) => r.win != null && Number(r.week) <= week).sort((a, b) => Number(a.week) - Number(b.week)),
-    [df, week],
-  );
-  const option = useMemo<EChartsOption>(
-    () => ({
-      grid: { left: 34, right: 6, top: 26, bottom: 18 },
-      legend: { top: 0, itemWidth: 12, itemHeight: 10, textStyle: { fontSize: 10 } },
-      xAxis: { type: "category", data: played.map((r) => `W${r.week}`), axisLabel: { fontSize: 9 } },
-      yAxis: { type: "value", name: "Yards", nameTextStyle: { fontSize: 9 }, axisLabel: { fontSize: 9 } },
-      tooltip: {
-        trigger: "axis",
-        formatter: (ps: unknown) => {
-          const arr = ps as { dataIndex: number }[];
-          const r = played[arr[0]?.dataIndex ?? 0];
-          const forYds = r.total_yards == null ? null : Number(r.total_yards);
-          const agYds = r.total_yards_allowed == null ? null : Number(r.total_yards_allowed);
-          const diff = forYds != null && agYds != null ? forYds - agYds : null;
-          return `W${r.week}<br/>Yards for: ${forYds ?? "—"}<br/>Yards against: ${agYds ?? "—"}${diff == null ? "" : `<br/>Diff: ${diff > 0 ? "+" : ""}${diff}`}`;
-        },
-      },
-      series: [
-        {
-          name: "Yards for",
-          type: "bar",
-          barMaxWidth: 12,
-          data: played.map((r) => {
-            const v = r.total_yards == null ? null : Number(r.total_yards);
-            const isCurrent = Number(r.week) === week;
-            return { value: v, itemStyle: { color: OFF_ACCENT, borderColor: isCurrent ? color : "transparent", borderWidth: isCurrent ? 2 : 0, borderRadius: 2 } };
-          }),
-        },
-        {
-          name: "Yards against",
-          type: "bar",
-          barMaxWidth: 12,
-          data: played.map((r) => {
-            const v = r.total_yards_allowed == null ? null : Number(r.total_yards_allowed);
-            const isCurrent = Number(r.week) === week;
-            return { value: v, itemStyle: { color: DEF_ACCENT, borderColor: isCurrent ? color : "transparent", borderWidth: isCurrent ? 2 : 0, borderRadius: 2 } };
-          }),
-        },
-      ],
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }),
-    [played.map((r) => `${r.week}:${r.total_yards}:${r.total_yards_allowed}`).join(","), week, opp, color],
-  );
-  const ref = useECharts(option);
-  return <div ref={ref} className="h-32 w-full" />;
-}
-
 /** Season schedule — every game for the selected team, with results filled in
  *  and an expandable row for venue/weather/QB detail plus mini market/margin charts. */
 function ScheduleSection({
@@ -383,14 +370,12 @@ function ScheduleSection({
   team,
   color,
   df,
-  leagueAvg,
 }: {
   games: GameInfo[];
   meta: Map<string, TeamMeta>;
   team: string;
   color: string;
   df: Row[];
-  leagueAvg: (col: string) => number | null;
 }) {
   const [open, setOpen] = useState<Record<string, boolean>>({});
   if (!games.length) return null;
@@ -520,106 +505,45 @@ function ScheduleSection({
                               <div className="rounded-xl border border-slate-200 bg-white p-3" style={{ borderTop: `3px solid ${OFF_ACCENT}` }}>
                                 <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Offense — this game</div>
                                 <div className="space-y-3">
-                                  <div>
-                                    <SplitBar
-                                      label="Yards (passing vs rushing)"
-                                      a={gv("passing_yards") ?? 0}
-                                      b={gv("rushing_yards") ?? 0}
-                                      la={leagueAvg("passing_yards") ?? 0}
-                                      lb={leagueAvg("rushing_yards") ?? 0}
-                                      aName="Pass"
-                                      bName="Rush"
-                                      accent={OFF_ACCENT}
-                                      rank={null}
-                                      nTeams={0}
-                                    />
-                                    <RawCounts a={gv("passing_yards")} b={gv("rushing_yards")} aLabel="pass yds" bLabel="rush yds" />
-                                  </div>
-                                  <div>
-                                    <SplitBar
-                                      label="Play volume (pass attempts vs carries)"
-                                      a={gv("attempts") ?? 0}
-                                      b={gv("carries") ?? 0}
-                                      la={leagueAvg("attempts") ?? 0}
-                                      lb={leagueAvg("carries") ?? 0}
-                                      aName="Pass"
-                                      bName="Rush"
-                                      accent={OFF_ACCENT}
-                                      rank={null}
-                                      nTeams={0}
-                                    />
-                                    <RawCounts a={gv("attempts")} b={gv("carries")} aLabel="pass att" bLabel="rush car" />
-                                  </div>
-                                  <div>
-                                    <SplitBar
-                                      label="First downs (passing vs rushing)"
-                                      a={gv("passing_first_downs") ?? 0}
-                                      b={gv("rushing_first_downs") ?? 0}
-                                      la={leagueAvg("passing_first_downs") ?? 0}
-                                      lb={leagueAvg("rushing_first_downs") ?? 0}
-                                      aName="Pass"
-                                      bName="Rush"
-                                      accent={OFF_ACCENT}
-                                      rank={null}
-                                      nTeams={0}
-                                    />
-                                    <RawCounts a={gv("passing_first_downs")} b={gv("rushing_first_downs")} aLabel="pass 1st downs" bLabel="rush 1st downs" />
-                                  </div>
+                                  <GameStatBar label="Yards (passing vs rushing)" aVal={gv("passing_yards")} bVal={gv("rushing_yards")} aUnit="pass yds" bUnit="rush yds" accent={OFF_ACCENT} />
+                                  <GameStatBar label="Play volume (pass attempts vs carries)" aVal={gv("attempts")} bVal={gv("carries")} aUnit="pass att" bUnit="rush car" accent={OFF_ACCENT} />
+                                  <GameStatBar
+                                    label="First downs (passing vs rushing)"
+                                    aVal={gv("passing_first_downs")}
+                                    bVal={gv("rushing_first_downs")}
+                                    aUnit="pass 1st downs"
+                                    bUnit="rush 1st downs"
+                                    accent={OFF_ACCENT}
+                                  />
                                 </div>
                               </div>
                               <div className="rounded-xl border border-slate-200 bg-white p-3" style={{ borderTop: `3px solid ${DEF_ACCENT}` }}>
                                 <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Defense (opponent) — this game</div>
                                 <div className="space-y-3">
-                                  <div>
-                                    <SplitBar
-                                      label="Yards allowed (pass vs rush)"
-                                      a={gv("passing_yards_allowed") ?? 0}
-                                      b={gv("rushing_yards_allowed") ?? 0}
-                                      la={leagueAvg("passing_yards_allowed") ?? 0}
-                                      lb={leagueAvg("rushing_yards_allowed") ?? 0}
-                                      aName="Pass"
-                                      bName="Rush"
-                                      accent={DEF_ACCENT}
-                                      rank={null}
-                                      nTeams={0}
-                                    />
-                                    <RawCounts a={gv("passing_yards_allowed")} b={gv("rushing_yards_allowed")} aLabel="pass yds allowed" bLabel="rush yds allowed" />
-                                  </div>
-                                  <div>
-                                    <SplitBar
-                                      label="Play volume faced (pass vs rush)"
-                                      a={gv("attempts_allowed") ?? 0}
-                                      b={gv("carries_allowed") ?? 0}
-                                      la={leagueAvg("attempts_allowed") ?? 0}
-                                      lb={leagueAvg("carries_allowed") ?? 0}
-                                      aName="Pass"
-                                      bName="Rush"
-                                      accent={DEF_ACCENT}
-                                      rank={null}
-                                      nTeams={0}
-                                    />
-                                    <RawCounts a={gv("attempts_allowed")} b={gv("carries_allowed")} aLabel="pass att faced" bLabel="rush car faced" />
-                                  </div>
-                                  <div>
-                                    <SplitBar
-                                      label="First downs allowed (pass vs rush)"
-                                      a={gv("passing_first_downs_allowed") ?? 0}
-                                      b={gv("rushing_first_downs_allowed") ?? 0}
-                                      la={leagueAvg("passing_first_downs_allowed") ?? 0}
-                                      lb={leagueAvg("rushing_first_downs_allowed") ?? 0}
-                                      aName="Pass"
-                                      bName="Rush"
-                                      accent={DEF_ACCENT}
-                                      rank={null}
-                                      nTeams={0}
-                                    />
-                                    <RawCounts
-                                      a={gv("passing_first_downs_allowed")}
-                                      b={gv("rushing_first_downs_allowed")}
-                                      aLabel="pass 1st downs allowed"
-                                      bLabel="rush 1st downs allowed"
-                                    />
-                                  </div>
+                                  <GameStatBar
+                                    label="Yards allowed (pass vs rush)"
+                                    aVal={gv("passing_yards_allowed")}
+                                    bVal={gv("rushing_yards_allowed")}
+                                    aUnit="pass yds allowed"
+                                    bUnit="rush yds allowed"
+                                    accent={DEF_ACCENT}
+                                  />
+                                  <GameStatBar
+                                    label="Play volume faced (pass vs rush)"
+                                    aVal={gv("attempts_allowed")}
+                                    bVal={gv("carries_allowed")}
+                                    aUnit="pass att faced"
+                                    bUnit="rush car faced"
+                                    accent={DEF_ACCENT}
+                                  />
+                                  <GameStatBar
+                                    label="First downs allowed (pass vs rush)"
+                                    aVal={gv("passing_first_downs_allowed")}
+                                    bVal={gv("rushing_first_downs_allowed")}
+                                    aUnit="pass 1st downs allowed"
+                                    bUnit="rush 1st downs allowed"
+                                    accent={DEF_ACCENT}
+                                  />
                                 </div>
                               </div>
                             </div>
@@ -638,12 +562,6 @@ function ScheduleSection({
                                 <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Market win probability</div>
                                 <GameProbBar info={info} meta={meta} team={team} />
                               </div>
-                            </div>
-                            <div className="rounded-xl border border-slate-200 bg-white p-3">
-                              <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                                Yards for vs. yards against, week by week — actual yard totals through Week {info.week}
-                              </div>
-                              <GameYardsStrip df={df} week={info.week} opp={info.opp} color={color} />
                             </div>
                           </div>
                         ) : (
@@ -981,7 +899,7 @@ export default function Scorecards() {
       </div>
 
       {/* ---------- season schedule ---------- */}
-      <ScheduleSection games={teamGames} meta={meta} team={team} color={color} df={df} leagueAvg={leagueAvg} />
+      <ScheduleSection games={teamGames} meta={meta} team={team} color={color} df={df} />
     </div>
   );
 }
