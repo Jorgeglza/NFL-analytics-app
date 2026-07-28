@@ -272,6 +272,16 @@ function gameInfoFor(g: Row, team: string): GameInfo {
   };
 }
 
+/** Actual counts behind a split bar's percentages (e.g. "34 pass att · 22 rush car"). */
+function RawCounts({ a, b, aLabel, bLabel }: { a: number | null; b: number | null; aLabel: string; bLabel: string }) {
+  return (
+    <div className="mt-1 flex justify-between text-[10px] text-slate-400">
+      <span>{a == null ? "—" : Math.round(a).toLocaleString()} {aLabel}</span>
+      <span>{b == null ? "—" : Math.round(b).toLocaleString()} {bLabel}</span>
+    </div>
+  );
+}
+
 function MetricRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between gap-3 py-1 text-xs">
@@ -502,83 +512,106 @@ function ScheduleSection({
                               <div className="rounded-xl border border-slate-200 bg-white p-3" style={{ borderTop: `3px solid ${OFF_ACCENT}` }}>
                                 <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Offense — this game</div>
                                 <div className="space-y-3">
-                                  <SplitBar
-                                    label="Play volume (pass attempts vs carries)"
-                                    a={gv("attempts") ?? 0}
-                                    b={gv("carries") ?? 0}
-                                    la={leagueAvg("attempts") ?? 0}
-                                    lb={leagueAvg("carries") ?? 0}
-                                    aName="Pass"
-                                    bName="Rush"
-                                    accent={OFF_ACCENT}
-                                    rank={null}
-                                    nTeams={0}
-                                  />
-                                  <SplitBar
-                                    label="First downs (passing vs rushing)"
-                                    a={gv("passing_first_downs") ?? 0}
-                                    b={gv("rushing_first_downs") ?? 0}
-                                    la={leagueAvg("passing_first_downs") ?? 0}
-                                    lb={leagueAvg("rushing_first_downs") ?? 0}
-                                    aName="Pass"
-                                    bName="Rush"
-                                    accent={OFF_ACCENT}
-                                    rank={null}
-                                    nTeams={0}
-                                  />
-                                  <SplitBar
-                                    label="Yards (passing vs rushing)"
-                                    a={gv("passing_yards") ?? 0}
-                                    b={gv("rushing_yards") ?? 0}
-                                    la={leagueAvg("passing_yards") ?? 0}
-                                    lb={leagueAvg("rushing_yards") ?? 0}
-                                    aName="Pass"
-                                    bName="Rush"
-                                    accent={OFF_ACCENT}
-                                    rank={null}
-                                    nTeams={0}
-                                  />
+                                  <div>
+                                    <SplitBar
+                                      label="Play volume (pass attempts vs carries)"
+                                      a={gv("attempts") ?? 0}
+                                      b={gv("carries") ?? 0}
+                                      la={leagueAvg("attempts") ?? 0}
+                                      lb={leagueAvg("carries") ?? 0}
+                                      aName="Pass"
+                                      bName="Rush"
+                                      accent={OFF_ACCENT}
+                                      rank={null}
+                                      nTeams={0}
+                                    />
+                                    <RawCounts a={gv("attempts")} b={gv("carries")} aLabel="pass att" bLabel="rush car" />
+                                  </div>
+                                  <div>
+                                    <SplitBar
+                                      label="First downs (passing vs rushing)"
+                                      a={gv("passing_first_downs") ?? 0}
+                                      b={gv("rushing_first_downs") ?? 0}
+                                      la={leagueAvg("passing_first_downs") ?? 0}
+                                      lb={leagueAvg("rushing_first_downs") ?? 0}
+                                      aName="Pass"
+                                      bName="Rush"
+                                      accent={OFF_ACCENT}
+                                      rank={null}
+                                      nTeams={0}
+                                    />
+                                    <RawCounts a={gv("passing_first_downs")} b={gv("rushing_first_downs")} aLabel="pass 1st downs" bLabel="rush 1st downs" />
+                                  </div>
+                                  <div>
+                                    <SplitBar
+                                      label="Yards (passing vs rushing)"
+                                      a={gv("passing_yards") ?? 0}
+                                      b={gv("rushing_yards") ?? 0}
+                                      la={leagueAvg("passing_yards") ?? 0}
+                                      lb={leagueAvg("rushing_yards") ?? 0}
+                                      aName="Pass"
+                                      bName="Rush"
+                                      accent={OFF_ACCENT}
+                                      rank={null}
+                                      nTeams={0}
+                                    />
+                                    <RawCounts a={gv("passing_yards")} b={gv("rushing_yards")} aLabel="pass yds" bLabel="rush yds" />
+                                  </div>
                                 </div>
                               </div>
                               <div className="rounded-xl border border-slate-200 bg-white p-3" style={{ borderTop: `3px solid ${DEF_ACCENT}` }}>
                                 <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Defense (opponent) — this game</div>
                                 <div className="space-y-3">
-                                  <SplitBar
-                                    label="Play volume faced (pass vs rush)"
-                                    a={gv("attempts_allowed") ?? 0}
-                                    b={gv("carries_allowed") ?? 0}
-                                    la={leagueAvg("attempts_allowed") ?? 0}
-                                    lb={leagueAvg("carries_allowed") ?? 0}
-                                    aName="Pass"
-                                    bName="Rush"
-                                    accent={DEF_ACCENT}
-                                    rank={null}
-                                    nTeams={0}
-                                  />
-                                  <SplitBar
-                                    label="First downs allowed (pass vs rush)"
-                                    a={gv("passing_first_downs_allowed") ?? 0}
-                                    b={gv("rushing_first_downs_allowed") ?? 0}
-                                    la={leagueAvg("passing_first_downs_allowed") ?? 0}
-                                    lb={leagueAvg("rushing_first_downs_allowed") ?? 0}
-                                    aName="Pass"
-                                    bName="Rush"
-                                    accent={DEF_ACCENT}
-                                    rank={null}
-                                    nTeams={0}
-                                  />
-                                  <SplitBar
-                                    label="Yards allowed (pass vs rush)"
-                                    a={gv("passing_yards_allowed") ?? 0}
-                                    b={gv("rushing_yards_allowed") ?? 0}
-                                    la={leagueAvg("passing_yards_allowed") ?? 0}
-                                    lb={leagueAvg("rushing_yards_allowed") ?? 0}
-                                    aName="Pass"
-                                    bName="Rush"
-                                    accent={DEF_ACCENT}
-                                    rank={null}
-                                    nTeams={0}
-                                  />
+                                  <div>
+                                    <SplitBar
+                                      label="Play volume faced (pass vs rush)"
+                                      a={gv("attempts_allowed") ?? 0}
+                                      b={gv("carries_allowed") ?? 0}
+                                      la={leagueAvg("attempts_allowed") ?? 0}
+                                      lb={leagueAvg("carries_allowed") ?? 0}
+                                      aName="Pass"
+                                      bName="Rush"
+                                      accent={DEF_ACCENT}
+                                      rank={null}
+                                      nTeams={0}
+                                    />
+                                    <RawCounts a={gv("attempts_allowed")} b={gv("carries_allowed")} aLabel="pass att faced" bLabel="rush car faced" />
+                                  </div>
+                                  <div>
+                                    <SplitBar
+                                      label="First downs allowed (pass vs rush)"
+                                      a={gv("passing_first_downs_allowed") ?? 0}
+                                      b={gv("rushing_first_downs_allowed") ?? 0}
+                                      la={leagueAvg("passing_first_downs_allowed") ?? 0}
+                                      lb={leagueAvg("rushing_first_downs_allowed") ?? 0}
+                                      aName="Pass"
+                                      bName="Rush"
+                                      accent={DEF_ACCENT}
+                                      rank={null}
+                                      nTeams={0}
+                                    />
+                                    <RawCounts
+                                      a={gv("passing_first_downs_allowed")}
+                                      b={gv("rushing_first_downs_allowed")}
+                                      aLabel="pass 1st downs allowed"
+                                      bLabel="rush 1st downs allowed"
+                                    />
+                                  </div>
+                                  <div>
+                                    <SplitBar
+                                      label="Yards allowed (pass vs rush)"
+                                      a={gv("passing_yards_allowed") ?? 0}
+                                      b={gv("rushing_yards_allowed") ?? 0}
+                                      la={leagueAvg("passing_yards_allowed") ?? 0}
+                                      lb={leagueAvg("rushing_yards_allowed") ?? 0}
+                                      aName="Pass"
+                                      bName="Rush"
+                                      accent={DEF_ACCENT}
+                                      rank={null}
+                                      nTeams={0}
+                                    />
+                                    <RawCounts a={gv("passing_yards_allowed")} b={gv("rushing_yards_allowed")} aLabel="pass yds allowed" bLabel="rush yds allowed" />
+                                  </div>
                                 </div>
                               </div>
                             </div>
@@ -587,6 +620,10 @@ function ScheduleSection({
                                 <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Box score</div>
                                 <MetricRow label="Points (allowed)" value={`${fmt(gv("points") ?? 0, 0)} (${fmt(gv("points_allowed") ?? 0, 0)})`} />
                                 <MetricRow label="Total yards (allowed)" value={`${fmt(gv("total_yards") ?? 0, 0)} (${fmt(gv("total_yards_allowed") ?? 0, 0)})`} />
+                                <MetricRow
+                                  label="Pass / rush TDs (allowed)"
+                                  value={`${fmt(gv("passing_tds") ?? 0, 0)}/${fmt(gv("rushing_tds") ?? 0, 0)} (${fmt(gv("passing_tds_allowed") ?? 0, 0)}/${fmt(gv("rushing_tds_allowed") ?? 0, 0)})`}
+                                />
                                 <MetricRow label="Turnovers (forced)" value={`${fmt(gv("turnovers") ?? 0, 0)} (${fmt(gv("turnovers_allowed") ?? 0, 0)})`} />
                               </div>
                               <div className="rounded-xl border border-slate-200 bg-white p-3">
