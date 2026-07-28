@@ -4,12 +4,18 @@ import type { TeamMeta } from "../../../lib/team/meta";
 import { simulatePlayoffs, type PlayoffSimResult, type TeamConfDiv } from "../../../lib/logic/playoffSim";
 import { Loading } from "../../../components/Loading";
 import { tableWrapCls, theadCls, trCls } from "../../../components/ui";
+import DetailModal from "./DetailModal";
 
 const ITERATIONS = 2000;
+
+function recordStr(w: number, l: number, t: number): string {
+  return t > 0 ? `${w}-${l}-${t}` : `${w}-${l}`;
+}
 
 export default function PlayoffTab({ schedule, season, week, meta }: { schedule: Row[]; season: string; week: string; meta: Map<string, TeamMeta> }) {
   const [results, setResults] = useState<PlayoffSimResult[] | null>(null);
   const [computing, setComputing] = useState(false);
+  const [selectedTeam, setSelectedTeam] = useState<string | null>(null);
 
   useEffect(() => {
     if (!season || !week || !meta.size) return;
@@ -50,7 +56,7 @@ export default function PlayoffTab({ schedule, season, week, meta }: { schedule:
           <table className="w-full text-sm">
             <thead className={theadCls}>
               <tr>
-                {["Team", "Division", "Playoff %", "Division title %", "Avg wins", "Avg seed"].map((h) => (
+                {["Team", "Division", "Record", "Expected wins", "Playoff %", "Division title %", "Avg wins", "Avg seed"].map((h) => (
                   <th key={h} className="px-3 py-2">{h}</th>
                 ))}
               </tr>
@@ -59,7 +65,7 @@ export default function PlayoffTab({ schedule, season, week, meta }: { schedule:
               {[...teams]
                 .sort((a, b) => b.playoffPct - a.playoffPct)
                 .map((r) => (
-                  <tr key={r.team} className={trCls}>
+                  <tr key={r.team} className={`${trCls} cursor-pointer`} onClick={() => setSelectedTeam(r.team)}>
                     <td className="px-3 py-2 font-semibold text-slate-800">
                       <div className="flex items-center gap-2">
                         {meta.get(r.team)?.logo && <img src={meta.get(r.team)!.logo} alt="" className="h-5 w-5 object-contain" />}
@@ -67,6 +73,10 @@ export default function PlayoffTab({ schedule, season, week, meta }: { schedule:
                       </div>
                     </td>
                     <td className="px-3 py-2 text-slate-500">{r.division}</td>
+                    <td className="px-3 py-2 font-mono text-slate-700">{recordStr(r.currentWins, r.currentLosses, r.currentTies)}</td>
+                    <td className="px-3 py-2 text-slate-600">
+                      {(r.avgWins - r.currentWins >= 0 ? "+" : "") + (r.avgWins - r.currentWins).toFixed(1)}
+                    </td>
                     <td className="px-3 py-2 font-mono text-slate-700">{(r.playoffPct * 100).toFixed(1)}%</td>
                     <td className="px-3 py-2 text-slate-600">{(r.divisionTitlePct * 100).toFixed(1)}%</td>
                     <td className="px-3 py-2 text-slate-600">{r.avgWins.toFixed(1)}</td>
@@ -77,6 +87,12 @@ export default function PlayoffTab({ schedule, season, week, meta }: { schedule:
           </table>
         </div>
       ))}
+
+      {selectedTeam &&
+        (() => {
+          const r = results.find((x) => x.team === selectedTeam);
+          return r ? <DetailModal result={r} meta={meta.get(selectedTeam)} week={week} onClose={() => setSelectedTeam(null)} /> : null;
+        })()}
     </div>
   );
 }

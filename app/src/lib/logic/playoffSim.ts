@@ -24,6 +24,16 @@ export interface TeamConfDiv {
   division: string;
 }
 
+export interface RemainingGameProb {
+  week: number;
+  opponent: string;
+  home: boolean;
+  teamElo: number;
+  opponentElo: number;
+  /** This team's win probability for the game, from frozen Elo (what the sim actually draws from). */
+  winProb: number;
+}
+
 export interface PlayoffSimResult {
   team: string;
   conference: string;
@@ -31,8 +41,18 @@ export interface PlayoffSimResult {
   playoffPct: number;
   divisionTitlePct: number;
   avgWins: number;
+  /** Actual record through `throughWeek` — not simulated, the same for every iteration. */
+  currentWins: number;
+  currentLosses: number;
+  currentTies: number;
   /** Average seed (1-7) among simulations where the team made the playoffs; null if it never did. */
   avgSeed: number | null;
+  /** Index i = number of simulated seasons finishing with i wins (0-17). */
+  winsHistogram: number[];
+  /** Index 0 = missed playoffs, index 1-7 = that seed. Counts across all simulated seasons. */
+  seedHistogram: number[];
+  /** This team's not-yet-played games, with the Elo win probability the sim draws from. */
+  remainingGames: RemainingGameProb[];
 }
 
 interface TeamState {
@@ -110,6 +130,8 @@ export function simulatePlayoffs(
   const playoffCount = new Map<string, number>(teams.map((t) => [t, 0]));
   const divTitleCount = new Map<string, number>(teams.map((t) => [t, 0]));
   const seedSum = new Map<string, number>(teams.map((t) => [t, 0]));
+  const winsHist = new Map<string, number[]>(teams.map((t) => [t, new Array(18).fill(0)]));
+  const seedHist = new Map<string, number[]>(teams.map((t) => [t, new Array(8).fill(0)]));
 
   const byConfDiv = new Map<string, string[]>();
   for (const t of teams) {
@@ -151,7 +173,11 @@ export function simulatePlayoffs(
       }
     }
 
-    for (const t of teams) winsTotal.set(t, winsTotal.get(t)! + state.get(t)!.w);
+    for (const t of teams) {
+      const w = state.get(t)!.w;
+      winsTotal.set(t, winsTotal.get(t)! + w);
+      winsHist.get(t)![Math.min(w, 17)]++;
+    }
 
     const winPct = (b: TeamState) => (b.w + 0.5 * b.t) / Math.max(1, b.w + b.l + b.t);
     const confPct = (b: TeamState) => (b.confW + 0.5 * b.confT) / Math.max(1, b.confW + b.confL + b.confT);
@@ -168,6 +194,7 @@ export function simulatePlayoffs(
       return sb.pd - sa.pd;
     };
 
+    const madeThisIter = new Set<string>();
     for (const conf of conferences) {
       const divisions = [...byConfDiv.keys()].filter((k) => k.startsWith(`${conf}|`));
       const divWinners: string[] = [];
@@ -183,10 +210,26 @@ export function simulatePlayoffs(
       [...divWinners, ...wildcards].forEach((t, i) => {
         playoffCount.set(t, playoffCount.get(t)! + 1);
         seedSum.set(t, seedSum.get(t)! + (i + 1));
+        seedHist.get(t)![i + 1]++;
+        madeThisIter.add(t);
       });
       divWinners.forEach((t) => divTitleCount.set(t, divTitleCount.get(t)! + 1));
     }
+    for (const t of teams) if (!madeThisIter.has(t)) seedHist.get(t)![0]++;
   }
+
+  const remainingByTeam = new Map<string, RemainingGameProb[]>(teams.map((t) => [t, []]));
+  for (const g of remaining) {
+    const ht = String(g.home_team);
+    const at = String(g.away_team);
+    const week = Number(g.week);
+    const hElo = frozenElo.get(ht) ?? ELO_INIT;
+    const aElo = frozenElo.get(at) ?? ELO_INIT;
+    const pHome = eloPHome(aElo, hElo);
+    if (remainingByTeam.has(ht)) remainingByTeam.get(ht)!.push({ week, opponent: at, home: true, teamElo: hElo, opponentElo: aElo, winProb: pHome });
+    if (remainingByTeam.has(at)) remainingByTeam.get(at)!.push({ week, opponent: ht, home: false, teamElo: aElo, opponentElo: hElo, winProb: 1 - pHome });
+  }
+  for (const games of remainingByTeam.values()) games.sort((a, b) => a.week - b.week);
 
   return teams
     .map((t) => {
@@ -199,7 +242,13 @@ export function simulatePlayoffs(
         playoffPct: made / iterations,
         divisionTitlePct: divTitleCount.get(t)! / iterations,
         avgWins: winsTotal.get(t)! / iterations,
+        currentWins: base.get(t)!.w,
+        currentLosses: base.get(t)!.l,
+        currentTies: base.get(t)!.t,
         avgSeed: made ? seedSum.get(t)! / made : null,
+        winsHistogram: winsHist.get(t)!,
+        seedHistogram: seedHist.get(t)!,
+        remainingGames: remainingByTeam.get(t)!,
       };
     })
     .sort((a, b) => b.playoffPct - a.playoffPct);

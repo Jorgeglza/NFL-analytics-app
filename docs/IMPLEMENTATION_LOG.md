@@ -486,6 +486,49 @@ Per page: run old app side-by-side (`pda-ie` env), match tables/KPIs/chart serie
 
 ## Session notes (newest first)
 
+### 2026-07-27 — Season Outlook: click-to-zoom Monte Carlo detail modal
+- Playoff Probability tab (`season-outlook/PlayoffTab.tsx`) rows are now clickable, opening a
+  new `season-outlook/DetailModal.tsx` (modeled on Power Rankings' `DetailModal.tsx`, same
+  `Modal`/`useECharts` building blocks) showing the math behind that team's number: a win-total
+  histogram and a playoff-seed histogram (both bar charts over the same 2,000 simulated
+  seasons), plus the team's remaining schedule with the actual Elo-implied win probability the
+  simulation draws from for each game (opponent, both teams' frozen Elo ratings, a probability
+  bar).
+- `lib/logic/playoffSim.ts`'s `simulatePlayoffs()` now also returns `winsHistogram` (index =
+  win total 0-17), `seedHistogram` (index 0 = missed playoffs, 1-7 = seed), and
+  `remainingGames` (per-team, computed once from the already-built frozen Elo ratings, not
+  re-simulated) on `PlayoffSimResult` — all accumulated for free inside the existing
+  2,000-iteration loop, so the table and the modal read from the same simulation run (can't
+  disagree).
+- Verified in the browser pane at week 10, 2025: Green Bay Packers row (77.6% playoff / 27.8%
+  division title / 9.8 avg wins in the table) opened a modal showing the same numbers, wins
+  histogram centered near 9.8, "Simulated seasons 2,000 / Playoff appearances 1,553 / 2,000"
+  (1553/2000 = 77.6%, consistent), and 8 remaining games with win probabilities that track Elo +
+  home-field correctly (e.g. @ DET 1612 vs 1668 → 35.4%; vs BAL 1612 vs 1590 → 59.9%). Esc closes
+  the modal; clicking a different (0%-playoff) team correctly re-renders. `tsc --noEmit` and
+  `npm run build` both clean.
+
+### 2026-07-27 — Season Outlook detail modal: current record + wins-so-far marker
+- Follow-up to the drill-down modal above, per user request: `PlayoffSimResult` gained
+  `currentWins`/`currentLosses`/`currentTies` (from the already-computed `base` per-team state —
+  the actual record through `throughWeek`, not simulated). Modal now shows a "Current record +
+  Expected additional wins = Projected final wins (avg)" strip at the top, and the win-total
+  distribution chart got a dashed `markLine` at the current-wins bar so it's visually obvious
+  which bars represent wins already banked vs. simulated upside.
+- Verified in the browser pane (2025, week 10): Green Bay Packers shows "Record 5-3-1 · current
+  wins 5 · expected +4.7 · projected 9.7" (5 + 4.7 = 9.7, matches the table's Avg wins), dashed
+  marker visible left of the peak of the histogram. `tsc --noEmit`/`npm run build` clean.
+
+### 2026-07-27 — Season Outlook: Record + Expected wins columns on the main table
+- Follow-up per user request: the Playoff Probability table (`PlayoffTab.tsx`) now has two new
+  columns between Division and the %-columns — **Record** (current W-L(-T) through the selected
+  week, `recordStr(currentWins, currentLosses, currentTies)`) and **Expected wins** (avg wins
+  still to come, `avgWins - currentWins`, signed) — so the existing Avg wins/Avg seed/percentage
+  columns now sit next to the record they're projected from, without opening the drill-down
+  modal. Same `PlayoffSimResult` fields the modal already uses; no simulation changes.
+- Verified in the browser pane (2025, week 10): e.g. Eagles 7-2 / +5.8 / 12.8 avg wins
+  (7 + 5.8 = 12.8, consistent); `tsc --noEmit`/`npm run build` clean.
+
 ### 2026-07-21 — Season-range cutoff moved to August
 - `config.current_season()` rollover moved from September 1 to August 1 (user request): the new season's schedule is published by nflverse well before kickoff (verified live: 2026 schedule, 272 games, already present via `nfl_data_py.import_schedules([2026])` in July 2026), so the new season can enter the app a month earlier as schedule-only data. No scores/stats until games are actually played — same "unplayed game" code path already used for in-season future weeks. Updated docstring, `SEASONS` comment, and `docs/pipeline-runbook.md`.
 
