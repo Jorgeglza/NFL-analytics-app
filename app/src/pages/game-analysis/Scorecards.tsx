@@ -3,16 +3,18 @@
 // context on every stat, disclosed playstyle metrics, grades with ranks, and a
 // season-journey chart (weekly margin + grade evolution). Data unchanged:
 // team_week + team_week_ranks + grades.json, regular season only.
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import type { EChartsOption } from "echarts";
-import { getTeamWeek, getTeamWeekRanks, getGrades, getMeta, type Row } from "../../lib/data/loader";
+import { getTeamWeek, getTeamWeekRanks, getGrades, getMeta, getSchedule, type Row } from "../../lib/data/loader";
 import { getTeamMetaMap, type TeamMeta } from "../../lib/team/meta";
 import { Select } from "../../components/filters/Select";
 import { useECharts } from "../../components/charts/useECharts";
 import { Loading } from "../../components/Loading";
-import { Card } from "../../components/ui";
+import { Card, tableWrapCls, theadCls, trCls } from "../../components/ui";
+import { TeamLogoLink } from "../../components/team/TeamLogoLink";
 import { opponentLabel } from "../grading-model/shared";
+import { fairProbs } from "../../lib/logic/moneyline";
 import { usePageTitle } from "../../lib/hooks/usePageTitle";
 import { useSeasonWeek } from "../../context/SeasonWeekContext";
 
@@ -206,6 +208,337 @@ function SplitBar({
   );
 }
 
+interface GameInfo {
+  gameId: string;
+  week: number;
+  opp: string;
+  home: boolean;
+  played: boolean;
+  teamScore: number | null;
+  oppScore: number | null;
+  win: boolean | null;
+  tie: boolean;
+  margin: number | null;
+  spreadForTeam: number | null;
+  atsResult: "W" | "L" | "P" | null;
+  teamProb: number | null;
+  oppProb: number | null;
+  rest: number | null;
+  g: Row;
+}
+
+function gameInfoFor(g: Row, team: string): GameInfo {
+  const home = String(g.home_team) === team;
+  const opp = home ? String(g.away_team) : String(g.home_team);
+  const hs = g.home_score == null ? null : Number(g.home_score);
+  const as_ = g.away_score == null ? null : Number(g.away_score);
+  const played = hs != null && as_ != null;
+  const teamScore = played ? (home ? hs! : as_!) : null;
+  const oppScore = played ? (home ? as_! : hs!) : null;
+  const margin = played ? teamScore! - oppScore! : null;
+  const win = played ? (margin! > 0 ? true : margin! < 0 ? false : null) : null;
+  const tie = played && margin === 0;
+  const spreadLine = g.spread_line == null ? null : Number(g.spread_line);
+  const spreadForTeam = spreadLine == null ? null : home ? spreadLine : -spreadLine;
+  let atsResult: "W" | "L" | "P" | null = null;
+  if (played && margin != null && spreadForTeam != null) {
+    const diff = margin + spreadForTeam;
+    atsResult = diff > 0 ? "W" : diff < 0 ? "L" : "P";
+  }
+  const homeMl = g.home_moneyline == null ? null : Number(g.home_moneyline);
+  const awayMl = g.away_moneyline == null ? null : Number(g.away_moneyline);
+  const { homeFair, awayFair } = fairProbs(awayMl, homeMl);
+  const teamProb = home ? homeFair : awayFair;
+  const oppProb = home ? awayFair : homeFair;
+  const restCol = home ? g.home_rest : g.away_rest;
+  const rest = restCol == null ? null : Number(restCol);
+  return {
+    gameId: String(g.game_id),
+    week: Number(g.week),
+    opp,
+    home,
+    played,
+    teamScore,
+    oppScore,
+    win,
+    tie,
+    margin,
+    spreadForTeam,
+    atsResult,
+    teamProb,
+    oppProb,
+    rest,
+    g,
+  };
+}
+
+function MetricRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3 py-1 text-xs">
+      <span className="text-slate-500">{label}</span>
+      <span className="text-right font-medium text-slate-700">{value}</span>
+    </div>
+  );
+}
+
+/** Home/away market win-probability split bar (moneyline-implied fair odds). */
+function GameProbBar({ info, meta, team }: { info: GameInfo; meta: Map<string, TeamMeta>; team: string }) {
+  if (info.teamProb == null || info.oppProb == null) {
+    return <div className="py-2 text-xs text-slate-400">No market odds recorded for this game.</div>;
+  }
+  const teamPct = info.teamProb * 100;
+  const oppPct = info.oppProb * 100;
+  const teamColor = meta.get(team)?.color ?? "#002f6c";
+  const oppColor = meta.get(info.opp)?.color ?? "#94a3b8";
+  const favoriteIsTeam = teamPct >= oppPct;
+  return (
+    <div>
+      <div className="mb-1 flex items-baseline justify-between text-[11px] font-semibold text-slate-600">
+        <span>{team} {teamPct.toFixed(0)}%</span>
+        <span>{info.opp} {oppPct.toFixed(0)}%</span>
+      </div>
+      <div className="flex h-4 overflow-hidden rounded-full bg-slate-200">
+        <div style={{ width: `${teamPct}%`, background: teamColor }} />
+        <div className="flex-1" style={{ background: oppColor }} />
+      </div>
+      {info.played && info.win != null && !info.tie && (
+        <div className="mt-1.5 text-[10.5px] text-slate-400">
+          Market favored {favoriteIsTeam ? team : info.opp} — {info.win === favoriteIsTeam ? "the favorite won." : "the underdog won."}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** This game's margin against the team's full-season weekly margins, current week highlighted. */
+function GameMarginStrip({ df, week, color }: { df: Row[]; week: number; color: string }) {
+  const played = useMemo(
+    () => df.filter((r) => r.win != null).sort((a, b) => Number(a.week) - Number(b.week)),
+    [df],
+  );
+  const option = useMemo<EChartsOption>(
+    () => ({
+      grid: { left: 6, right: 6, top: 8, bottom: 18 },
+      xAxis: { type: "category", data: played.map((r) => `W${r.week}`), axisLabel: { fontSize: 9 } },
+      yAxis: { type: "value", show: false },
+      tooltip: {
+        trigger: "axis",
+        formatter: (ps: unknown) => {
+          const arr = ps as { dataIndex: number }[];
+          const r = played[arr[0]?.dataIndex ?? 0];
+          const m = r.points_margin == null ? null : Number(r.points_margin);
+          return `W${r.week}: ${m == null ? "—" : (m > 0 ? "+" : "") + m}`;
+        },
+      },
+      series: [
+        {
+          type: "bar",
+          barMaxWidth: 14,
+          data: played.map((r) => {
+            const m = r.points_margin == null ? null : Number(r.points_margin);
+            const isCurrent = Number(r.week) === week;
+            return {
+              value: m,
+              itemStyle: {
+                color: m != null && m > 0 ? "#3C9A5F" : m != null && m < 0 ? "#C8102E" : "#94a3b8",
+                borderColor: isCurrent ? color : "transparent",
+                borderWidth: isCurrent ? 2 : 0,
+                borderRadius: 3,
+              },
+            };
+          }),
+        },
+      ],
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }),
+    [played.map((r) => `${r.week}:${r.points_margin}`).join(","), week, color],
+  );
+  const ref = useECharts(option);
+  return <div ref={ref} className="h-28 w-full" />;
+}
+
+/** Season schedule — every game for the selected team, with results filled in
+ *  and an expandable row for venue/weather/QB detail plus mini market/margin charts. */
+function ScheduleSection({
+  games,
+  meta,
+  team,
+  color,
+  df,
+}: {
+  games: GameInfo[];
+  meta: Map<string, TeamMeta>;
+  team: string;
+  color: string;
+  df: Row[];
+}) {
+  const [open, setOpen] = useState<Record<string, boolean>>({});
+  if (!games.length) return null;
+  return (
+    <Card title="Season schedule" subtitle="Every game this season — click a row for venue, weather, and win-probability detail.">
+      <div className={tableWrapCls}>
+        <table className="w-full min-w-[860px] text-sm">
+          <thead className={theadCls}>
+            <tr>
+              <th className="px-3 py-2">Wk</th>
+              <th className="px-3 py-2">Date</th>
+              <th className="px-3 py-2">Opponent</th>
+              <th className="px-3 py-2">Result</th>
+              <th className="px-3 py-2 text-right">Score</th>
+              <th className="px-3 py-2 text-right">Margin</th>
+              <th className="px-3 py-2 text-right">Spread (ATS)</th>
+              <th className="px-3 py-2">Win Prob</th>
+              <th className="px-3 py-2 text-right">Rest</th>
+            </tr>
+          </thead>
+          <tbody>
+            {games.map((info) => {
+              const opp = meta.get(info.opp);
+              const isOpen = !!open[info.gameId];
+              return (
+                <Fragment key={info.gameId}>
+                  <tr
+                    className={`${trCls} cursor-pointer ${info.played ? "" : "text-slate-400"}`}
+                    onClick={() => setOpen((o) => ({ ...o, [info.gameId]: !o[info.gameId] }))}
+                  >
+                    <td className="px-3 py-2 font-semibold text-slate-500">
+                      <span className={`mr-1.5 inline-block text-slate-400 transition-transform ${isOpen ? "rotate-90" : ""}`}>›</span>
+                      W{info.week}
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap text-slate-500" title={`${info.g.weekday ?? ""} ${info.g.gametime ?? ""}`}>
+                      {info.g.gameday ?? "—"}
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        {opp?.logo && (
+                          <TeamLogoLink
+                            to={`/game_analysis/scorecards_teams?team=${info.opp}&season=${info.g.season}`}
+                            logo={opp.logo}
+                            alt={info.opp}
+                            imgClassName="h-6 w-6 object-contain"
+                            title={`Open ${opp.name} scorecard`}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        )}
+                        <span className="font-semibold text-slate-700">
+                          {info.home ? "vs" : "@"} {info.opp}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-3 py-2">
+                      {info.played ? (
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[10px] font-bold text-white ${
+                            info.tie ? "bg-slate-400" : info.win ? "bg-[#3C9A5F]" : "bg-[#C8102E]"
+                          }`}
+                        >
+                          {info.tie ? "T" : info.win ? "W" : "L"}
+                        </span>
+                      ) : (
+                        <span className="rounded-full border border-dashed border-slate-300 px-2 py-0.5 text-[10px] uppercase tracking-wider text-slate-400">
+                          Scheduled
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums">
+                      {info.played ? <span className="font-semibold text-slate-800">{info.teamScore}–{info.oppScore}</span> : "—"}
+                    </td>
+                    <td
+                      className={`px-3 py-2 text-right tabular-nums font-semibold ${
+                        info.margin == null ? "text-slate-400" : info.margin > 0 ? "text-[#3C9A5F]" : info.margin < 0 ? "text-[#C8102E]" : "text-slate-500"
+                      }`}
+                    >
+                      {info.margin == null ? "—" : `${info.margin > 0 ? "+" : ""}${info.margin}`}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums text-slate-600">
+                      {info.spreadForTeam == null ? (
+                        "—"
+                      ) : (
+                        <span>
+                          {info.spreadForTeam > 0 ? "+" : ""}
+                          {info.spreadForTeam}
+                          {info.atsResult && (
+                            <span
+                              className={`ml-1.5 text-[10px] font-bold ${
+                                info.atsResult === "W" ? "text-[#3C9A5F]" : info.atsResult === "L" ? "text-[#C8102E]" : "text-slate-400"
+                              }`}
+                            >
+                              {info.atsResult}
+                            </span>
+                          )}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2">
+                      {info.teamProb != null && info.oppProb != null ? (
+                        <div
+                          className="flex h-2.5 w-24 overflow-hidden rounded-full bg-slate-200"
+                          title={`${team} ${(info.teamProb * 100).toFixed(0)}% · ${info.opp} ${(info.oppProb * 100).toFixed(0)}%`}
+                        >
+                          <div style={{ width: `${info.teamProb * 100}%`, background: color }} />
+                          <div className="flex-1" style={{ background: opp?.color ?? "#94a3b8" }} />
+                        </div>
+                      ) : (
+                        <span className="text-slate-300">—</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums text-slate-500">
+                      {info.rest == null ? "—" : <span className={info.rest <= 5 ? "font-semibold text-[#C8102E]" : ""}>{info.rest}d</span>}
+                    </td>
+                  </tr>
+                  {isOpen && (
+                    <tr className="border-t border-slate-100 bg-slate-50/70">
+                      <td colSpan={9} className="px-4 py-4">
+                        <div className="grid gap-4 lg:grid-cols-[1fr_1.2fr]">
+                          <div className="space-y-1">
+                            <MetricRow label="Venue" value={String(info.g.stadium ?? "—")} />
+                            <MetricRow label="Roof / Surface" value={`${info.g.roof ?? "—"} / ${info.g.surface ?? "—"}`} />
+                            {info.g.roof === "outdoors" && (
+                              <MetricRow label="Temp / Wind" value={`${info.g.temp ?? "—"}°F / ${info.g.wind ?? "—"} mph`} />
+                            )}
+                            <MetricRow label="Referee" value={String(info.g.referee ?? "—")} />
+                            <MetricRow
+                              label={info.home ? "Opponent QB" : "Home QB"}
+                              value={String(info.home ? info.g.away_qb_name ?? "—" : info.g.home_qb_name ?? "—")}
+                            />
+                            <MetricRow label="Coaches" value={`${info.g.away_coach ?? "—"} @ ${info.g.home_coach ?? "—"}`} />
+                            <MetricRow label="Division game" value={Number(info.g.div_game) === 1 ? "Yes" : "No"} />
+                            {info.played && info.g.total_line != null && (
+                              <MetricRow
+                                label="Total (O/U)"
+                                value={`${info.g.total} vs line ${info.g.total_line} (${
+                                  Number(info.g.total) > Number(info.g.total_line) ? "Over" : Number(info.g.total) < Number(info.g.total_line) ? "Under" : "Push"
+                                })`}
+                              />
+                            )}
+                            {!info.played && (
+                              <MetricRow label="Kickoff" value={`${info.g.gameday ?? "—"} ${info.g.gametime ?? ""} (${info.g.weekday ?? "—"})`} />
+                            )}
+                          </div>
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            <div className="rounded-xl border border-slate-200 bg-white p-3">
+                              <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Market win probability</div>
+                              <GameProbBar info={info} meta={meta} team={team} />
+                            </div>
+                            <div className="rounded-xl border border-slate-200 bg-white p-3">
+                              <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Margin in season context</div>
+                              <GameMarginStrip df={df} week={info.week} color={color} />
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  );
+}
+
 export default function Scorecards() {
   const [searchParams] = useSearchParams();
   const { season, setSeason } = useSeasonWeek();
@@ -215,6 +548,7 @@ export default function Scorecards() {
   const [teamWeek, setTeamWeek] = useState<Row[]>([]);
   const [ranks, setRanks] = useState<Row[]>([]);
   const [grades, setGrades] = useState<Row[]>([]);
+  const [schedule, setSchedule] = useState<Row[]>([]);
 
   usePageTitle(`Team Scorecard: ${team}`);
 
@@ -242,9 +576,10 @@ export default function Scorecards() {
 
   useEffect(() => {
     if (!season) return;
-    Promise.all([getTeamWeek(Number(season)), getTeamWeekRanks(Number(season))]).then(([tw, rk]) => {
+    Promise.all([getTeamWeek(Number(season)), getTeamWeekRanks(Number(season)), getSchedule()]).then(([tw, rk, sch]) => {
       setTeamWeek(tw.filter((r) => r.game_type === "REG" || r.game_type == null));
       setRanks(rk);
+      setSchedule(sch);
     });
   }, [season]);
 
@@ -307,6 +642,14 @@ export default function Scorecards() {
   }, [grades, season, team]);
 
   const color = meta?.get(team)?.color ?? "#002f6c";
+
+  // ---------- season schedule: every game this team/season, results filled in ----------
+  const teamGames = useMemo<GameInfo[]>(() => {
+    return schedule
+      .filter((g) => Number(g.season) === Number(season) && g.game_type === "REG" && (g.home_team === team || g.away_team === team))
+      .sort((a, b) => Number(a.week) - Number(b.week))
+      .map((g) => gameInfoFor(g, team));
+  }, [schedule, season, team]);
 
   // ---------- season journey: weekly points margin bars + overall grade line ----------
   const journeyOption = useMemo<EChartsOption | null>(() => {
@@ -498,6 +841,9 @@ export default function Scorecards() {
           </div>
         </Card>
       </div>
+
+      {/* ---------- season schedule ---------- */}
+      <ScheduleSection games={teamGames} meta={meta} team={team} color={color} df={df} />
     </div>
   );
 }
