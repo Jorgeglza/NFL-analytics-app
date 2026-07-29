@@ -41,6 +41,8 @@ interface StatSummary {
   average: number | null;
   prev: number | null;
   prevOpp: string;
+  prevWeek: number | null;
+  isBye: boolean;
   hasData: boolean;
 }
 
@@ -145,16 +147,28 @@ export default function TeamComparison() {
     return v == null ? null : Number(v);
   };
 
+  // True when the league played this week but this team has no team_week row
+  // for it — i.e. the team was on a bye.
+  const isBye = (team: string): boolean => {
+    if (!weeks.includes(wk)) return false;
+    return !(teamRows.get(team) ?? []).some((r) => Number(r.week) === wk);
+  };
+
   const summaryOf = (team: string, stat: string): StatSummary => {
     const rows = (teamRows.get(team) ?? []).filter((r) => Number(r.week) <= wk);
     const vals = rows.map((r) => (r[stat] == null ? null : Number(r[stat])));
     const clean = vals.filter((v): v is number => v != null && Number.isFinite(v));
-    const exact = rows.find((r) => Number(r.week) === wk);
+    // If the selected week is a bye for this team there's no row at `wk` —
+    // fall back to the most recent played game so "Last" still shows real
+    // data instead of a blank "--" (rows is sorted ascending by week).
+    const exact = rows.find((r) => Number(r.week) === wk) ?? rows[rows.length - 1];
     return {
       total: clean.reduce((a, b) => a + b, 0),
       average: clean.length ? clean.reduce((a, b) => a + b, 0) / clean.length : null,
       prev: exact && exact[stat] != null ? Number(exact[stat]) : null,
       prevOpp: exact ? opponentLabel(String(exact.game_id ?? ""), team) : "",
+      prevWeek: exact ? Number(exact.week) : null,
+      isBye: isBye(team),
       hasData: clean.length > 0,
     };
   };
@@ -220,17 +234,25 @@ export default function TeamComparison() {
     // identical as plain "0" otherwise — user-reported confusion on
     // low-count stats like Interceptions Allowed. Zero gets its own muted,
     // dashed treatment + an explicit tooltip so it doesn't read as a glitch.
-    const pill = (key: string, label: string, value: string, raw: number | null, hint?: string) => {
+    const pill = (key: string, label: string, value: string, raw: number | null, hint?: string, marker?: string) => {
       const isZero = raw != null && raw === 0;
       return (
         <div
           key={key}
-          className={`rounded-xl border text-center ${sub ? "w-14 px-1 py-0.5" : "w-[72px] px-1.5 py-1"} ${
+          className={`relative rounded-xl border text-center ${sub ? "w-14 px-1 py-0.5" : "w-[72px] px-1.5 py-1"} ${
             isZero ? "border-dashed border-slate-200 bg-slate-50/40" : "border-slate-200 bg-slate-50/80"
           }`}
           title={isZero ? `${hint ? `${hint} — ` : ""}confirmed zero (data present, not missing)` : hint}
           style={{ boxShadow: `inset 0 2px 0 0 ${color(team)}33` }}
         >
+          {marker && (
+            <span
+              className="absolute -top-1.5 right-0.5 rounded-full border border-amber-300 bg-amber-100 px-1 text-[7px] font-bold uppercase leading-tight tracking-wider text-amber-700"
+              title={hint}
+            >
+              {marker}
+            </span>
+          )}
           <div className={`font-semibold uppercase tracking-wider text-slate-400 ${sub ? "text-[8px]" : "text-[9px]"}`}>{label}</div>
           <div className={`font-semibold tabular-nums ${sub ? "text-[11px]" : "text-sm"} ${isZero ? "italic text-slate-400" : "text-slate-800"}`}>
             {value || "--"}
@@ -238,8 +260,16 @@ export default function TeamComparison() {
         </div>
       );
     };
+    // "Last" shows the most recent played game's stats. If this week was a
+    // bye for the team, that's an earlier week — flag it with a "Bye" marker
+    // and make the hint explicit about which week the numbers are from.
+    const prevHint = s.isBye
+      ? `Bye in Week ${week} — showing last game (Week ${s.prevWeek ?? "?"}${s.prevOpp ? ` vs ${s.prevOpp}` : ""})`
+      : s.prevOpp
+        ? `Week ${week} vs ${s.prevOpp}`
+        : undefined;
     const cell: Record<string, JSX.Element> = {
-      prev: pill("prev", "Last", fmtPrev(s.prev), s.prev, s.prevOpp ? `Week ${week} vs ${s.prevOpp}` : undefined),
+      prev: pill("prev", "Last", fmtPrev(s.prev), s.prev, prevHint, s.isBye ? "Bye" : undefined),
       avg: pill("avg", "Avg", s.average == null ? "" : (Math.round(s.average * 10) / 10).toFixed(1), s.average, "Per-game average this season"),
       total: pill("total", "Total", Math.trunc(s.total).toLocaleString(), s.total, "Season total"),
     };
@@ -575,6 +605,14 @@ export default function TeamComparison() {
                     />
                   )}
                   <div className="mt-1 font-bold">{recordOf(t)}</div>
+                  {isBye(t) && (
+                    <div
+                      className="mt-1 inline-block rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-700"
+                      title={`${t} was on a bye in Week ${week} — stats below show data through the last game played`}
+                    >
+                      Bye · Wk {week}
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
