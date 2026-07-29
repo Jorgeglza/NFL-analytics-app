@@ -51,9 +51,8 @@ Per page: run old app side-by-side (`pda-ie` env), match tables/KPIs/chart serie
 - ✅ **UX audit — per-page items (§1–13) and Cross-Page/Global items both done.** Reconciled 2026-07-21 against current source (not just log claims) — see the "Next" note above and `docs/UX_AUDIT.md`'s prioritized summary. Two items remain intentionally unimplemented by explicit user decision (win-type color-only encoding, engine-disagreement callout), not gaps.
 
 ### M3.5 — New analytics beyond old-app parity (not ports) ✅
-- ✅ /game_analysis/power_rankings — composite of Elo + season-to-date Overall Grade + Pythagorean win% (`lib/logic/powerRankings.ts`), any-week filter, movement vs. prior week, rank-trend chart.
 - ✅ /game_analysis/team_trends — weekly grade/stat trajectories, up to 3 teams (`pages/game-analysis/team-trends/shared.ts`).
-- ✅ /game_analysis/season_outlook — Strength of Schedule (played vs. remaining opponent Elo) + Playoff Probability (2,000-iteration Monte Carlo, simplified tiebreaker) tabs (`pages/game-analysis/season-outlook/shared.ts`, `lib/logic/playoffSim.ts`).
+- ✅ /game_analysis/season_outlook — 3 tabs, each own sub-URL (`/game_analysis/season_outlook/<power_rankings|strength_of_schedule|playoff_probability>`, `:tab` route in `App.tsx`, old `/game_analysis/power_rankings` URL redirects): **Power Rankings** (composite of Elo + season-to-date Overall Grade + Pythagorean win%, `lib/logic/powerRankings.ts`, moved here 2026-07-28 from its own standalone page — logic/component reused as-is in `season-outlook/PowerRankingsTab.tsx`, old `pages/game-analysis/PowerRankings.tsx` deleted), **Strength of Schedule** (played vs. remaining opponent Elo) + **Playoff Probability** (2,000-iteration Monte Carlo, simplified tiebreaker) tabs (`pages/game-analysis/season-outlook/shared.ts`, `lib/logic/playoffSim.ts`).
 - Deferred: Model Backtest + Value Bets Backtest — scoped but not built, see `docs/FUTURE_DEVELOPMENT.md` (blocked on historical prop-line data for the value-bets half).
 
 ### M5 — Deploy + automation ✅
@@ -485,6 +484,38 @@ Per page: run old app side-by-side (`pda-ie` env), match tables/KPIs/chart serie
 - Plan: `C:\Users\Jorge\.claude\plans\need-to-plan-the-cheerful-papert.md`.
 
 ## Session notes (newest first)
+
+### 2026-07-28 — Power Rankings folded into Season Outlook as its first tab; per-tab sub-URLs; expected-wins KPI now states game count
+- **Power Rankings moved into Season Outlook**: was its own standalone nav item/page
+  (`/game_analysis/power_rankings`); now the first of Season Outlook's 3 tabs (ahead of
+  Strength of Schedule and Playoff Probability — see the story ordering, `nav.ts`). Table +
+  detail-popup logic unchanged, extracted verbatim from `pages/game-analysis/PowerRankings.tsx`
+  (now deleted) into `pages/game-analysis/season-outlook/PowerRankingsTab.tsx` as a prop-driven
+  tab component (season/week/schedule/grades/meta all owned by `SeasonOutlook.tsx`, same as the
+  other two tabs — no more separate Select/week-stepper). `nav.ts`'s Power Rankings entry
+  removed; Season Outlook's description updated to mention it; Home's card count picked it up
+  automatically (still 7/7 Game Analysis pages, just one fewer nav-level entry).
+- **Each Season Outlook tab gets its own sub-URL**: `/game_analysis/season_outlook/power_rankings`,
+  `/strength_of_schedule`, `/playoff_probability` — `App.tsx` adds an explicit
+  `/game_analysis/season_outlook/:tab` route (reusing the existing lazy `SeasonOutlook` import,
+  not a second lazy() call) ahead of the generic `NAV_GROUPS`-driven route loop, so the bare
+  `/game_analysis/season_outlook` (what `nav.ts`/Home link to) still renders the same page, which
+  now redirects (`navigate(..., {replace:true})`) to the default tab's sub-URL on mount if `:tab`
+  is missing/unrecognized. Old `/game_analysis/power_rankings` bookmarks/links redirect to
+  `/game_analysis/season_outlook/power_rankings` via a `<Navigate>` route. `Navbar.tsx`'s
+  group-active-highlight check widened from exact match to prefix match (`pathname === p.path ||
+  pathname.startsWith(p.path + "/")`) so the Game Analysis dropdown still highlights while on any
+  Season Outlook sub-tab; per-item `NavLink` highlighting needed no change (v6 default already
+  prefix-matches without `end`). Verified in-browser: default load lands on Power Rankings tab
+  with correct sub-URL, switching tabs updates the URL and page title, old power-rankings URL
+  redirects correctly.
+- **Playoff Probability team-detail KPI now shows remaining-game count**: per user request ("see
+  the games plus expected win %... in a friendly and good way without cluttering"), the existing
+  "Expected additional wins" KPI tile in `season-outlook/DetailModal.tsx`'s top stat bar now reads
+  "Expected wins over N remaining games" (N = `result.remainingGames.length`, singular/plural
+  handled) instead of a bare label — no new tile added, and the detailed per-game remaining-schedule
+  list further down (opponent/Elo/win% rows) was deliberately left untouched per explicit user
+  confirmation during this session.
 
 ### 2026-07-27 — Models Guide cleanup: order, stale copy, Trend Edge contributions, back-nav
 - **Card order**: reordered to match `MODEL_KEYS` (Average, ML Fair, Market-calibrated,

@@ -1,5 +1,5 @@
 import { Suspense, lazy, type ComponentType, type LazyExoticComponent } from "react";
-import { Route, Routes, useLocation } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import Navbar from "./components/Navbar";
 import { Loading } from "./components/Loading";
 import Home from "./pages/Home";
@@ -20,14 +20,14 @@ const PAGE_TITLES: Record<string, string> = Object.fromEntries(
 
 function RouteTitle() {
   const { pathname } = useLocation();
-  usePageTitle(TITLE_OVERRIDES[pathname] ?? PAGE_TITLES[pathname] ?? "NFL Analytics");
+  const pageTitle = PAGE_TITLES[pathname] ?? (pathname.startsWith("/game_analysis/season_outlook/") ? PAGE_TITLES["/game_analysis/season_outlook"] : undefined);
+  usePageTitle(TITLE_OVERRIDES[pathname] ?? pageTitle ?? "NFL Analytics");
   return null;
 }
 
 // Pages are lazy-loaded so ECharts-heavy routes don't bloat the initial bundle (M4).
 const IMPLEMENTED: Record<string, LazyExoticComponent<ComponentType>> = {
   "/glossary": lazy(() => import("./pages/GlossaryPage")),
-  "/game_analysis/power_rankings": lazy(() => import("./pages/game-analysis/PowerRankings")),
   "/game_analysis/team_trends": lazy(() => import("./pages/game-analysis/TeamTrends")),
   "/game_analysis/season_outlook": lazy(() => import("./pages/game-analysis/SeasonOutlook")),
   "/game_analysis/game_picks": lazy(() => import("./pages/game-analysis/GamePicks")),
@@ -69,6 +69,14 @@ export default function App() {
           <Suspense fallback={<Loading />}>
             <Routes>
               <Route path="/" element={<Home />} />
+              {/* Power Rankings is now the first Season Outlook tab — keep the old
+                  URL working for bookmarks/links. */}
+              <Route path="/game_analysis/power_rankings" element={<Navigate to="/game_analysis/season_outlook/power_rankings" replace />} />
+              {/* Season Outlook's 3 tabs each get their own sub-URL. */}
+              {(() => {
+                const Outlook = IMPLEMENTED["/game_analysis/season_outlook"];
+                return <Route path="/game_analysis/season_outlook/:tab" element={<Outlook />} />;
+              })()}
               {/* Not in the navbar — reached from Home's footer link */}
               {(() => {
                 const GlossaryPage = IMPLEMENTED["/glossary"];

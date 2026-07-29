@@ -39,7 +39,7 @@ export default function Navbar() {
         {/* Desktop group dropdowns */}
         <nav className="ml-auto hidden items-center gap-1 md:flex">
           {NAV_GROUPS.map((group) => {
-            const active = group.pages.some((p) => location.pathname === p.path);
+            const active = group.pages.some((p) => location.pathname === p.path || location.pathname.startsWith(`${p.path}/`));
             const isOpen = open === group.label;
             return (
               <div key={group.label} className="relative">

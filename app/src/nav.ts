@@ -13,11 +13,11 @@ export interface NavGroup {
 
 // Game Analysis order tells a story: make the pick (Game Picks) -> see how
 // that kind of result plays out generally (Win Types) -> see what the model
-// itself recommends (Matchup Previews) -> zoom out to season-long team
-// strength (Power Rankings) -> drill into a specific hard call (Team
-// Comparison) -> the full detail behind one team (Team Scorecard) -> another
-// statistical lens on the same question (Spread Win Percentage) -> the
-// season-long payoff (Season Outlook).
+// itself recommends (Matchup Previews) -> drill into a specific hard call
+// (Team Comparison) -> the full detail behind one team (Team Scorecard) ->
+// another statistical lens on the same question (Spread Win Percentage) ->
+// the season-long payoff (Season Outlook — power rankings, strength of
+// schedule and playoff probability, each its own tab/sub-URL).
 export const NAV_GROUPS: NavGroup[] = [
   {
     label: "Game Analysis",
@@ -41,12 +41,6 @@ export const NAV_GROUPS: NavGroup[] = [
         implemented: true,
       },
       {
-        label: "Power Rankings",
-        path: "/game_analysis/power_rankings",
-        description: "Composite team strength for any week — Elo, season-to-date grade and Pythagorean win%, with movement",
-        implemented: true,
-      },
-      {
         label: "Team Comparison",
         path: "/game_analysis/team_comparison",
         description: "Head-to-head stat comparison with ranks, grades and trend charts",
@@ -67,7 +61,7 @@ export const NAV_GROUPS: NavGroup[] = [
       {
         label: "Season Outlook",
         path: "/game_analysis/season_outlook",
-        description: "Strength of schedule and playoff probability — where the road ahead gets harder or easier",
+        description: "Power rankings, strength of schedule and playoff probability — the state of the league and the road ahead",
         implemented: true,
       },
     ],

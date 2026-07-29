@@ -117,7 +117,9 @@ export default function DetailModal({
           </div>
           <div className="text-slate-300">+</div>
           <div>
-            <div className="text-[10px] uppercase tracking-wider text-slate-400">Expected additional wins</div>
+            <div className="text-[10px] uppercase tracking-wider text-slate-400">
+              Expected wins over {result.remainingGames.length} remaining {result.remainingGames.length === 1 ? "game" : "games"}
+            </div>
             <div className="text-lg font-extrabold" style={{ color: accent }}>
               {(result.avgWins - result.currentWins >= 0 ? "+" : "")}
               {(result.avgWins - result.currentWins).toFixed(1)}
