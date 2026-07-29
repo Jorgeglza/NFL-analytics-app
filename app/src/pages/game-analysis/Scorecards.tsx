@@ -501,6 +501,22 @@ function ScheduleSection({
                       <td colSpan={9} className="px-4 py-4">
                         {info.played && gameRow ? (
                           <div className="space-y-3">
+                            <div className="grid gap-3 sm:grid-cols-2">
+                              <div className="rounded-xl border border-slate-200 bg-white p-3">
+                                <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Box score</div>
+                                <MetricRow label="Points (allowed)" value={`${fmt(gv("points") ?? 0, 0)} (${fmt(gv("points_allowed") ?? 0, 0)})`} />
+                                <MetricRow label="Total yards (allowed)" value={`${fmt(gv("total_yards") ?? 0, 0)} (${fmt(gv("total_yards_allowed") ?? 0, 0)})`} />
+                                <MetricRow
+                                  label="Pass / rush TDs (allowed)"
+                                  value={`${fmt(gv("passing_tds") ?? 0, 0)}/${fmt(gv("rushing_tds") ?? 0, 0)} (${fmt(gv("passing_tds_allowed") ?? 0, 0)}/${fmt(gv("rushing_tds_allowed") ?? 0, 0)})`}
+                                />
+                                <MetricRow label="Turnovers (forced)" value={`${fmt(gv("turnovers") ?? 0, 0)} (${fmt(gv("turnovers_allowed") ?? 0, 0)})`} />
+                              </div>
+                              <div className="rounded-xl border border-slate-200 bg-white p-3">
+                                <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Market win probability</div>
+                                <GameProbBar info={info} meta={meta} team={team} />
+                              </div>
+                            </div>
                             <div className="grid gap-4 lg:grid-cols-2">
                               <div className="rounded-xl border border-slate-200 bg-white p-3" style={{ borderTop: `3px solid ${OFF_ACCENT}` }}>
                                 <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Offense — this game</div>
@@ -545,22 +561,6 @@ function ScheduleSection({
                                     accent={DEF_ACCENT}
                                   />
                                 </div>
-                              </div>
-                            </div>
-                            <div className="grid gap-3 sm:grid-cols-2">
-                              <div className="rounded-xl border border-slate-200 bg-white p-3">
-                                <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Box score</div>
-                                <MetricRow label="Points (allowed)" value={`${fmt(gv("points") ?? 0, 0)} (${fmt(gv("points_allowed") ?? 0, 0)})`} />
-                                <MetricRow label="Total yards (allowed)" value={`${fmt(gv("total_yards") ?? 0, 0)} (${fmt(gv("total_yards_allowed") ?? 0, 0)})`} />
-                                <MetricRow
-                                  label="Pass / rush TDs (allowed)"
-                                  value={`${fmt(gv("passing_tds") ?? 0, 0)}/${fmt(gv("rushing_tds") ?? 0, 0)} (${fmt(gv("passing_tds_allowed") ?? 0, 0)}/${fmt(gv("rushing_tds_allowed") ?? 0, 0)})`}
-                                />
-                                <MetricRow label="Turnovers (forced)" value={`${fmt(gv("turnovers") ?? 0, 0)} (${fmt(gv("turnovers_allowed") ?? 0, 0)})`} />
-                              </div>
-                              <div className="rounded-xl border border-slate-200 bg-white p-3">
-                                <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Market win probability</div>
-                                <GameProbBar info={info} meta={meta} team={team} />
                               </div>
                             </div>
                           </div>
