@@ -486,6 +486,39 @@ Per page: run old app side-by-side (`pda-ie` env), match tables/KPIs/chart serie
 
 ## Session notes (newest first)
 
+### 2026-07-27 — Models Guide cleanup: order, stale copy, Trend Edge contributions, back-nav
+- **Card order**: reordered to match `MODEL_KEYS` (Average, ML Fair, Market-calibrated,
+  Predictive, Elo, Pythagorean, Trend Edge) — the same order used everywhere else (Week
+  Preview rows, Matchup verdict strip, Model Overview picker), so the guide reads the same
+  left-to-right as the rest of the page instead of its own ad hoc order.
+- **Stale copy fixed**: Average (consensus)'s card cited a fixed calibration snapshot ("53% in
+  the 50-55% band up to 81% in the 80%+ band" on "~2,300 games") left over from before the
+  Market-calibrated/Trend Edge recalibrations — no longer accurate (current live numbers per
+  Model Overview: 51%/59%/67%/70%/75%/90% across the bands, 2,232 games). Replaced the hardcoded
+  numbers with a link to the live Model Overview → confidence-band chart (same pattern already
+  used by the Predictive card's "no confirmed edge" link) so this can't go stale again. Also
+  added model-name labels next to each home-probability pill in the worked example (was
+  color-dot-only — unreadable without memorizing every model's color from elsewhere on the page).
+- **Trend Edge worked example** now shows each of the 5 components' raw stat (both teams), the
+  diff, the weight, and the resulting weighted contribution (`edgeComposite`'s `gradeD`/`pmL6D`/
+  `epaL6D`/`winL6D`/`tomL6D`, which were already computed but previously only rendered in
+  `MatchupTab`'s bar chart, not here) — was previously just the 5 raw stats per team and the
+  final summed edge, with no visibility into which component actually moved the number.
+- **Back-navigation fix**: "← Back to Matchup Previews" was hardcoded to the bare route, always
+  dropping the user back on Week Preview regardless of which tab (or, on the Matchup tab, which
+  game) they came from — `MatchupPreviews`' `tab` state and `MatchupTab`'s `season`/`week`/
+  `gameId` state were local React state only, never written to the URL. Fixed by: (1)
+  `MatchupPreviews.tsx` now syncs `tab` into `?tab=` on every change (`replace: true`, no history
+  spam); (2) `MatchupTab.tsx` now syncs `season`/`week`/`game` into the URL the same way; (3) the
+  "How the models work" link captures `location.pathname + location.search` as an encoded `back`
+  param; (4) `ModelsGuide.tsx` reads `back` for the Back link's href, and also seeds its own
+  season/week/game selects from the same captured values so the worked example defaults to the
+  exact game you were looking at, not always the newest week's first game. Verified in the
+  browser pane: switched to Matchup tab, picked KC @ LV, clicked through — worked example
+  defaulted to KC @ LV, Back link returned to the Matchup tab with KC @ LV still selected; same
+  round-trip verified from the Model Overview tab.
+- `npm test` (60/60), `tsc --noEmit`, `npm run build` all clean.
+
 ### 2026-07-27 — Market-calibrated: vig-lean + team-ATS extras (85/15) so it's not just ML Fair
 - Follow-up to the pure-market change below. Feedback: pure bucket history is too similar to
   ML Fair for ensemble purposes (both just answer "what does the market think") — needed an

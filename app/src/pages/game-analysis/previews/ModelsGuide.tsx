@@ -2,6 +2,7 @@
 // Matchup Previews, with a live worked example: pick any game and see the
 // actual inputs each model consumed and the probability it produced.
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { getSchedule, getGrades, getTeamWeek, getMeta, getPredictiveModelGames, getPredictiveModelMeta, type Row } from "../../../lib/data/loader";
 import { Select } from "../../../components/filters/Select";
 import { Loading } from "../../../components/Loading";
@@ -69,12 +70,20 @@ const Res = ({ team, p }: { team: string; p: number | null }) => (
 );
 
 export default function ModelsGuide() {
+  const [searchParams] = useSearchParams();
+  // Captured from Matchup Previews' "How the models work" link so Back returns
+  // to the exact tab (and, on the Matchup tab, the exact game) the user came from.
+  const backHref = searchParams.get("back");
+  const backTo = backHref ? `#${backHref}` : "#/game_analysis/matchup_previews";
+  // If we arrived from the Matchup tab, default the worked example to that same
+  // game instead of always resetting to the newest week's first game.
+  const backParams = useMemo(() => new URLSearchParams(backHref?.split("?")[1] ?? ""), [backHref]);
   const [schedule, setSchedule] = useState<Row[]>([]);
   const [grades, setGrades] = useState<Row[]>([]);
   const [teamWeekBySeason, setTeamWeekBySeason] = useState<Map<number, Row[]> | null>(null);
-  const [season, setSeason] = useState("");
-  const [week, setWeek] = useState("");
-  const [gameId, setGameId] = useState("");
+  const [season, setSeason] = useState(backParams.get("season") ?? "");
+  const [week, setWeek] = useState(backParams.get("week") ?? "");
+  const [gameId, setGameId] = useState(backParams.get("game") ?? "");
   const [predIdx, setPredIdx] = useState<PredictiveIndex | null>(null);
   const [predictiveUnavailable, setPredictiveUnavailable] = useState(false);
   const [predictiveCoverage, setPredictiveCoverage] = useState<{ min: number; max: number } | null>(null);
@@ -173,7 +182,7 @@ export default function ModelsGuide() {
             All models use <b>pre-game information only</b> (stats through the previous week).
           </p>
         </div>
-        <a href="#/game_analysis/matchup_previews" className="rounded-full border border-[#002f6c]/25 px-3 py-1.5 text-xs font-semibold text-[#002f6c] hover:bg-[#002f6c]/5">← Back to Matchup Previews</a>
+        <a href={backTo} className="rounded-full border border-[#002f6c]/25 px-3 py-1.5 text-xs font-semibold text-[#002f6c] hover:bg-[#002f6c]/5">← Back to Matchup Previews</a>
       </div>
 
       <FilterGroup label="Example game — used in every card below">
@@ -182,7 +191,56 @@ export default function ModelsGuide() {
         <Select label="Game" value={String(game.game_id)} onChange={setGameId} options={games.map((g) => ({ value: String(g.game_id), label: `${g.away_team} @ ${g.home_team}` }))} />
       </FilterGroup>
 
+      {/* Cards ordered to match MODEL_KEYS — the same order used everywhere else
+          (Week Preview rows, Matchup verdict strip, Model Overview picker) — so
+          this page reads left-to-right the same way those do. */}
       <div className="grid gap-5 lg:grid-cols-2">
+        <ModelCard
+          color={MODEL_COLORS.consensus}
+          title="Average (consensus)"
+          what={
+            <>
+              The simple mean of every model that has data for the game, re-normalized so the two sides sum to 100%.
+              Accuracy rises steadily with its own confidence — see the live{" "}
+              <a className="underline" href="#/game_analysis/matchup_previews?tab=overview">Model Overview → confidence bands</a>{" "}
+              chart for current numbers across every completed game (recalculated live from today's models, not a fixed
+              snapshot).
+            </>
+          }
+          inputs={[
+            "All other model probabilities below (missing ones — including Predictive outside its coverage — are skipped)",
+            "Equal weights — no model is trusted more than another",
+          ]}
+        >
+          <div className="space-y-1">
+            {MODEL_KEYS.filter(([k]) => k !== "consensus" && !(predictiveUnavailable && k === "predictive")).map(([k, label]) => (
+              <div key={k} className="flex items-center gap-1.5">
+                <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ background: MODEL_COLORS[k] }} />
+                <span className="w-36 shrink-0 text-slate-500">{label}</span>
+                <b>{pctf(ex.bundle[k][1], 0)}</b>
+                <span className="text-slate-400">(home)</span>
+              </div>
+            ))}
+          </div>
+          <Res team={pickOf(ex.bundle.consensus)} p={ex.bundle.consensus[0] != null && ex.bundle.consensus[1] != null ? Math.max(ex.bundle.consensus[0], ex.bundle.consensus[1]) : null} />
+        </ModelCard>
+
+        <ModelCard
+          color={MODEL_COLORS.ml}
+          title="ML Fair"
+          what="What the sportsbook itself believes, extracted from the moneyline odds with the bookmaker's margin (vig) removed. The market consensus in probability form."
+          inputs={[
+            "Away and home moneyline odds",
+            "Implied probability of each (e.g. −150 → 60%)",
+            "Both normalized so they sum to 100% (removes the ~4–5% vig)",
+          ]}
+        >
+          <div>Moneylines: {away} <b>{ex.mlA == null ? "—" : ex.mlA > 0 ? `+${ex.mlA}` : ex.mlA}</b> · {home} <b>{ex.mlH == null ? "—" : ex.mlH > 0 ? `+${ex.mlH}` : ex.mlH}</b></div>
+          <div>Implied: {away} {pctf(impliedProb(ex.mlA))} · {home} {pctf(impliedProb(ex.mlH))} (sum &gt; 100% = vig {ex.fair.overround == null ? "—" : pctf(ex.fair.overround)})</div>
+          <div>Fair (vig removed): {away} <b>{pctf(ex.fair.awayFair)}</b> · {home} <b>{pctf(ex.fair.homeFair)}</b></div>
+          <Res team={pickOf(ex.bundle.ml)} p={ex.bundle.ml[0] != null && ex.bundle.ml[1] != null ? Math.max(ex.bundle.ml[0], ex.bundle.ml[1]) : null} />
+        </ModelCard>
+
         <ModelCard
           color={MODEL_COLORS.blend}
           title="Market-calibrated"
@@ -203,40 +261,32 @@ export default function ModelsGuide() {
           <Res team={pickOf(ex.bundle.blend)} p={ex.bundle.blend[0] != null && ex.bundle.blend[1] != null ? Math.max(ex.bundle.blend[0], ex.bundle.blend[1]) : null} />
         </ModelCard>
 
-        <ModelCard
-          color={MODEL_COLORS.trend}
-          title="Trend Edge"
-          what="A recent-form composite: five differences (away minus home), each weighted, summed into an edge and squashed into a probability. Captures who is playing well right now. Variables, windows and weights are fit from a backtest against actual game outcomes (2015-2025), not hand-picked — see docs/IMPLEMENTATION_LOG.md."
-          inputs={[
-            `Overall grade difference, season-to-date (weight ${EDGE_WEIGHTS.grade})`,
-            `Points margin, mean of last 6 games (${EDGE_WEIGHTS.pmL6})`,
-            `EPA differential, mean of last 6 (${EDGE_WEIGHTS.epaL6})`,
-            `Win rate, mean of last 6 (${EDGE_WEIGHTS.winL6})`,
-            `Turnover margin, mean of last 6 (${EDGE_WEIGHTS.tomL6})`,
-            `Logistic scale ${EDGE_SCALE} converts the summed edge to a probability`,
-          ]}
-        >
-          <div>{away}: grade {numf(ex.gA, 1)}, PM-L6 {numf(ex.fa.pmL6)}, EPA-L6 {numf(ex.fa.epaL6)}, Win%-L6 {numf(ex.fa.winL6)}, TO-L6 {numf(ex.fa.tomL6)}</div>
-          <div>{home}: grade {numf(ex.gH, 1)}, PM-L6 {numf(ex.fh.pmL6)}, EPA-L6 {numf(ex.fh.epaL6)}, Win%-L6 {numf(ex.fh.winL6)}, TO-L6 {numf(ex.fh.tomL6)}</div>
-          <div>Weighted edge (away − home): <b>{numf(ex.edge.edge)}</b> → 1 / (1 + e^(−{EDGE_SCALE} × edge))</div>
-          <Res team={pickOf(ex.bundle.trend)} p={Math.max(ex.bundle.trend[0]!, ex.bundle.trend[1]!)} />
-        </ModelCard>
-
-        <ModelCard
-          color={MODEL_COLORS.ml}
-          title="ML Fair"
-          what="What the sportsbook itself believes, extracted from the moneyline odds with the bookmaker's margin (vig) removed. The market consensus in probability form."
-          inputs={[
-            "Away and home moneyline odds",
-            "Implied probability of each (e.g. −150 → 60%)",
-            "Both normalized so they sum to 100% (removes the ~4–5% vig)",
-          ]}
-        >
-          <div>Moneylines: {away} <b>{ex.mlA == null ? "—" : ex.mlA > 0 ? `+${ex.mlA}` : ex.mlA}</b> · {home} <b>{ex.mlH == null ? "—" : ex.mlH > 0 ? `+${ex.mlH}` : ex.mlH}</b></div>
-          <div>Implied: {away} {pctf(impliedProb(ex.mlA))} · {home} {pctf(impliedProb(ex.mlH))} (sum &gt; 100% = vig {ex.fair.overround == null ? "—" : pctf(ex.fair.overround)})</div>
-          <div>Fair (vig removed): {away} <b>{pctf(ex.fair.awayFair)}</b> · {home} <b>{pctf(ex.fair.homeFair)}</b></div>
-          <Res team={pickOf(ex.bundle.ml)} p={ex.bundle.ml[0] != null && ex.bundle.ml[1] != null ? Math.max(ex.bundle.ml[0], ex.bundle.ml[1]) : null} />
-        </ModelCard>
+        {!predictiveUnavailable && (
+          <ModelCard
+            color={MODEL_COLORS.predictive}
+            title="Predictive (margin regression)"
+            what={
+              <>
+                A walk-forward linear regression that fits point margin (home score − away score) from 41 pre-game features
+                (Elo, rolling EPA/success rate, injuries, rest, weather, divisional game). Win probability comes from a fitted
+                normal residual distribution around the predicted margin. <b>Research finding: no confirmed edge over the
+                market</b> — see the <a className="underline" href="#/data/predictive_model">Predictive Model page</a> and{" "}
+                <code>docs/predictive-model.md</code> for the full investigation. Historical only — no prediction is produced
+                for upcoming/unplayed games yet, so it silently sits out of the Average for those.
+              </>
+            }
+            inputs={[
+              "Elo rating differential (dominant feature by an order of magnitude)",
+              "Rolling EPA / success-rate / explosive-play-rate differentials (last 3 games)",
+              "Rest days, divisional game, weather (temp/wind/roof), QB-starter continuity, injury counts",
+              `Coverage: seasons ${predictiveCoverage ? `${predictiveCoverage.min}–${predictiveCoverage.max}` : "—"} only (precomputed by the pipeline, not computed live in the browser)`,
+            ]}
+          >
+            <div>Predicted home win probability (precomputed): <b>{pctf(ex.bundle.predictive[1])}</b></div>
+            <div className="text-slate-400">{ex.bundle.predictive[1] == null ? "No prediction for this game (outside coverage or unplayed)." : "Loaded from the export's precomputed normal-CDF probability — nothing is refit in the browser."}</div>
+            <Res team={pickOf(ex.bundle.predictive)} p={ex.bundle.predictive[0] != null && ex.bundle.predictive[1] != null ? Math.max(ex.bundle.predictive[0], ex.bundle.predictive[1]) : null} />
+          </ModelCard>
+        )}
 
         <ModelCard
           color={MODEL_COLORS.elo}
@@ -270,52 +320,39 @@ export default function ModelsGuide() {
           <Res team={pickOf(ex.bundle.pyth)} p={ex.bundle.pyth[0] != null && ex.bundle.pyth[1] != null ? Math.max(ex.bundle.pyth[0], ex.bundle.pyth[1]) : null} />
         </ModelCard>
 
-        {!predictiveUnavailable && (
-          <ModelCard
-            color={MODEL_COLORS.predictive}
-            title="Predictive (margin regression)"
-            what={
-              <>
-                A walk-forward linear regression that fits point margin (home score − away score) from 41 pre-game features
-                (Elo, rolling EPA/success rate, injuries, rest, weather, divisional game). Win probability comes from a fitted
-                normal residual distribution around the predicted margin. <b>Research finding: no confirmed edge over the
-                market</b> — see the <a className="underline" href="#/data/predictive_model">Predictive Model page</a> and{" "}
-                <code>docs/predictive-model.md</code> for the full investigation. Historical only — no prediction is produced
-                for upcoming/unplayed games yet, so it silently sits out of the Average for those.
-              </>
-            }
-            inputs={[
-              "Elo rating differential (dominant feature by an order of magnitude)",
-              "Rolling EPA / success-rate / explosive-play-rate differentials (last 3 games)",
-              "Rest days, divisional game, weather (temp/wind/roof), QB-starter continuity, injury counts",
-              `Coverage: seasons ${predictiveCoverage ? `${predictiveCoverage.min}–${predictiveCoverage.max}` : "—"} only (precomputed by the pipeline, not computed live in the browser)`,
-            ]}
-          >
-            <div>Predicted home win probability (precomputed): <b>{pctf(ex.bundle.predictive[1])}</b></div>
-            <div className="text-slate-400">{ex.bundle.predictive[1] == null ? "No prediction for this game (outside coverage or unplayed)." : "Loaded from the export's precomputed normal-CDF probability — nothing is refit in the browser."}</div>
-            <Res team={pickOf(ex.bundle.predictive)} p={ex.bundle.predictive[0] != null && ex.bundle.predictive[1] != null ? Math.max(ex.bundle.predictive[0], ex.bundle.predictive[1]) : null} />
-          </ModelCard>
-        )}
-
         <ModelCard
-          color={MODEL_COLORS.consensus}
-          title="Average (consensus)"
-          what="The simple mean of every model that has data for the game, re-normalized so the two sides sum to 100%. Historically the best calibrated: on ~2,300 games its accuracy rises steadily with its confidence (53% in the 50–55% band up to 81% in the 80%+ band)."
+          color={MODEL_COLORS.trend}
+          title="Trend Edge"
+          what="A recent-form composite: five differences (away minus home), each weighted, summed into an edge and squashed into a probability. Captures who is playing well right now. Variables, windows and weights are fit from a backtest against actual game outcomes (2015-2025), not hand-picked — see docs/IMPLEMENTATION_LOG.md."
           inputs={[
-            "All six model probabilities above (missing ones — including Predictive outside its coverage — are skipped)",
-            "Equal weights — no model is trusted more than another",
+            `Overall grade difference, season-to-date (weight ${EDGE_WEIGHTS.grade})`,
+            `Points margin, mean of last 6 games (${EDGE_WEIGHTS.pmL6})`,
+            `EPA differential, mean of last 6 (${EDGE_WEIGHTS.epaL6})`,
+            `Win rate, mean of last 6 (${EDGE_WEIGHTS.winL6})`,
+            `Turnover margin, mean of last 6 (${EDGE_WEIGHTS.tomL6})`,
+            `Logistic scale ${EDGE_SCALE} converts the summed edge to a probability`,
           ]}
         >
-          <div>
-            {MODEL_KEYS.filter(([k]) => k !== "consensus" && !(predictiveUnavailable && k === "predictive")).map(([k]) => (
-              <span key={k} className="mr-3 inline-flex items-center gap-1">
-                <span className="inline-block h-2 w-2 rounded-full" style={{ background: MODEL_COLORS[k] }} />
-                {pctf(ex.bundle[k][1], 0)}
-              </span>
+          <div className="space-y-0.5">
+            {(
+              [
+                ["Grade", ex.gA, ex.gH, EDGE_WEIGHTS.grade, ex.edge.gradeD],
+                ["PM-L6", ex.fa.pmL6, ex.fh.pmL6, EDGE_WEIGHTS.pmL6, ex.edge.pmL6D],
+                ["EPA-L6", ex.fa.epaL6, ex.fh.epaL6, EDGE_WEIGHTS.epaL6, ex.edge.epaL6D],
+                ["Win%-L6", ex.fa.winL6, ex.fh.winL6, EDGE_WEIGHTS.winL6, ex.edge.winL6D],
+                ["TO-L6", ex.fa.tomL6, ex.fh.tomL6, EDGE_WEIGHTS.tomL6, ex.edge.tomL6D],
+              ] as [string, number | null, number | null, number, number][]
+            ).map(([label, a, h, wt, contrib]) => (
+              <div key={label} className="flex flex-wrap items-baseline gap-x-1">
+                <span className="w-16 shrink-0 text-slate-500">{label}</span>
+                <span>{away} {numf(a)} vs {home} {numf(h)}</span>
+                <span className="text-slate-400">→ diff {numf(a != null && h != null ? a - h : null, 2)} × {wt} =</span>
+                <b className={contrib > 0 ? "text-slate-800" : contrib < 0 ? "text-slate-500" : undefined}>{numf(contrib, 3)}</b>
+              </div>
             ))}
-            <span className="text-slate-400">(home-side probs)</span>
           </div>
-          <Res team={pickOf(ex.bundle.consensus)} p={ex.bundle.consensus[0] != null && ex.bundle.consensus[1] != null ? Math.max(ex.bundle.consensus[0], ex.bundle.consensus[1]) : null} />
+          <div>Summed edge (away − home): <b>{numf(ex.edge.edge)}</b> → 1 / (1 + e^(−{EDGE_SCALE} × edge))</div>
+          <Res team={pickOf(ex.bundle.trend)} p={Math.max(ex.bundle.trend[0]!, ex.bundle.trend[1]!)} />
         </ModelCard>
       </div>
     </div>

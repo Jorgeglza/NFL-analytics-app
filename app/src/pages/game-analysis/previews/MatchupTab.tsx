@@ -1,6 +1,6 @@
 // Port of matchup_previews_tab.py — single-game deep dive: snapshot, moneyline,
 // spread pick engine, trend edge predictor, trends, recent form, H2H.
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import type { EChartsOption } from "echarts";
 import type { Row } from "../../../lib/data/loader";
@@ -107,7 +107,7 @@ export default function MatchupTab({
   initialSelection?: { season: string; week: string; game: string } | null;
 }) {
   const modelKeys = useMemo(() => (predictiveUnavailable ? MODEL_KEYS.filter(([k]) => k !== "predictive") : MODEL_KEYS), [predictiveUnavailable]);
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const reg = useMemo(() => schedule.filter((r) => r.game_type === "REG"), [schedule]);
   const seasons = useMemo(() => [...new Set(reg.map((r) => Number(r.season)))].sort((a, b) => b - a), [reg]);
   const [season, setSeason] = useState(initialSelection?.season ?? searchParams.get("season") ?? "");
@@ -135,6 +135,22 @@ export default function MatchupTab({
   const away = selGame ? String(selGame.away_team) : "";
   const home = selGame ? String(selGame.home_team) : "";
   const [stat, setStat] = useState("points_margin");
+
+  // Keep season/week/game in the URL so "How the models work" (and browser
+  // back/forward) can return to the exact matchup being viewed.
+  useEffect(() => {
+    if (!selGame) return;
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.set("season", sel);
+        next.set("week", selWeek);
+        next.set("game", String(selGame.game_id));
+        return next;
+      },
+      { replace: true },
+    );
+  }, [sel, selWeek, selGame, setSearchParams]);
 
   usePageTitle(away && home ? `${away} @ ${home} — Matchup Previews` : "Matchup Previews — Matchup");
 

@@ -2,7 +2,7 @@
 // Loads all seasons' team_week data once so the shared engine can compute
 // trend features and grades for any game.
 import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useLocation, useSearchParams } from "react-router-dom";
 import { getSchedule, getGrades, getTeamWeek, getTeamWeekRanks, getMeta, getPredictiveModelGames, getPredictiveModelMeta, type Row } from "../../../lib/data/loader";
 import { getTeamMetaMap, type TeamMeta } from "../../../lib/team/meta";
 import { buildHist, buildGradesIndex, buildTeamWeekIndex, buildScheduleEloIndex, buildPredictiveIndex, type PredictiveIndex } from "./engine";
@@ -21,10 +21,25 @@ const TABS = [
 ] as const;
 type Tab = (typeof TABS)[number][0];
 const TAB_SLUGS: Record<string, Tab> = { matchup: "Matchup", week: "Week Preview", overview: "Model Overview", picker: "Model Picker" };
+const TAB_TO_SLUG: Record<Tab, string> = { Matchup: "matchup", "Week Preview": "week", "Model Overview": "overview", "Model Picker": "picker" };
 
 export default function MatchupPreviews() {
-  const [searchParams] = useSearchParams();
+  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [tab, setTab] = useState<Tab>(TAB_SLUGS[searchParams.get("tab") ?? ""] ?? "Week Preview");
+
+  // Keep ?tab= in sync so the URL always reflects what's on screen — lets
+  // "How the models work" (and browser back/forward) return to the exact tab.
+  useEffect(() => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.set("tab", TAB_TO_SLUG[tab]);
+        return next;
+      },
+      { replace: true },
+    );
+  }, [tab, setSearchParams]);
   const [schedule, setSchedule] = useState<Row[]>([]);
   const [grades, setGrades] = useState<Row[]>([]);
   const [meta, setMeta] = useState<Map<string, TeamMeta> | null>(null);
@@ -85,7 +100,10 @@ export default function MatchupPreviews() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-4">
         <h1 title="Zoom out to see how every team stacks up all season on Power Rankings." className="mr-auto flex items-center gap-2.5 text-2xl font-extrabold tracking-tight text-[#002f6c]"><span className="h-6 w-1.5 rounded-full bg-gradient-to-b from-[#002f6c] to-[#164a9c]" />Matchup Previews</h1>
-        <a href="#/game_analysis/models_guide" className="rounded-full border border-[#002f6c]/25 px-3 py-1.5 text-xs font-semibold text-[#002f6c] transition-colors hover:bg-[#002f6c]/5">
+        <a
+          href={`#/game_analysis/models_guide?back=${encodeURIComponent(location.pathname + location.search)}`}
+          className="rounded-full border border-[#002f6c]/25 px-3 py-1.5 text-xs font-semibold text-[#002f6c] transition-colors hover:bg-[#002f6c]/5"
+        >
           📖 How the models work →
         </a>
       </div>
