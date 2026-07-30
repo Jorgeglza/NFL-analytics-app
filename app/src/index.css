@@ -46,3 +46,25 @@ body {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
   cursor: pointer;
 }
+
+/* Coarse pointers (touch) get bigger thumbs — 14px is a fine target for a
+   mouse but not a finger, and the dual-handle slider superimposes both
+   thumbs exactly when lo == hi, so size matters doubly here. */
+@media (pointer: coarse) {
+  .range-thumb::-webkit-slider-thumb {
+    height: 24px;
+    width: 24px;
+  }
+  .range-thumb::-moz-range-thumb {
+    height: 24px;
+    width: 24px;
+  }
+}
+
+/* Safe-area padding utilities for notches/home-indicator bars. */
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.safe-top {
+  padding-top: env(safe-area-inset-top);
+}

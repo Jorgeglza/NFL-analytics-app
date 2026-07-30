@@ -15,6 +15,7 @@ import { Loading } from "../../components/Loading";
 import { usePageTitle } from "../../lib/hooks/usePageTitle";
 import { useSeasonWeek } from "../../context/SeasonWeekContext";
 import { PageHeader } from "../../components/ui";
+import { TabBar } from "../../components/TabBar";
 import PowerRankingsTab from "./season-outlook/PowerRankingsTab";
 import SosTab from "./season-outlook/SosTab";
 import PlayoffTab from "./season-outlook/PlayoffTab";
@@ -93,23 +94,7 @@ export default function SeasonOutlook() {
         </div>
       </PageHeader>
 
-      <div className="grid gap-2 sm:grid-cols-3">
-        {TABS.map(([t, , icon, desc]) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`rounded-2xl border px-4 py-2.5 text-left shadow-sm transition-all ${
-              tab === t ? "border-[#002f6c] bg-[#002f6c] text-white" : "border-slate-200 bg-white text-slate-700 hover:border-[#002f6c]/40"
-            }`}
-          >
-            <div className="flex items-center gap-2 text-sm font-bold">
-              <span>{icon}</span>
-              {t}
-            </div>
-            <div className={`mt-0.5 text-[11px] ${tab === t ? "text-white/75" : "text-slate-400"}`}>{desc}</div>
-          </button>
-        ))}
-      </div>
+      <TabBar tabs={TABS.map(([t, , icon, desc]) => [t, icon, desc] as const)} active={tab} onChange={setTab} gridClassName="sm:grid-cols-3" />
 
       {loading ? (
         <Loading label="Loading season data…" />

@@ -10,7 +10,7 @@ export function PageHeader({ title, subtitle, children }: { title: string; subti
   return (
     <div className="flex flex-wrap items-end justify-between gap-4">
       <div className="min-w-0">
-        <h1 className="flex items-center gap-2.5 text-2xl font-extrabold tracking-tight text-[#002f6c]">
+        <h1 className="flex items-center gap-2.5 text-xl font-extrabold tracking-tight text-[#002f6c] sm:text-2xl">
           <span className="h-6 w-1.5 rounded-full bg-gradient-to-b from-[#002f6c] to-[#164a9c]" />
           {title}
         </h1>
@@ -56,7 +56,10 @@ export function Card({
 /** Stat tile — value + uppercase micro-label, optional accent color. */
 export function Kpi({ label, value, accent = NAVY, sub }: { label: string; value: ReactNode; accent?: string; sub?: string }) {
   return (
-    <div className="min-w-36 flex-1 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm" style={{ borderTop: `3px solid ${accent}` }}>
+    <div
+      className="min-w-[calc(50%-0.375rem)] flex-1 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm sm:min-w-36"
+      style={{ borderTop: `3px solid ${accent}` }}
+    >
       <div className="text-[11px] font-medium uppercase tracking-wider text-slate-400">{label}</div>
       <div className="mt-0.5 text-xl font-bold text-slate-900">{value}</div>
       {sub && <div className="mt-0.5 text-[11px] text-slate-500">{sub}</div>}
@@ -84,7 +87,7 @@ export function Segmented<T extends string>({
           <button
             key={o.value}
             onClick={() => onChange(o.value)}
-            className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
+            className={`rounded-full px-3.5 py-2.5 text-sm font-medium transition-colors sm:py-1.5 ${
               value === o.value ? "bg-[#002f6c] text-white shadow-sm" : "text-slate-600 hover:text-slate-900"
             }`}
           >
@@ -125,13 +128,25 @@ export const tableWrapCls = "overflow-x-auto rounded-2xl border border-slate-200
 export const theadCls = "bg-slate-50 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400";
 export const trCls = "border-t border-slate-100 transition-colors hover:bg-slate-50/70";
 
+/** Pins a table's first column while the rest scrolls horizontally — apply
+ * to both the `<th>` and `<td>` of that column. Requires the table itself
+ * to use `border-separate border-spacing-0` (sticky cells lose borders
+ * under `border-collapse`); pair with a `box-shadow` divider instead of a
+ * border on the sticky cell if a visible seam is needed. */
+export const stickyColCls = "sticky left-0 z-10 bg-white";
+
+/** Right-edge fade + "swipe" affordance for a horizontally-scrollable table
+ * wrapper — pair with `tableWrapCls` on a `relative`-positioned ancestor. */
+export const scrollHintCls =
+  "pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-white to-transparent";
+
 /** Labeled numeric input matching the Select styling. */
 export function NumberInput({
   label,
   value,
   onChange,
   placeholder,
-  className = "w-28",
+  className = "w-full sm:w-28",
   min,
   step,
 }: {
@@ -167,7 +182,7 @@ export function RangeInput({
   min,
   max,
   step = 1,
-  className = "w-44",
+  className = "w-full sm:w-44",
 }: {
   label: string;
   value: number;
@@ -182,14 +197,5 @@ export function RangeInput({
       <span className="text-[11px] font-medium uppercase tracking-wider text-slate-400">{label}</span>
       <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(Number(e.target.value))} className={`${className} accent-[#002f6c]`} />
     </label>
-  );
-}
-
-/** Filter toolbar — soft slate strip that groups page controls. */
-export function FilterBar({ children }: { children: ReactNode }) {
-  return (
-    <div className="flex flex-wrap items-end gap-3 rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3">
-      {children}
-    </div>
   );
 }

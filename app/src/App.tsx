@@ -64,7 +64,7 @@ export default function App() {
     <div className="min-h-screen">
       <Navbar />
       <RouteTitle />
-      <main className="mx-auto max-w-screen-2xl px-4 py-6">
+      <main className="safe-bottom mx-auto max-w-screen-2xl px-3 py-6 sm:px-4">
         <SeasonWeekProvider>
           <Suspense fallback={<Loading />}>
             <Routes>

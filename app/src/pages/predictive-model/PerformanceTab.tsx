@@ -10,6 +10,7 @@ import type { ECharts, EChartsOption } from "echarts";
 import type { Row } from "../../lib/data/loader";
 import { useECharts } from "../../components/charts/useECharts";
 import { Card, FilterGroup, Kpi, Segmented, tableWrapCls, theadCls, trCls } from "../../components/ui";
+import { InfoDot } from "../../components/InfoDot";
 import { WIN_TYPE_COLORS, type WinType } from "../../lib/logic/winType";
 import {
   ALL_SEASONS,
@@ -67,19 +68,6 @@ function lighten(hex: string, amount = 0.6): string {
 
 type Mode = "Points" | "%";
 type Grouping = "Outcome" | "Pregame";
-
-/** Small hover-only info marker — matches the app's existing convention of a
- * native `title` attribute for "nothing obvious until hovered" hints. */
-function InfoDot({ text }: { text: string }) {
-  return (
-    <span
-      title={text}
-      className="ml-1.5 inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full bg-slate-200 text-[10px] font-bold text-slate-500 align-middle"
-    >
-      i
-    </span>
-  );
-}
 
 /** Shared heatmap chart-option builder for both the margin and probability
  * grids — same visual grammar (N-labeled cells, blue/red correctness

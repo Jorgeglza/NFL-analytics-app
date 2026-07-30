@@ -15,6 +15,7 @@ import {
   type PredictiveModelMeta,
 } from "../../lib/data/loader";
 import { Loading } from "../../components/Loading";
+import { TabBar } from "../../components/TabBar";
 import { usePageTitle } from "../../lib/hooks/usePageTitle";
 import OverviewTab from "./OverviewTab";
 import PerformanceTab from "./PerformanceTab";
@@ -72,23 +73,7 @@ export default function PredictiveModel() {
         </p>
       </div>
 
-      <div className="grid gap-2 sm:grid-cols-4">
-        {TABS.map(([t, icon, desc]) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`rounded-2xl border px-4 py-2.5 text-left shadow-sm transition-all ${
-              tab === t ? "border-[#002f6c] bg-[#002f6c] text-white" : "border-slate-200 bg-white text-slate-700 hover:border-[#002f6c]/40"
-            }`}
-          >
-            <div className="flex items-center gap-2 text-sm font-bold">
-              <span>{icon}</span>
-              {t}
-            </div>
-            <div className={`mt-0.5 text-[11px] ${tab === t ? "text-white/75" : "text-slate-400"}`}>{desc}</div>
-          </button>
-        ))}
-      </div>
+      <TabBar tabs={TABS} active={tab} onChange={setTab} gridClassName="sm:grid-cols-4" />
 
       {loading ? (
         <Loading label="Loading predictive model data…" />
