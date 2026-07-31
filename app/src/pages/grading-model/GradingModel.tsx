@@ -1,5 +1,6 @@
 // Port of the grading model page (4 tabs: Season, Teams, Weekly, Features).
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { getGrades, getFeatureImportance, getSchedule, getContribParams, type Row, type ContribParams } from "../../lib/data/loader";
 import { getTeamMetaMap, type TeamMeta } from "../../lib/team/meta";
 import { Loading } from "../../components/Loading";
@@ -18,9 +19,25 @@ const TABS = [
   ["Features", "🧬", "What goes into every grade"],
 ] as const;
 type Tab = (typeof TABS)[number][0];
+const TAB_SLUGS: Record<string, Tab> = { season: "Season", teams: "Teams", weekly: "Weekly", features: "Features" };
+const TAB_TO_SLUG: Record<Tab, string> = { Season: "season", Teams: "teams", Weekly: "weekly", Features: "features" };
 
 export default function GradingModel() {
-  const [tab, setTab] = useState<Tab>("Season");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [tab, setTab] = useState<Tab>(TAB_SLUGS[searchParams.get("tab") ?? ""] ?? "Season");
+
+  // Keep ?tab= in sync so the URL reflects what's on screen and the browser
+  // back button undoes a tab change instead of leaving the page (P4.17).
+  useEffect(() => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.set("tab", TAB_TO_SLUG[tab]);
+        return next;
+      },
+      { replace: true },
+    );
+  }, [tab, setSearchParams]);
   const [grades, setGrades] = useState<Row[]>([]);
   const [importance, setImportance] = useState<Row[]>([]);
   const [schedule, setSchedule] = useState<Row[]>([]);

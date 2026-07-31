@@ -188,14 +188,20 @@ export interface ReliabilityBucket {
  * fixed-width bins and compares mean predicted vs. observed win rate per
  * bin — the standard tool for "is this probability itself accurate," a
  * different question from pick accuracy. Mirrors
- * pipeline/predictive_model/evaluate.py's calibration_table exactly, just
- * computed client-side so it can be scoped to the current season/team
- * filter instead of only the pooled global number on the Confidence tab. */
+ * pipeline/predictive_model/evaluate.py's calibration_table exactly,
+ * including its edge convention (`np.digitize(..., right=True)`, i.e. bins
+ * are `(lo, hi]` not `[lo, hi)` — only observable for probabilities landing
+ * exactly on a bin edge), just computed client-side so it can be scoped to
+ * the current season/team filter instead of only the pooled global number
+ * on the Confidence tab. */
 export function reliabilityBuckets(games: Row[], nBins = 10): ReliabilityBucket[] {
   const graded = games.filter((g) => g.home_win_prob !== null);
   if (!graded.length) return [];
   const edges = Array.from({ length: nBins + 1 }, (_, i) => i / nBins);
-  const bucketIndex = (p: number) => Math.max(0, Math.min(nBins - 1, Math.floor(p * nBins)));
+  // (lo, hi] bins, matching np.digitize(p, edges[1:-1], right=True): p==0
+  // falls in bin 0 (nothing below it to exclude); every other edge value
+  // belongs to the *lower* bin, not the upper one.
+  const bucketIndex = (p: number) => Math.max(0, Math.min(nBins - 1, Math.ceil(p * nBins) - 1));
 
   const bins: { n: number; sumPredicted: number; sumObserved: number }[] = Array.from({ length: nBins }, () => ({
     n: 0,

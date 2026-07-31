@@ -7,6 +7,7 @@ import { useMemo } from "react";
 import type { EChartsOption } from "echarts";
 import type { PredictiveModelCalibration, Row } from "../../lib/data/loader";
 import { useECharts } from "../../components/charts/useECharts";
+import { buildHistogramBins, histogramBarSeries } from "../../components/charts/histogram";
 import { Card, Kpi } from "../../components/ui";
 
 const N_HIST_BINS = 30;
@@ -64,21 +65,13 @@ export default function ConfidenceTab({ calibration }: { calibration: Predictive
   const histOption = useMemo<EChartsOption | null>(() => {
     const pool = calibration.residual_pool;
     if (!pool.length) return null;
-    const min = Math.min(...pool);
-    const max = Math.max(...pool);
-    const width = (max - min) / N_HIST_BINS || 1;
-    const counts = new Array(N_HIST_BINS).fill(0);
-    pool.forEach((v) => {
-      const idx = Math.min(N_HIST_BINS - 1, Math.max(0, Math.floor((v - min) / width)));
-      counts[idx]++;
-    });
-    const labels = counts.map((_, i) => (min + i * width).toFixed(0));
+    const bins = buildHistogramBins(pool, N_HIST_BINS);
     return {
       grid: { left: 10, right: 20, top: 10, bottom: 10, containLabel: true },
       tooltip: { trigger: "axis" },
-      xAxis: { type: "category", data: labels, name: "Residual (points)", axisLabel: { interval: 4 } },
+      xAxis: { type: "value", min: bins.lo, max: bins.hi, name: "Residual (points)" },
       yAxis: { type: "value", name: "Count" },
-      series: [{ type: "bar", data: counts, itemStyle: { color: "#164a9c" }, barCategoryGap: "0%" }],
+      series: [histogramBarSeries(bins, "#164a9c", "Count")],
     } as EChartsOption;
   }, [calibration]);
 

@@ -14,6 +14,7 @@ import type { EChartsOption } from "echarts";
 import { wilson } from "../../lib/logic/wilson";
 import { WIN_TYPE_COLORS, CATEGORY_CODES, type WinType } from "../../lib/logic/winType";
 import { Loading } from "../../components/Loading";
+import { InfoDot } from "../../components/InfoDot";
 
 const WIN_TYPE_CATS: WinType[] = ["Favorite home", "Favorite away", "Underdog home", "Underdog away"];
 
@@ -679,7 +680,11 @@ export default function SpreadWinPct() {
 
   return (
     <div className="space-y-4">
-      <h1 title="For the season's full outlook, see Season Outlook." className="flex items-center gap-2.5 text-2xl font-extrabold tracking-tight text-[#002f6c]"><span className="h-6 w-1.5 rounded-full bg-gradient-to-b from-[#002f6c] to-[#164a9c]" />Win % by Win Type &amp; Spread</h1>
+      <h1 className="flex items-center gap-2.5 text-2xl font-extrabold tracking-tight text-[#002f6c]">
+        <span className="h-6 w-1.5 rounded-full bg-gradient-to-b from-[#002f6c] to-[#164a9c]" />
+        Win % by Win Type &amp; Spread
+        <InfoDot text="For the season's full outlook, see Season Outlook." />
+      </h1>
 
       {/* Controls */}
       <div className="flex flex-wrap items-end gap-4 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
@@ -702,8 +707,11 @@ export default function SpreadWinPct() {
             ))}
           </div>
         </div>
-        <div className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400" title="Width of each spread bucket in points. Smaller bins = finer curve but fewer games per bin.">
-          Bin size ⓘ
+        <div className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
+          <span className="inline-flex items-center">
+            Bin size
+            <InfoDot text="Width of each spread bucket in points. Smaller bins = finer curve but fewer games per bin." />
+          </span>
           <div className="flex gap-2">
             {[0.5, 1, 2].map((b) => (
               <button key={b} onClick={() => setBinSize(b)} className={`rounded-full px-3 py-1.5 text-sm normal-case tracking-normal ${binSize === b ? "bg-[#002f6c] text-white shadow-sm" : "bg-white text-slate-600 border border-slate-300"}`}>
@@ -712,8 +720,11 @@ export default function SpreadWinPct() {
             ))}
           </div>
         </div>
-        <div className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400" title="Signed keeps home favorites (negative) and away favorites (positive) in separate buckets; Absolute pools them by spread size only.">
-          Spread mode ⓘ
+        <div className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
+          <span className="inline-flex items-center">
+            Spread mode
+            <InfoDot text="Signed keeps home favorites (negative) and away favorites (positive) in separate buckets; Absolute pools them by spread size only." />
+          </span>
           <div className="flex gap-2">
             {(["Signed", "Absolute"] as const).map((m) => (
               <button key={m} onClick={() => setSigned(m === "Signed")} className={`rounded-full px-3 py-1.5 text-sm normal-case tracking-normal ${(m === "Signed") === signed ? "bg-[#002f6c] text-white shadow-sm" : "bg-white text-slate-600 border border-slate-300"}`}>
@@ -722,13 +733,19 @@ export default function SpreadWinPct() {
             ))}
           </div>
         </div>
-        <label className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400" title="Buckets with fewer games than this are hidden from charts and greyed in the table — tiny samples are noise, not signal.">
-          Min N per bin ⓘ
+        <label className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
+          <span className="inline-flex items-center">
+            Min N per bin
+            <InfoDot text="Buckets with fewer games than this are hidden from charts and greyed in the table — tiny samples are noise, not signal." />
+          </span>
           <input type="number" min={1} step={1} value={minN} onChange={(e) => setMinN(Math.max(1, Number(e.target.value) || 1))} className="w-24 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
         </label>
-        <label className="flex items-center gap-2 pb-2 text-sm text-slate-700" title="Shades a 95% Wilson confidence band around each bucket's favorite win % — wider band = less certain estimate.">
+        <label className="flex items-center gap-2 pb-2 text-sm text-slate-700">
           <input type="checkbox" checked={showCi} onChange={(e) => setShowCi(e.target.checked)} />
-          Show CI (Calibration) ⓘ
+          <span className="inline-flex items-center">
+            Show CI (Calibration)
+            <InfoDot text="Shades a 95% Wilson confidence band around each bucket's favorite win % — wider band = less certain estimate." />
+          </span>
         </label>
       </div>
 

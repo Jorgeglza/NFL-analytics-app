@@ -11,6 +11,7 @@ import { opponentLabel } from "../grading-model/shared";
 import { Loading } from "../../components/Loading";
 import { buildStatGroups, statLabel, americanOdds, headshotCrop, randomItem, randomPassRushRecStat, randomDefenseStat, seasonTypeOptions, HIT_COLOR, MISS_COLOR, NEUTRAL_COLOR } from "./statPicker";
 import { useSeasonWeek } from "../../context/SeasonWeekContext";
+import { stickyColHeadCls, ScrollHint } from "../../components/ui";
 
 const EXCLUDE = new Set([
   "season", "week", "team", "opponent_team", "gameday", "game_id",
@@ -65,6 +66,9 @@ export default function PropBets() {
   const [stat, setStat] = useState(searchParams.get("stat") ?? randomPassRushRecStat());
   const [setLine, setSetLine] = useState<string>("");
   const [selectedPlayer, setSelectedPlayer] = useState<string | null>(searchParams.get("player"));
+  // Opponent + "% of team total" lives in a hover `title` on each pivot cell,
+  // which never fires on touch — tapping a cell surfaces the same text here.
+  const [activeCellTip, setActiveCellTip] = useState<string | null>(null);
 
   useEffect(() => {
     getMeta().then((m) => {
@@ -301,11 +305,11 @@ export default function PropBets() {
       </div>
 
       {pivot && (
-        <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <table className="w-full text-xs">
+        <div className="relative overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <table className="w-full border-separate border-spacing-0 text-xs">
             <thead className="bg-slate-50 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
               <tr>
-                <th className="px-3 py-2 text-left">Player</th>
+                <th className={`px-3 py-2 text-left ${stickyColHeadCls}`}>Player</th>
                 {pivot.weeks.map((w) => (
                   <th key={w} className="px-2 py-2 text-center">
                     W{w}
@@ -320,14 +324,28 @@ export default function PropBets() {
             <tbody>
               {pivot.players.map((p) => (
                 <tr key={p.player} className={`cursor-pointer border-t border-slate-100 hover:bg-slate-50 ${p.player === selPlayer ? "bg-blue-50" : ""}`} onClick={() => setSelectedPlayer(p.player)}>
-                  <td className="whitespace-nowrap px-3 py-1.5 text-left font-medium">{p.player}</td>
+                  <td
+                    className={`sticky left-0 z-10 whitespace-nowrap px-3 py-3 text-left font-medium shadow-[2px_0_4px_-2px_rgba(0,0,0,0.15)] sm:py-1.5 ${p.player === selPlayer ? "bg-blue-50" : "bg-white"}`}
+                  >
+                    {p.player}
+                  </td>
                   {pivot.weeks.map((w) => {
                     const v = p.cells.get(w) ?? null;
                     const hit = line != null && v != null && v >= line;
                     const total = pivot.weekTotals.get(w);
                     const tip = v != null && total ? `Opp: ${pivot.oppMap.get(`${p.player}|${w}`) ?? ""} — ${Math.round((v / total) * 100)}% of ${selStat}` : "";
                     return (
-                      <td key={w} title={tip} className={`px-2 py-1.5 text-center ${hit ? "bg-emerald-500/25 font-semibold text-emerald-900" : ""}`}>
+                      <td
+                        key={w}
+                        title={tip}
+                        onClick={(e) => {
+                          if (tip) {
+                            e.stopPropagation();
+                            setActiveCellTip(tip);
+                          }
+                        }}
+                        className={`px-2 py-1.5 text-center ${tip ? "cursor-pointer" : ""} ${hit ? "bg-emerald-500/25 font-semibold text-emerald-900" : ""}`}
+                      >
                         {fmt(v)}
                       </td>
                     );
@@ -337,9 +355,23 @@ export default function PropBets() {
               ))}
             </tbody>
           </table>
+          <ScrollHint />
           <div className="border-t border-slate-100 px-3 py-1.5 text-[10px] text-slate-400">
             Opponent shown under each week — @ = away game. A missing week is the team's bye.
           </div>
+          {activeCellTip && (
+            <div className="flex items-start justify-between gap-3 border-t border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+              <span>{activeCellTip}</span>
+              <button
+                type="button"
+                onClick={() => setActiveCellTip(null)}
+                aria-label="Close"
+                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-slate-400 hover:bg-slate-200 hover:text-slate-600"
+              >
+                ✕
+              </button>
+            </div>
+          )}
         </div>
       )}
 

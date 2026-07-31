@@ -4,10 +4,12 @@
 import { useMemo, useState } from "react";
 import type { EChartsOption } from "echarts";
 import type { Row } from "../../../lib/data/loader";
-import { Segmented } from "../../../components/ui";
+import { Segmented, stickyColCls, stickyColHeadCls, ScrollHint } from "../../../components/ui";
 import { useECharts } from "../../../components/charts/useECharts";
 import { rowChartH } from "../../../components/charts/sizing";
 import { withMobile } from "../../../components/charts/responsive";
+import { percentile } from "../../../lib/logic/contributions";
+import { InfoDot } from "../../../components/InfoDot";
 import {
   MODEL_KEYS,
   MODEL_COLORS,
@@ -70,16 +72,6 @@ function colorForAcc(pct: number, domainLo = 0, domainHi = 100): string {
   return `rgb(${rgb.join(",")})`;
 }
 
-/** Linear-interpolated percentile of a pre-sorted numeric array. */
-function percentile(sorted: number[], p: number): number {
-  if (!sorted.length) return 0;
-  const idx = (sorted.length - 1) * p;
-  const lo = Math.floor(idx);
-  const hi = Math.ceil(idx);
-  if (lo === hi) return sorted[lo];
-  return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
-}
-
 interface HeatEntry {
   perModel: { pct: number | null; n: number; correct: number }[];
 }
@@ -106,9 +98,8 @@ function buildHeatmap(
     });
   });
   const validPct = data.map((d) => d.value[2]).filter((p) => p >= 0);
-  const sorted = [...validPct].sort((a, b) => a - b);
-  let domainLo = percentile(sorted, 0.2);
-  let domainHi = percentile(sorted, 0.8);
+  let domainLo = validPct.length ? percentile(validPct, 20) : 0;
+  let domainHi = validPct.length ? percentile(validPct, 80) : 100;
   if (domainHi - domainLo < 12) {
     const mid = (domainHi + domainLo) / 2;
     domainLo = Math.max(0, mid - 6);
@@ -229,6 +220,9 @@ export default function ModelPickerTab({
     return seasons[0];
   }, [seasons, records]);
   const [season, setSeason] = useState<number | null>(null);
+  // The scenario matrix's exact record (n / correct-wrong) lives in a hover
+  // `title`, which never fires on touch — tapping a cell surfaces it here.
+  const [activeScenarioTip, setActiveScenarioTip] = useState<string | null>(null);
   const sel = season ?? latestWithResults ?? seasons[0];
 
   // ---------- overall KPIs (all seasons, all time) ----------
@@ -436,8 +430,14 @@ export default function ModelPickerTab({
               <div className="mt-0.5 text-xl font-extrabold leading-none tabular-nums text-slate-800">{m.pct == null ? "—" : `${m.pct.toFixed(1)}%`}</div>
               <div className="mt-1 text-[11px] text-slate-500">{m.n ? `${m.correct}/${m.n} correct` : "no results yet"}</div>
               <div className="mt-1.5 flex justify-between text-[10px] text-slate-400">
-                <span title="Average pick confidence">avg conf {m.avgConf == null ? "—" : `${Math.round(100 * m.avgConf)}%`}</span>
-                <span title="Brier score — mean squared error of the home-win probability vs the actual result (lower = better calibrated)">brier {m.brier == null ? "—" : m.brier.toFixed(3)}</span>
+                <span className="inline-flex items-center">
+                  avg conf {m.avgConf == null ? "—" : `${Math.round(100 * m.avgConf)}%`}
+                  <InfoDot text="Average pick confidence" />
+                </span>
+                <span className="inline-flex items-center">
+                  brier {m.brier == null ? "—" : m.brier.toFixed(3)}
+                  <InfoDot text="Brier score — mean squared error of the home-win probability vs the actual result (lower = better calibrated)" />
+                </span>
               </div>
             </div>
           ))}
@@ -447,11 +447,11 @@ export default function ModelPickerTab({
       <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
         <div className="mb-1.5 text-sm font-semibold text-slate-700">Best model, by scenario — all seasons</div>
         <p className="mb-2 text-[11px] text-slate-400">Accuracy % within each slice; darker green/red = further from a coin flip. Hover a cell for the exact record.</p>
-        <div className="overflow-x-auto">
+        <div className="relative overflow-x-auto">
           <table className="w-full border-collapse text-xs">
             <thead className="bg-slate-50">
               <tr>
-                <th className="border px-2 py-1.5 text-left">Model</th>
+                <th className={`border px-2 py-1.5 text-left ${stickyColHeadCls}`}>Model</th>
                 {SCENARIOS.map((sc) => (
                   <th key={sc.key} className="border px-2 py-1.5">{sc.label}</th>
                 ))}
@@ -460,13 +460,18 @@ export default function ModelPickerTab({
             <tbody>
               {scenarioMatrix.map((row) => (
                 <tr key={row.key}>
-                  <td className="whitespace-nowrap border px-2 py-1.5 font-bold" style={{ color: MODEL_COLORS[row.key] }}>{row.label}</td>
+                  <td className={`whitespace-nowrap border px-2 py-1.5 font-bold ${stickyColCls}`} style={{ color: MODEL_COLORS[row.key] }}>{row.label}</td>
                   {row.cells.map((c) => (
                     <td
                       key={c.scenario}
-                      className="border px-2 py-1.5 text-center font-semibold"
+                      className="cursor-pointer border px-2 py-1.5 text-center font-semibold"
                       style={{ background: c.pct == null ? "#f8fafc" : `${colorForAcc(c.pct)}26`, color: c.pct == null ? "#94a3b8" : colorForAcc(c.pct) }}
                       title={c.n ? `${c.correct}/${c.n} correct` : "No games in this slice"}
+                      onClick={() =>
+                        setActiveScenarioTip(
+                          `${row.label} — ${SCENARIOS.find((s) => s.key === c.scenario)?.label ?? c.scenario}: ${c.n ? `${c.correct}/${c.n} correct` : "No games in this slice"}`,
+                        )
+                      }
                     >
                       {c.pct == null ? "—" : `${c.pct.toFixed(0)}%`}
                       <div className="text-[9px] font-normal text-slate-400">{c.n ? `n=${c.n}` : ""}</div>
@@ -476,6 +481,20 @@ export default function ModelPickerTab({
               ))}
             </tbody>
           </table>
+          <ScrollHint />
+          {activeScenarioTip && (
+            <div className="mt-1.5 flex items-start justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+              <span>{activeScenarioTip}</span>
+              <button
+                type="button"
+                onClick={() => setActiveScenarioTip(null)}
+                aria-label="Close"
+                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-slate-400 hover:bg-slate-200 hover:text-slate-600"
+              >
+                ✕
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

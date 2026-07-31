@@ -30,7 +30,7 @@ const SLUG_TO_TAB = new Map<string, Tab>(TABS.map(([t, slug]) => [slug, t]));
 const DEFAULT_TAB: Tab = TABS[0][0];
 
 const stepBtnCls =
-  "grid h-8 w-8 place-items-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm transition-colors hover:text-slate-900 disabled:opacity-30 disabled:hover:text-slate-500";
+  "grid h-11 w-11 sm:h-8 sm:w-8 place-items-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm transition-colors hover:text-slate-900 disabled:opacity-30 disabled:hover:text-slate-500";
 
 export default function SeasonOutlook() {
   const { tab: tabSlug } = useParams<{ tab?: string }>();

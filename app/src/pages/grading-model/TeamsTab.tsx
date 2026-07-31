@@ -10,6 +10,8 @@ import { chartH } from "../../components/charts/sizing";
 import { weekContributions, type GradeType } from "../../lib/logic/contributions";
 import { buildStatGroups, statLabel } from "../player-analysis/statPicker";
 import { teamPalette, opponentLabel } from "./shared";
+import { InfoDot } from "../../components/InfoDot";
+import { stickyColCls, stickyColHeadCls, ScrollHint } from "../../components/ui";
 
 const GRADE_OPTS: GradeType[] = ["Overall Grade", "Offensive Grade", "Defensive Grade"];
 
@@ -383,22 +385,32 @@ export default function TeamsTab({
             <b className="text-slate-700">Avg (raw)</b> is that stat's mean across played weeks — a real-world number (yards, EPA, etc.).{" "}
             <b className="text-slate-700">Avg. contrib. (pts)</b> is a different unit: how many of the 0–100 grade's points that stat contributed on average, once weighted and scaled. A stat can average high in raw terms but contribute little to the grade, or vice versa.
           </p>
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
+          <div className="relative overflow-x-auto">
+            <table className="w-full border-separate border-spacing-0 text-xs">
               <thead className="bg-slate-50 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">
                 <tr>
-                  <th className="px-2 py-2">Feature</th>
+                  <th className={`px-2 py-2 ${stickyColHeadCls}`}>Feature</th>
                   {driversTable.weeks.map((w) => (
                     <th key={w} className="px-2 py-2 text-right">W{w}</th>
                   ))}
-                  <th className="bg-slate-200/70 px-2 py-2 text-right" title="Mean raw stat value across played weeks">Avg (raw)</th>
-                  <th className="bg-slate-200/70 px-2 py-2 text-right" title="Mean scaled contribution toward the 0–100 grade">Avg. contrib. (pts)</th>
+                  <th className="bg-slate-200/70 px-2 py-2 text-right">
+                    <span className="inline-flex items-center">
+                      Avg (raw)
+                      <InfoDot text="Mean raw stat value across played weeks" />
+                    </span>
+                  </th>
+                  <th className="bg-slate-200/70 px-2 py-2 text-right">
+                    <span className="inline-flex items-center">
+                      Avg. contrib. (pts)
+                      <InfoDot text="Mean scaled contribution toward the 0–100 grade" />
+                    </span>
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {driversTable.rows.map((r) => (
                   <tr key={r.feature} className="border-t border-slate-100">
-                    <td className="px-2 py-1.5 font-semibold">{r.feature}</td>
+                    <td className={`px-2 py-1.5 font-semibold ${stickyColCls}`}>{r.feature}</td>
                     {r.raws.map((v, i) => {
                       const wk = driversTable.weeks[i];
                       if (driversTable.byeWeeks.has(wk)) return <td key={i} className="px-2 py-1.5 text-right italic text-slate-400">Bye</td>;
@@ -410,6 +422,7 @@ export default function TeamsTab({
                 ))}
               </tbody>
             </table>
+            <ScrollHint />
           </div>
         </div>
       )}

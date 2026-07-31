@@ -1,7 +1,7 @@
 // Shared UI kit (M4) — matches the navbar/home design language:
 // navy #002f6c accents, rounded-2xl white cards on slate borders,
 // uppercase micro-labels, pill segments. Presentation only.
-import type { ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 export const NAVY = "#002f6c";
 
@@ -80,14 +80,14 @@ export function Segmented<T extends string>({
   onChange: (v: T) => void;
 }) {
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex max-w-[calc(100vw-2rem)] flex-col gap-1">
       {label && <span className="text-[11px] font-medium uppercase tracking-wider text-slate-400">{label}</span>}
-      <div className="flex rounded-full border border-slate-200 bg-slate-100 p-0.5">
+      <div className="flex max-w-full overflow-x-auto rounded-full border border-slate-200 bg-slate-100 p-0.5">
         {options.map((o) => (
           <button
             key={o.value}
             onClick={() => onChange(o.value)}
-            className={`rounded-full px-3.5 py-2.5 text-sm font-medium transition-colors sm:py-1.5 ${
+            className={`shrink-0 whitespace-nowrap rounded-full px-3.5 py-2.5 text-sm font-medium transition-colors sm:py-1.5 ${
               value === o.value ? "bg-[#002f6c] text-white shadow-sm" : "text-slate-600 hover:text-slate-900"
             }`}
           >
@@ -123,22 +123,58 @@ export function FilterGroup({ label, children }: { label: string; children: Reac
   );
 }
 
-/** Consistent table classes. */
-export const tableWrapCls = "overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm";
+/** Consistent table classes. `relative` so `ScrollHint` (below) can anchor
+ * to it without every consumer needing to add its own positioning. */
+export const tableWrapCls = "relative overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm";
 export const theadCls = "bg-slate-50 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400";
 export const trCls = "border-t border-slate-100 transition-colors hover:bg-slate-50/70";
 
 /** Pins a table's first column while the rest scrolls horizontally — apply
  * to both the `<th>` and `<td>` of that column. Requires the table itself
  * to use `border-separate border-spacing-0` (sticky cells lose borders
- * under `border-collapse`); pair with a `box-shadow` divider instead of a
- * border on the sticky cell if a visible seam is needed. */
-export const stickyColCls = "sticky left-0 z-10 bg-white";
+ * under `border-collapse`); the divider between the pinned column and the
+ * scrolling ones is drawn with `box-shadow` (a border on the sticky cell
+ * itself would scroll away with nothing to anchor against). */
+export const stickyColCls = "sticky left-0 z-10 bg-white shadow-[2px_0_4px_-2px_rgba(0,0,0,0.15)]";
+
+/** Same as `stickyColCls`, for a `<th>` inside a `bg-slate-50` header row
+ * (e.g. `theadCls`) — the sticky cell needs its own opaque background
+ * matching the header's, not the body's white. */
+export const stickyColHeadCls = "sticky left-0 z-10 bg-slate-50 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.15)]";
 
 /** Right-edge fade + "swipe" affordance for a horizontally-scrollable table
  * wrapper — pair with `tableWrapCls` on a `relative`-positioned ancestor. */
 export const scrollHintCls =
   "pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-white to-transparent";
+
+/** Drop as the last child of a `tableWrapCls` wrapper (a scrolling parent)
+ * to add a right-edge fade affordance — hides itself once there's nothing
+ * left to scroll (content fits, or the user has already scrolled to the
+ * end), so it never lingers as a false "there's more" signal. */
+export function ScrollHint() {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const wrap = ref.current?.parentElement;
+    if (!wrap) return;
+    const update = () => setVisible(wrap.scrollWidth - wrap.clientWidth - wrap.scrollLeft > 4);
+    update();
+    wrap.addEventListener("scroll", update);
+    // ResizeObserver on `wrap` only fires when *its own* box changes — the
+    // wrapper's size is fixed by its container, so a table growing inside it
+    // (async data arriving, column count changing) never triggers that.
+    // Observe the scrollable content itself instead.
+    const ro = new ResizeObserver(update);
+    for (const child of wrap.children) if (child !== ref.current) ro.observe(child);
+    return () => {
+      wrap.removeEventListener("scroll", update);
+      ro.disconnect();
+    };
+  }, []);
+
+  return <div ref={ref} className={scrollHintCls} style={{ opacity: visible ? 1 : 0 }} aria-hidden="true" />;
+}
 
 /** Labeled numeric input matching the Select styling. */
 export function NumberInput({

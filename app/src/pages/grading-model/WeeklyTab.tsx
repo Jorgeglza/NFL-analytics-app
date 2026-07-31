@@ -7,6 +7,7 @@ import type { TeamMeta } from "../../lib/team/meta";
 import { Select } from "../../components/filters/Select";
 import { useECharts } from "../../components/charts/useECharts";
 import { rowChartH, chartH } from "../../components/charts/sizing";
+import { buildHistogramBins, histogramBarSeries, sturgesBinCount } from "../../components/charts/histogram";
 import { percentile, sampleStd, type GradeType } from "../../lib/logic/contributions";
 import { seasonRecords, weekGameInfo } from "./shared";
 import { rankedBarOption, offDefScatterOption, type TeamPoint } from "./charts";
@@ -72,20 +73,15 @@ export default function WeeklyTab({
   const histOption = useMemo<EChartsOption | null>(() => {
     if (!stats) return null;
     const x = sub.map((r) => Number(r[gradeType]));
-    const nbins = Math.min(24, Math.max(5, Math.floor(x.length / 2)));
-    const lo = stats.min;
-    const hi = stats.max === lo ? lo + 1 : stats.max;
-    const w = (hi - lo) / nbins;
-    const counts = new Array(nbins).fill(0);
-    for (const v of x) counts[Math.min(nbins - 1, Math.floor((v - lo) / w))]++;
+    const bins = buildHistogramBins(x, sturgesBinCount(x.length));
     return {
       grid: { left: 10, right: 10, top: 30, bottom: 10, containLabel: true },
       legend: { top: 0 },
       tooltip: { trigger: "axis" },
-      xAxis: { type: "category", data: counts.map((_, i) => `${(lo + i * w).toFixed(1)}`), name: "Grade", nameLocation: "middle", nameGap: 26 },
+      xAxis: { type: "value", min: bins.lo, max: bins.hi, name: "Grade", nameLocation: "middle", nameGap: 26 },
       yAxis: { type: "value", name: "Teams" },
       series: [
-        { name: "Teams", type: "bar", data: counts, barCategoryGap: "5%", itemStyle: { color: "#636EFA" } },
+        histogramBarSeries(bins, "#636EFA", "Teams"),
         {
           name: "Mean",
           type: "line",
@@ -94,7 +90,7 @@ export default function WeeklyTab({
             symbol: "none",
             lineStyle: { type: "dashed" },
             label: { formatter: "Mean" },
-            data: [{ xAxis: Math.min(nbins - 1, Math.max(0, Math.floor((stats.mean - lo) / w))) }],
+            data: [{ xAxis: stats.mean }],
           },
         },
         {
@@ -105,7 +101,7 @@ export default function WeeklyTab({
             symbol: "none",
             lineStyle: { type: "dotted" },
             label: { formatter: "Median" },
-            data: [{ xAxis: Math.min(nbins - 1, Math.max(0, Math.floor((stats.med - lo) / w))) }],
+            data: [{ xAxis: stats.med }],
           },
         },
       ],
@@ -237,7 +233,7 @@ export default function WeeklyTab({
                   <td className="px-3 py-1.5 text-right">{r.pct.toFixed(1)}</td>
                   {onSelectTeam && (
                     <td className="px-3 py-1.5 text-right">
-                      <button onClick={() => onSelectTeam(r.team, sel)} className="font-semibold text-[#002f6c] hover:underline">
+                      <button onClick={() => onSelectTeam(r.team, sel)} className="flex min-h-11 w-full items-center justify-end font-semibold text-[#002f6c] hover:underline sm:min-h-0">
                         Drivers →
                       </button>
                     </td>

@@ -17,6 +17,7 @@ import { useECharts } from "../../components/charts/useECharts";
 import { withMobile } from "../../components/charts/responsive";
 import { opponentLabel } from "../grading-model/shared";
 import { Loading } from "../../components/Loading";
+import { stickyColHeadCls, ScrollHint } from "../../components/ui";
 import { buildMismatchStatGroups, statLabel } from "./statPicker";
 import { defaultWeekNearToday } from "../game-analysis/previews/engine";
 
@@ -66,6 +67,9 @@ export default function MatchupBets() {
   const [setLine, setSetLine] = useState("");
   const [topN, setTopN] = useState(8);
   const [selectedPlayer, setSelectedPlayer] = useState<string | null>(urlPlayer);
+  // Opponent + "% of team total" lives in a hover `title` on each pivot cell,
+  // which never fires on touch — tapping a cell surfaces the same text here.
+  const [activeCellTip, setActiveCellTip] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.all([getTeamMetaMap(), getSchedule(), getMeta()]).then(([m, s, mt]) => {
@@ -550,12 +554,12 @@ export default function MatchupBets() {
 
       {/* Pivot */}
       {pivot && (
-        <div className="mt-3 overflow-x-auto rounded-xl border border-slate-100">
-          <table className="w-full text-xs">
+        <div className="relative mt-3 overflow-x-auto rounded-xl border border-slate-100">
+          <table className="w-full border-separate border-spacing-0 text-xs">
             <thead className="bg-slate-50 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
               <tr>
                 <th className="px-2 py-2" />
-                <th className="px-2 py-2 text-left">Team</th>
+                <th className={`px-2 py-2 text-left ${stickyColHeadCls}`}>Team</th>
                 <th className="px-2 py-2 text-left">Player</th>
                 {pivot.weeks.map((wk) => (
                   <th key={wk} className="px-1.5 py-2 text-center">W{wk}</th>
@@ -568,15 +572,29 @@ export default function MatchupBets() {
               {pivot.players.map((p) => (
                 <tr key={p.player} className={`cursor-pointer border-t border-slate-100 hover:bg-slate-50 ${p.player === selPlayer ? "bg-blue-50" : ""}`} onClick={() => setSelectedPlayer(p.player)}>
                   <td className="px-2 py-1">{meta?.get(p.team)?.logo && <img src={meta.get(p.team)!.logo} alt={p.team} className="h-6 w-6 object-contain" />}</td>
-                  <td className="px-2 py-1 text-left">{p.team}</td>
-                  <td className="whitespace-nowrap px-2 py-1 text-left font-medium">{p.player}</td>
+                  <td
+                    className={`sticky left-0 z-10 px-2 py-1 text-left shadow-[2px_0_4px_-2px_rgba(0,0,0,0.15)] ${p.player === selPlayer ? "bg-blue-50" : "bg-white"}`}
+                  >
+                    {p.team}
+                  </td>
+                  <td className="whitespace-nowrap px-2 py-3 text-left font-medium sm:py-1">{p.player}</td>
                   {pivot.weeks.map((wk) => {
                     const v = p.cells.get(wk) ?? null;
                     const hit = line != null && v != null && v >= line;
                     const twt = pivot.teamWeekTotals.get(`${p.team}|${wk}`);
                     const tip = v != null ? `Opp: ${pivot.oppMap.get(`${p.player}|${wk}`) ?? ""} — ${twt ? Math.round((v / twt) * 100) : 0}% of team` : "";
                     return (
-                      <td key={wk} title={tip} className={`px-1.5 py-1 text-center ${hit ? "bg-emerald-500/25 font-semibold text-emerald-900" : ""}`}>
+                      <td
+                        key={wk}
+                        title={tip}
+                        onClick={(e) => {
+                          if (tip) {
+                            e.stopPropagation();
+                            setActiveCellTip(tip);
+                          }
+                        }}
+                        className={`px-1.5 py-1 text-center ${tip ? "cursor-pointer" : ""} ${hit ? "bg-emerald-500/25 font-semibold text-emerald-900" : ""}`}
+                      >
                         {fmt(v)}
                       </td>
                     );
@@ -587,7 +605,7 @@ export default function MatchupBets() {
                       to={`/player_analysis/prop_bets_players?season=${season}&team=${p.team}&stat=${selStat}&player=${encodeURIComponent(p.player)}`}
                       title="Open in Prop Bets"
                       onClick={(e) => e.stopPropagation()}
-                      className="text-slate-400 hover:text-[#002f6c]"
+                      className="flex min-h-11 min-w-11 items-center justify-center text-slate-400 hover:text-[#002f6c] sm:min-h-0 sm:min-w-0"
                     >
                       →
                     </Link>
@@ -596,6 +614,20 @@ export default function MatchupBets() {
               ))}
             </tbody>
           </table>
+          <ScrollHint />
+          {activeCellTip && (
+            <div className="flex items-start justify-between gap-3 border-t border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+              <span>{activeCellTip}</span>
+              <button
+                type="button"
+                onClick={() => setActiveCellTip(null)}
+                aria-label="Close"
+                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-slate-400 hover:bg-slate-200 hover:text-slate-600"
+              >
+                ✕
+              </button>
+            </div>
+          )}
         </div>
       )}
 

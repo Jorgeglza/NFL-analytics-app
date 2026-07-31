@@ -19,6 +19,7 @@ import { LazyMount } from "../../components/LazyMount";
 import { Glossary } from "../../components/Glossary";
 import { GLOSSARY_SECTIONS } from "../../lib/glossary";
 import { CATEGORY_COLORS, CATEGORY_CODES, type Category } from "../../lib/logic/winType";
+import { InfoDot } from "../../components/InfoDot";
 
 const CATEGORY_ORDER: Category[] = [
   "Favorite home",
@@ -467,7 +468,11 @@ export default function WinTypes() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-4">
-        <h1 title="For a specific upcoming game, see what the model recommends on Matchup Previews." className="mr-auto flex items-center gap-2.5 text-2xl font-extrabold tracking-tight text-[#002f6c]"><span className="h-6 w-1.5 rounded-full bg-gradient-to-b from-[#002f6c] to-[#164a9c]" />Win Types</h1>
+        <h1 className="mr-auto flex items-center gap-2.5 text-2xl font-extrabold tracking-tight text-[#002f6c]">
+          <span className="h-6 w-1.5 rounded-full bg-gradient-to-b from-[#002f6c] to-[#164a9c]" />
+          Win Types
+          <InfoDot text="For a specific upcoming game, see what the model recommends on Matchup Previews." />
+        </h1>
         <button
           onClick={() => setGlossaryOpen((o) => !o)}
           className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm transition-colors hover:text-slate-900"
@@ -531,13 +536,13 @@ export default function WinTypes() {
             />
           </Card>
 
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-1.5">
             <span className="mr-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">Jump to</span>
             {blockValues.map((x) => (
               <button
                 key={x}
                 onClick={() => scrollToBlock(x)}
-                className="rounded-full border border-slate-200 bg-white px-2.5 py-0.5 text-xs font-medium text-slate-600 shadow-sm transition-colors hover:border-[#002f6c] hover:text-[#002f6c]"
+                className="rounded-full border border-slate-200 bg-white px-2.5 py-2 text-xs font-medium text-slate-600 shadow-sm transition-colors hover:border-[#002f6c] hover:text-[#002f6c] sm:py-0.5"
               >
                 {mode === "season" ? x : `Wk ${x}`}
               </button>

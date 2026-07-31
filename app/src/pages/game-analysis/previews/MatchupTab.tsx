@@ -480,7 +480,7 @@ export default function MatchupTab({
         ))}
         <div className="flex-[1.2] lg:order-2">
           <h3 className="mb-1.5 text-center text-sm font-semibold">Matchup Snapshot</h3>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
             {[
               // favorite is always laying points — show it as −X.X regardless of side
               ["Favorite (spread)", fav ? `${fav === "home" ? home : away} −${Math.abs(spread!).toFixed(1)}` : "—"],
@@ -493,7 +493,7 @@ export default function MatchupTab({
               </div>
             ))}
           </div>
-          <div className="mt-2 grid grid-cols-3 gap-2 rounded-2xl border border-slate-200 bg-white shadow-sm p-3">
+          <div className="mt-2 grid grid-cols-1 gap-2 rounded-2xl border border-slate-200 bg-white shadow-sm p-3 sm:grid-cols-3">
             {[
               [`${away} ML`, fmtMl(mlAway), `Implied: ${pct1(impliedProb(mlAway))} | Fair: ${pct1(awayFair)}`],
               ["Market Overround", overround == null ? "—" : `${(100 * overround).toFixed(1)}%`, "(vig)"],
@@ -688,22 +688,24 @@ export default function MatchupTab({
                   {meta.get(t)?.logo && <img src={meta.get(t)!.logo} alt={t} className="h-5" />}
                   {t}
                 </div>
-                <table className="w-full text-xs">
-                  <thead className="bg-slate-50 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                    <tr>{["Wk", "Opp", "W/L", "Pts", "Yds"].map((h) => <th key={h} className="px-2 py-1.5">{h}</th>)}</tr>
-                  </thead>
-                  <tbody>
-                    {recent(t).map((r) => (
-                      <tr key={`${t}${r.week}`} className="border-t border-slate-100">
-                        <td className="px-2 py-1.5 text-slate-500">{r.week}</td>
-                        <td className="px-2 py-1.5 font-medium">{r.opp}</td>
-                        <td className={`px-2 py-1.5 font-bold ${r.wl === "W" ? "text-[#3C9A5F]" : "text-[#C8102E]"}`}>{r.wl}</td>
-                        <td className="px-2 py-1.5 tabular-nums">{r.pts}</td>
-                        <td className="px-2 py-1.5 tabular-nums">{r.yds}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead className="bg-slate-50 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                      <tr>{["Wk", "Opp", "W/L", "Pts", "Yds"].map((h) => <th key={h} className="px-2 py-1.5">{h}</th>)}</tr>
+                    </thead>
+                    <tbody>
+                      {recent(t).map((r) => (
+                        <tr key={`${t}${r.week}`} className="border-t border-slate-100">
+                          <td className="px-2 py-1.5 text-slate-500">{r.week}</td>
+                          <td className="px-2 py-1.5 font-medium">{r.opp}</td>
+                          <td className={`px-2 py-1.5 font-bold ${r.wl === "W" ? "text-[#3C9A5F]" : "text-[#C8102E]"}`}>{r.wl}</td>
+                          <td className="px-2 py-1.5 tabular-nums">{r.pts}</td>
+                          <td className="px-2 py-1.5 tabular-nums">{r.yds}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             ))}
           </div>
@@ -728,24 +730,26 @@ export default function MatchupTab({
                 ))}
                 {h2h.ties > 0 && <span className="text-xs text-slate-400">({h2h.ties} ties)</span>}
               </div>
-              <table className="w-full text-xs">
-                <thead className="bg-slate-50 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                  <tr>{["Season", "Wk", "Date", "Score", "Winner"].map((h) => <th key={h} className="px-2 py-1.5">{h}</th>)}</tr>
-                </thead>
-                <tbody>
-                  {h2h.rows.map(({ g, winner, date }) => (
-                    <tr key={String(g.game_id)} className="border-t border-slate-100">
-                      <td className="px-2 py-1.5 text-slate-500">{String(g.season)}</td>
-                      <td className="px-2 py-1.5 text-slate-500">{String(g.week)}</td>
-                      <td className="px-2 py-1.5 text-slate-500">{date}</td>
-                      <td className="px-2 py-1.5 tabular-nums">
-                        {String(g.away_team)} {g.away_score == null ? "" : Math.round(Number(g.away_score))} @ {String(g.home_team)} {g.home_score == null ? "" : Math.round(Number(g.home_score))}
-                      </td>
-                      <td className="px-2 py-1.5 font-bold" style={{ color: winner && winner !== "TIE" ? meta.get(winner)?.color : undefined }}>{winner ?? ""}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead className="bg-slate-50 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                    <tr>{["Season", "Wk", "Date", "Score", "Winner"].map((h) => <th key={h} className="px-2 py-1.5">{h}</th>)}</tr>
+                  </thead>
+                  <tbody>
+                    {h2h.rows.map(({ g, winner, date }) => (
+                      <tr key={String(g.game_id)} className="border-t border-slate-100">
+                        <td className="px-2 py-1.5 text-slate-500">{String(g.season)}</td>
+                        <td className="px-2 py-1.5 text-slate-500">{String(g.week)}</td>
+                        <td className="px-2 py-1.5 text-slate-500">{date}</td>
+                        <td className="px-2 py-1.5 tabular-nums">
+                          {String(g.away_team)} {g.away_score == null ? "" : Math.round(Number(g.away_score))} @ {String(g.home_team)} {g.home_score == null ? "" : Math.round(Number(g.home_score))}
+                        </td>
+                        <td className="px-2 py-1.5 font-bold" style={{ color: winner && winner !== "TIE" ? meta.get(winner)?.color : undefined }}>{winner ?? ""}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </>
           )}
         </div>

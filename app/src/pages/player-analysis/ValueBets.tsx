@@ -11,6 +11,7 @@ import { getTeamMetaMap, type TeamMeta } from "../../lib/team/meta";
 import { Select } from "../../components/filters/Select";
 import { useECharts } from "../../components/charts/useECharts";
 import { Loading } from "../../components/Loading";
+import { stickyColCls, stickyColHeadCls, ScrollHint } from "../../components/ui";
 import { buildMismatchStatGroups, statLabel, PROP_MARKET_SECTIONS } from "./statPicker";
 import { useSeasonWeek } from "../../context/SeasonWeekContext";
 
@@ -85,6 +86,9 @@ export default function ValueBets() {
   const [stat, setStat] = useState(searchParams.get("stat") ?? "receiving_yards");
   const [topN, setTopN] = useState(5);
   const [showFullRoster, setShowFullRoster] = useState(false);
+  // Per-cell value/avg/above-average status lives in a hover `title`, which
+  // never fires on touch — tapping a cell surfaces the same text here.
+  const [activeCellTip, setActiveCellTip] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.all([getTeamMetaMap(), getSchedule(), getMeta()]).then(([m, s, mt]) => {
@@ -470,7 +474,7 @@ export default function ValueBets() {
                     <button
                       key={`${p.stat}-${p.offTeam}`}
                       onClick={() => setStat(p.stat)}
-                      className={`flex w-full items-center gap-1.5 rounded-lg border px-2 py-1 text-left text-[11px] transition-colors ${
+                      className={`flex min-h-11 w-full items-center gap-1.5 rounded-lg border px-2 py-1 text-left text-[11px] transition-colors sm:min-h-0 ${
                         p.stat === selStat ? "border-[#002f6c] bg-[#002f6c]/5" : "border-transparent hover:border-slate-200 hover:bg-white"
                       }`}
                     >
@@ -530,7 +534,7 @@ export default function ValueBets() {
             <Link
               key={`${g.away}-${g.home}`}
               to={matchupHref(g.gameId)}
-              className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:border-[#002f6c] hover:text-[#002f6c]"
+              className="inline-flex min-h-11 items-center gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:border-[#002f6c] hover:text-[#002f6c] sm:min-h-0"
             >
               {g.away} @ {g.home} →
             </Link>
@@ -551,22 +555,22 @@ export default function ValueBets() {
       </div>
 
       {pivot && (
-        <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="relative overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
           <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2">
             <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
               Top {TOP_PER_TEAM} players per mismatched team
             </span>
             {hiddenCount > 0 && (
-              <button onClick={() => setShowFullRoster((v) => !v)} className="text-xs font-medium text-[#002f6c] hover:underline">
+              <button onClick={() => setShowFullRoster((v) => !v)} className="flex min-h-11 items-center text-xs font-medium text-[#002f6c] hover:underline sm:min-h-0">
                 {showFullRoster ? "Show top players only" : `Show full roster (${hiddenCount} more)`}
               </button>
             )}
           </div>
-          <table className="w-full text-xs">
+          <table className="w-full border-separate border-spacing-0 text-xs">
             <thead className="bg-slate-50 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
               <tr>
                 <th className="px-2 py-2" />
-                <th className="px-2 py-2 text-left">Team</th>
+                <th className={`px-2 py-2 text-left ${stickyColHeadCls}`}>Team</th>
                 <th className="px-2 py-2 text-left">Player</th>
                 <th className="px-2 py-2 text-center">Opp W{selWeek}</th>
                 {pivot.weeks.map((wk) => (
@@ -581,7 +585,7 @@ export default function ValueBets() {
               {visiblePlayers.map((p) => (
                 <tr key={`${p.player}|${p.team}`} className="border-t border-slate-100 hover:bg-slate-50">
                   <td className="px-2 py-1">{logo(p.team) && <img src={logo(p.team)!} alt={p.team} className="h-6 w-6 object-contain" />}</td>
-                  <td className="px-2 py-1 text-left">{p.team}</td>
+                  <td className={`px-2 py-1 text-left ${stickyColCls}`}>{p.team}</td>
                   <td className="whitespace-nowrap px-2 py-1 text-left font-medium">{p.player}</td>
                   <td className="px-2 py-1 text-center">{p.opp}</td>
                   {pivot.weeks.map((wk) => {
@@ -589,7 +593,17 @@ export default function ValueBets() {
                     const above = p.rowAvg != null && v != null && v >= p.rowAvg;
                     const tip = v != null && p.rowAvg != null ? `Value: ${v.toFixed(1)} — Player avg: ${p.rowAvg.toFixed(1)} — Above avg: ${above ? "Yes" : "No"}` : "";
                     return (
-                      <td key={wk} title={tip} className={`px-1.5 py-1 text-center ${above ? "bg-emerald-500/20 font-semibold text-emerald-900" : ""}`}>
+                      <td
+                        key={wk}
+                        title={tip}
+                        onClick={(e) => {
+                          if (tip) {
+                            e.stopPropagation();
+                            setActiveCellTip(tip);
+                          }
+                        }}
+                        className={`px-1.5 py-1 text-center ${tip ? "cursor-pointer" : ""} ${above ? "bg-emerald-500/20 font-semibold text-emerald-900" : ""}`}
+                      >
                         {fmt(v)}
                       </td>
                     );
@@ -602,7 +616,7 @@ export default function ValueBets() {
                     <Link
                       to={matchupHref(gameIdFor(p.team, p.opp), p.player)}
                       title="Zoom in on this matchup"
-                      className="text-slate-400 hover:text-[#002f6c]"
+                      className="flex min-h-11 min-w-11 items-center justify-center text-slate-400 hover:text-[#002f6c] sm:min-h-0 sm:min-w-0"
                     >
                       →
                     </Link>
@@ -611,6 +625,20 @@ export default function ValueBets() {
               ))}
             </tbody>
           </table>
+          <ScrollHint />
+          {activeCellTip && (
+            <div className="flex items-start justify-between gap-3 border-t border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+              <span>{activeCellTip}</span>
+              <button
+                type="button"
+                onClick={() => setActiveCellTip(null)}
+                aria-label="Close"
+                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-slate-400 hover:bg-slate-200 hover:text-slate-600"
+              >
+                ✕
+              </button>
+            </div>
+          )}
         </div>
       )}
 

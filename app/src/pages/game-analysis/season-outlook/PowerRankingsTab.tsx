@@ -70,27 +70,30 @@ export default function PowerRankingsTab({
               const tm = meta.get(r.team);
               return (
                 <tr key={r.team} className={`${trCls} cursor-pointer`} onClick={() => setSelectedTeam(r.team)}>
-                  <td className="px-3 py-2 font-bold text-slate-800">{r.rank}</td>
-                  <td className="px-3 py-2"><MovementBadge movement={r.movement} /></td>
-                  <td className="px-3 py-2">
+                  <td className="px-3 py-3 font-bold text-slate-800 sm:py-2">{r.rank}</td>
+                  <td className="px-3 py-3 sm:py-2"><MovementBadge movement={r.movement} /></td>
+                  <td className="px-3 py-3 sm:py-2">
                     <div className="flex items-center gap-2 font-semibold text-slate-800">
                       {tm?.logo && <img src={tm.logo} alt="" className="h-5 w-5 object-contain" />}
                       {tm?.name ?? r.team}
                     </div>
                   </td>
-                  <td className="px-3 py-2 font-mono text-slate-700">{(r.composite * 100).toFixed(1)}</td>
-                  <td className="px-3 py-2 text-slate-600">{Math.round(r.elo)}</td>
-                  <td className="px-3 py-2 text-slate-600">{r.grade == null ? "—" : r.grade.toFixed(1)}</td>
-                  <td className="px-3 py-2 text-slate-600">{r.pythPct == null ? "—" : `${(r.pythPct * 100).toFixed(1)}%`}</td>
-                  <td className="px-3 py-2">
-                    <Link
-                      to={`/game_analysis/team_trends?team1=${r.team}`}
-                      onClick={(e) => e.stopPropagation()}
-                      className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 shadow-sm transition-colors hover:border-[#002f6c]/50 hover:text-[#002f6c]"
-                      title={`Compare ${tm?.name ?? r.team}'s trend against other teams`}
-                    >
-                      Compare
-                    </Link>
+                  <td className="px-3 py-3 font-mono text-slate-700 sm:py-2">{(r.composite * 100).toFixed(1)}</td>
+                  <td className="px-3 py-3 text-slate-600 sm:py-2">{Math.round(r.elo)}</td>
+                  <td className="px-3 py-3 text-slate-600 sm:py-2">{r.grade == null ? "—" : r.grade.toFixed(1)}</td>
+                  <td className="px-3 py-3 text-slate-600 sm:py-2">{r.pythPct == null ? "—" : `${(r.pythPct * 100).toFixed(1)}%`}</td>
+                  <td className="px-3 py-3 sm:py-2">
+                    <div className="flex items-center gap-2">
+                      <Link
+                        to={`/game_analysis/team_trends?team1=${r.team}`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 shadow-sm transition-colors hover:border-[#002f6c]/50 hover:text-[#002f6c]"
+                        title={`Compare ${tm?.name ?? r.team}'s trend against other teams`}
+                      >
+                        Compare
+                      </Link>
+                      <span className="text-slate-300 sm:hidden" aria-hidden="true">›</span>
+                    </div>
                   </td>
                 </tr>
               );

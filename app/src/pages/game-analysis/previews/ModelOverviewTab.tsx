@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import type { Row } from "../../../lib/data/loader";
 import type { TeamMeta } from "../../../lib/team/meta";
-import { FilterGroup } from "../../../components/ui";
+import { FilterGroup, stickyColCls, stickyColHeadCls, ScrollHint } from "../../../components/ui";
 import {
   MODEL_KEYS,
   type MetricKey,
@@ -58,6 +58,10 @@ export default function ModelOverviewTab({
   const [order, setOrder] = useState<"time" | "rank">("time");
   const [filterMode, setFilterMode] = useState<"" | "upcoming" | "completed">("");
   const [minConf, setMinConf] = useState(0.55);
+  // The per-cell pick % lives in a hover `title` (deliberately, to keep the
+  // matrix dense — see the Cell component below), which never fires on
+  // touch. Tapping a cell surfaces the same info here instead.
+  const [activeRec, setActiveRec] = useState<Rec | null>(null);
 
   const records = useMemo<Rec[]>(() => {
     const reg = schedule.filter((r) => r.game_type === "REG");
@@ -144,7 +148,12 @@ export default function ModelOverviewTab({
     const bg = p.correct === true ? "#DFF5E1" : p.correct === false ? "#FBE4E4" : "#fff";
     const bc = p.correct === true ? "#cfeacd" : p.correct === false ? "#f2cccc" : "#eee";
     return (
-      <td className="border p-1.5 text-center align-middle" style={{ minWidth: 48, background: bg, borderColor: bc }} title={title}>
+      <td
+        className="cursor-pointer border p-1.5 text-center align-middle"
+        style={{ minWidth: 48, background: bg, borderColor: bc }}
+        title={title}
+        onClick={() => setActiveRec(rec)}
+      >
         <div className="relative flex flex-col items-center">
           {logo ? <img src={logo} alt={p.team ?? ""} className="h-6" /> : <div className="text-xs font-bold">{p.team ?? "—"}</div>}
           {p.correct === true && <span className="absolute -right-0.5 -top-1 text-[9px] font-black text-[#2CA25F]">✓</span>}
@@ -175,11 +184,11 @@ export default function ModelOverviewTab({
             {pctAll != null && <span className="font-medium opacity-70">({corrAll}/{evaldAll.length})</span>}
           </span>
         </div>
-        <div className="overflow-x-auto">
+        <div className="relative overflow-x-auto">
           <table className="w-full border-collapse text-xs">
             <thead className="bg-slate-50">
               <tr>
-                <th className="border px-2 py-1 text-left">{rowLabel}</th>
+                <th className={`border px-2 py-1 text-left ${stickyColHeadCls}`}>{rowLabel}</th>
                 <th className="border px-2 py-1">Correct %</th>
                 {Array.from({ length: maxCols }, (_, i) => (
                   <th key={i} className="border px-2 py-1">{i + 1}</th>
@@ -195,7 +204,7 @@ export default function ModelOverviewTab({
                 else sorted.sort((a, b) => (b.picks[primary].conf ?? 0) - (a.picks[primary].conf ?? 0));
                 return (
                   <tr key={key}>
-                    <td className="whitespace-nowrap border px-2 py-1 font-bold">{rowLabel} {key}</td>
+                    <td className={`whitespace-nowrap border px-2 py-1 font-bold ${stickyColCls}`}>{rowLabel} {key}</td>
                     <td
                       className="border px-2 py-1 text-center font-bold"
                       style={{ color: !evald.length ? "#94a3b8" : corr / evald.length >= 0.5 ? "#2CA25F" : "#C8102E" }}
@@ -211,6 +220,7 @@ export default function ModelOverviewTab({
               })}
             </tbody>
           </table>
+          <ScrollHint />
         </div>
       </div>
     );
@@ -318,6 +328,31 @@ export default function ModelOverviewTab({
           </div>
         ))}
       </div>
+
+      {activeRec && (
+        <div className="flex items-start justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+          <div className="text-xs text-slate-600">
+            <div className="text-sm font-semibold text-slate-800">{activeRec.away} @ {activeRec.home}</div>
+            <div className="mt-0.5">
+              Pick: {activeRec.picks[primary].team ?? "—"}
+              {activeRec.picks[primary].conf != null && ` — ${Math.round(100 * activeRec.picks[primary].conf!)}%`}
+            </div>
+            <div>Spread: {activeRec.spread ?? "—"}</div>
+            <div>
+              Result: {activeRec.actual ?? "—"} —{" "}
+              {activeRec.picks[primary].correct === true ? "Correct ✓" : activeRec.picks[primary].correct === false ? "Wrong ✗" : "Upcoming"}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setActiveRec(null)}
+            aria-label="Close"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       <div className="space-y-4">
         {matrices.map(({ outer, rows }) => (

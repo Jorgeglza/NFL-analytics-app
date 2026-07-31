@@ -66,21 +66,26 @@ export default function PlayoffTab({ schedule, season, week, meta }: { schedule:
                 .sort((a, b) => b.playoffPct - a.playoffPct)
                 .map((r) => (
                   <tr key={r.team} className={`${trCls} cursor-pointer`} onClick={() => setSelectedTeam(r.team)}>
-                    <td className="px-3 py-2 font-semibold text-slate-800">
+                    <td className="px-3 py-3 font-semibold text-slate-800 sm:py-2">
                       <div className="flex items-center gap-2">
                         {meta.get(r.team)?.logo && <img src={meta.get(r.team)!.logo} alt="" className="h-5 w-5 object-contain" />}
                         {meta.get(r.team)?.name ?? r.team}
                       </div>
                     </td>
-                    <td className="px-3 py-2 text-slate-500">{r.division}</td>
-                    <td className="px-3 py-2 font-mono text-slate-700">{recordStr(r.currentWins, r.currentLosses, r.currentTies)}</td>
-                    <td className="px-3 py-2 text-slate-600">
+                    <td className="px-3 py-3 text-slate-500 sm:py-2">{r.division}</td>
+                    <td className="px-3 py-3 font-mono text-slate-700 sm:py-2">{recordStr(r.currentWins, r.currentLosses, r.currentTies)}</td>
+                    <td className="px-3 py-3 text-slate-600 sm:py-2">
                       {(r.avgWins - r.currentWins >= 0 ? "+" : "") + (r.avgWins - r.currentWins).toFixed(1)}
                     </td>
-                    <td className="px-3 py-2 font-mono text-slate-700">{(r.playoffPct * 100).toFixed(1)}%</td>
-                    <td className="px-3 py-2 text-slate-600">{(r.divisionTitlePct * 100).toFixed(1)}%</td>
-                    <td className="px-3 py-2 text-slate-600">{r.avgWins.toFixed(1)}</td>
-                    <td className="px-3 py-2 text-slate-600">{r.avgSeed == null ? "—" : r.avgSeed.toFixed(1)}</td>
+                    <td className="px-3 py-3 font-mono text-slate-700 sm:py-2">{(r.playoffPct * 100).toFixed(1)}%</td>
+                    <td className="px-3 py-3 text-slate-600 sm:py-2">{(r.divisionTitlePct * 100).toFixed(1)}%</td>
+                    <td className="px-3 py-3 text-slate-600 sm:py-2">{r.avgWins.toFixed(1)}</td>
+                    <td className="px-3 py-3 text-slate-600 sm:py-2">
+                      <div className="flex items-center justify-between gap-1">
+                        <span>{r.avgSeed == null ? "—" : r.avgSeed.toFixed(1)}</span>
+                        <span className="text-slate-300 sm:hidden" aria-hidden="true">›</span>
+                      </div>
+                    </td>
                   </tr>
                 ))}
             </tbody>

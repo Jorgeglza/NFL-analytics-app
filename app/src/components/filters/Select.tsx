@@ -10,9 +10,11 @@ interface SelectProps {
   /** Optional grouped options (rendered as <optgroup>). Takes precedence over `options`. */
   groups?: { label: string; options: Option[] }[];
   onChange: (value: string) => void;
+  /** Overrides the default `min-w-36` (e.g. for a select whose options run longer). */
+  minWidthClassName?: string;
 }
 
-export function Select({ label, value, options = [], groups, onChange }: SelectProps) {
+export function Select({ label, value, options = [], groups, onChange, minWidthClassName = "min-w-36" }: SelectProps) {
   const renderOptions = (opts: Option[]) =>
     opts.map((o) => (
       <option key={o.value} value={o.value}>
@@ -23,7 +25,7 @@ export function Select({ label, value, options = [], groups, onChange }: SelectP
     <label className="flex flex-col gap-1">
       {label && <span className="text-[11px] font-medium uppercase tracking-wider text-slate-400">{label}</span>}
       <select
-        className="min-w-36 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-[#002f6c] focus:outline-none focus:ring-2 focus:ring-[#002f6c]/15"
+        className={`${minWidthClassName} rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-[#002f6c] focus:outline-none focus:ring-2 focus:ring-[#002f6c]/15`}
         value={value}
         onChange={(e) => onChange(e.target.value)}
       >

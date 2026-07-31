@@ -13,11 +13,15 @@ export function MultiSelect({ label, values, options, onChange }: MultiSelectPro
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const close = (e: MouseEvent) => {
+    const close = (e: MouseEvent | TouchEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
     document.addEventListener("mousedown", close);
-    return () => document.removeEventListener("mousedown", close);
+    document.addEventListener("touchstart", close);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("touchstart", close);
+    };
   }, []);
 
   const toggle = (v: string) =>
@@ -43,18 +47,18 @@ export function MultiSelect({ label, values, options, onChange }: MultiSelectPro
         {summary} <span className="float-right text-slate-400">▾</span>
       </button>
       {open && (
-        <div className="absolute top-full z-20 mt-1 max-h-64 w-full min-w-40 overflow-y-auto rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
+        <div className="absolute top-full z-20 mt-1 max-h-64 w-full min-w-40 max-w-[calc(100vw-1.5rem)] overflow-y-auto rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
           <div className="flex gap-1 border-b border-slate-100 p-1">
             <button
               type="button"
-              className="rounded px-2 py-0.5 text-xs text-[#002f6c] hover:bg-slate-100"
+              className="rounded px-2 py-2 text-xs text-[#002f6c] hover:bg-slate-100 sm:py-0.5"
               onClick={() => onChange(options.map((o) => o.value))}
             >
               All
             </button>
             <button
               type="button"
-              className="rounded px-2 py-0.5 text-xs text-[#002f6c] hover:bg-slate-100"
+              className="rounded px-2 py-2 text-xs text-[#002f6c] hover:bg-slate-100 sm:py-0.5"
               onClick={() => onChange([])}
             >
               None
@@ -63,7 +67,7 @@ export function MultiSelect({ label, values, options, onChange }: MultiSelectPro
           {options.map((o) => (
             <label
               key={o.value}
-              className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm font-normal text-slate-800 hover:bg-slate-50"
+              className="flex min-h-11 cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm font-normal text-slate-800 hover:bg-slate-50 sm:min-h-0"
             >
               <input type="checkbox" checked={values.includes(o.value)} onChange={() => toggle(o.value)} />
               {o.label}

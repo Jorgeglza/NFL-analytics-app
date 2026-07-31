@@ -78,20 +78,20 @@ function LeagueLeaders({ stat, leaders, meta, onSelectTeam }: {
               key={`${p.team}-${p.name}`}
               onClick={() => onSelectTeam(p.team)}
               title={`${p.name} — ${fmtStat(stat, p.value)} (${p.pct.toFixed(1)}% of ${p.team}'s team total) — click to jump to ${p.team}`}
-              className="flex w-full items-center gap-2 rounded-lg px-1 py-0.5 text-left transition-colors hover:bg-slate-50"
+              className="flex w-full items-center gap-1 rounded-lg px-1 py-0.5 text-left transition-colors hover:bg-slate-50 sm:gap-2"
             >
               <span className="w-5 shrink-0 text-right text-xs font-semibold text-slate-400">{i + 1}</span>
               {tm?.logo && <img src={tm.logo} alt={p.team} className="h-5 w-5 shrink-0" />}
-              <span className="w-40 shrink-0 truncate text-sm font-medium text-slate-800">{p.name}</span>
-              <span className="w-10 shrink-0 text-xs text-slate-400">{p.team}</span>
-              <div className="relative h-5 flex-1 rounded bg-slate-100">
+              <span className="w-20 shrink-0 truncate text-sm font-medium text-slate-800 sm:w-40">{p.name}</span>
+              <span className="w-8 shrink-0 text-xs text-slate-400 sm:w-10">{p.team}</span>
+              <div className="relative h-5 min-w-8 flex-1 rounded bg-slate-100">
                 <div
                   className="h-5 rounded"
                   style={{ width: `${barPct}%`, background: tm?.color2 ?? tm?.color ?? "#002f6c" }}
                 />
               </div>
-              <span className="w-16 shrink-0 text-right text-sm font-semibold text-slate-900">{fmtStat(stat, p.value)}</span>
-              <span className="w-14 shrink-0 text-right text-xs text-slate-400">{p.pct.toFixed(0)}% team</span>
+              <span className="w-14 shrink-0 text-right text-sm font-semibold text-slate-900 sm:w-16">{fmtStat(stat, p.value)}</span>
+              <span className="hidden shrink-0 text-right text-xs text-slate-400 sm:block sm:w-14">{p.pct.toFixed(0)}% team</span>
             </button>
           );
         })}
@@ -328,7 +328,7 @@ export default function PlayerTeamStats() {
               <button
                 key={`${b.conf}-${b.div}`}
                 onClick={() => jumpTo(`block-${b.conf}-${b.div}`)}
-                className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600 hover:border-[#002f6c] hover:text-[#002f6c]"
+                className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-2 text-xs font-medium text-slate-600 hover:border-[#002f6c] hover:text-[#002f6c] sm:py-1"
               >
                 {b.conf === "Other" ? "Other" : `${b.conf} ${b.div}`}
               </button>

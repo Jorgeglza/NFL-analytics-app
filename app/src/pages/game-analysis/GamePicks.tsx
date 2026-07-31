@@ -12,6 +12,7 @@ import { Loading } from "../../components/Loading";
 import { usePageTitle } from "../../lib/hooks/usePageTitle";
 import { WIN_TYPE_COLORS } from "../../lib/logic/winType";
 import { useSeasonWeek } from "../../context/SeasonWeekContext";
+import { InfoDot } from "../../components/InfoDot";
 
 const LABEL_FOR_NONE = "No result yet";
 const COLORS: Record<string, string> = {
@@ -204,12 +205,16 @@ export default function GamePicks() {
   if (!schedule.length) return <Loading label="Loading schedule…" />;
 
   const weekIdx = weeks.indexOf(Number(week));
-  const stepBtnCls = "grid h-8 w-8 place-items-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm transition-colors hover:text-slate-900 disabled:opacity-30 disabled:hover:text-slate-500";
+  const stepBtnCls = "grid h-11 w-11 sm:h-8 sm:w-8 place-items-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm transition-colors hover:text-slate-900 disabled:opacity-30 disabled:hover:text-slate-500";
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end gap-4">
-        <h1 title="Once you've made your picks, see how these win types trend across a season on Win Types." className="mr-auto flex items-center gap-2.5 text-2xl font-extrabold tracking-tight text-[#002f6c]"><span className="h-6 w-1.5 rounded-full bg-gradient-to-b from-[#002f6c] to-[#164a9c]" />Game Picks</h1>
+        <h1 className="mr-auto flex items-center gap-2.5 text-2xl font-extrabold tracking-tight text-[#002f6c]">
+          <span className="h-6 w-1.5 rounded-full bg-gradient-to-b from-[#002f6c] to-[#164a9c]" />
+          Game Picks
+          <InfoDot text="Once you've made your picks, see how these win types trend across a season on Win Types." />
+        </h1>
         {pickRecord.any && (
           <div className="flex items-center gap-1.5 self-center rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold shadow-sm" title="Your manual picks vs. final results for this week">
             <span className="uppercase tracking-wider text-slate-400">Your picks</span>
@@ -259,14 +264,14 @@ export default function GamePicks() {
                 </td>
                 <td className="px-3 py-2 text-center">
                   {as_ != null ? Math.round(as_) : (
-                    <label className="cursor-pointer select-none" title="Mark away team as manual winner">
+                    <label className="flex min-h-11 cursor-pointer select-none items-center justify-center gap-1 sm:min-h-0" title="Mark away team as manual winner">
                       <input type="checkbox" checked={manual.includes(`${gid}_away`)} onChange={() => toggleManual(gid, "away")} /> ✔
                     </label>
                   )}
                 </td>
                 <td className="px-3 py-2 text-center">
                   {hs != null ? Math.round(hs) : (
-                    <label className="cursor-pointer select-none" title="Mark home team as manual winner">
+                    <label className="flex min-h-11 cursor-pointer select-none items-center justify-center gap-1 sm:min-h-0" title="Mark home team as manual winner">
                       <input type="checkbox" checked={manual.includes(`${gid}_home`)} onChange={() => toggleManual(gid, "home")} /> ✔
                     </label>
                   )}
@@ -286,17 +291,17 @@ export default function GamePicks() {
                   )}
                 </td>
                 <td className="px-3 py-2">
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-3 sm:gap-1.5">
                     <Link
                       to={`/game_analysis/matchup_previews?tab=matchup&season=${season}&week=${week}&game=${gid}`}
-                      className="grid h-7 w-7 place-items-center rounded-full border border-slate-200 bg-white text-sm shadow-sm transition-all hover:-translate-y-0.5 hover:border-[#002f6c]/50 hover:shadow"
+                      className="grid h-11 w-11 place-items-center rounded-full border border-slate-200 bg-white text-sm shadow-sm transition-all hover:-translate-y-0.5 hover:border-[#002f6c]/50 hover:shadow sm:h-7 sm:w-7"
                       title={`Open Matchup Preview — ${g.away_team} @ ${g.home_team}`}
                     >
                       🧭
                     </Link>
                     <Link
                       to={`/game_analysis/team_comparison?season=${season}&week=${week}&team1=${g.away_team}&team2=${g.home_team}`}
-                      className="grid h-7 w-7 place-items-center rounded-full border border-slate-200 bg-white text-sm shadow-sm transition-all hover:-translate-y-0.5 hover:border-[#002f6c]/50 hover:shadow"
+                      className="grid h-11 w-11 place-items-center rounded-full border border-slate-200 bg-white text-sm shadow-sm transition-all hover:-translate-y-0.5 hover:border-[#002f6c]/50 hover:shadow sm:h-7 sm:w-7"
                       title={`Compare ${g.away_team} vs ${g.home_team}`}
                     >
                       ⚖️
@@ -322,7 +327,7 @@ export default function GamePicks() {
               <button
                 key={v}
                 onClick={() => setSpreadSort(v)}
-                className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors ${
+                className={`rounded-full px-2.5 py-2 text-xs font-medium transition-colors sm:py-0.5 ${
                   spreadSort === v ? "bg-[#002f6c] text-white shadow-sm" : "text-slate-600 hover:text-slate-900"
                 }`}
               >

@@ -16,6 +16,7 @@ import type { Row } from "../../lib/data/loader";
 import { useECharts } from "../../components/charts/useECharts";
 import { chartH } from "../../components/charts/sizing";
 import { Card, tableWrapCls, theadCls, trCls } from "../../components/ui";
+import { Select } from "../../components/filters/Select";
 import { labelFor, pct } from "./shared";
 import { describeFeature } from "./featureDescriptions";
 
@@ -33,6 +34,12 @@ export default function ExplanationTab({
   featureCols: string[];
 }) {
   const [search, setSearch] = useState("");
+  // Feature descriptions live in a hover `title` (cursor-help + dotted
+  // underline), which never fires on touch — tapping the label surfaces the
+  // same text here instead. Two independent panels (one per table) so a tap
+  // in either table shows its result next to that table, not the other one.
+  const [activeDesc, setActiveDesc] = useState<string | null>(null);
+  const [activeDescGame, setActiveDescGame] = useState<string | null>(null);
 
   const sorted = useMemo(
     () => [...importance].sort((a, b) => Number(b.importance ?? 0) - Number(a.importance ?? 0)),
@@ -167,8 +174,9 @@ export default function ExplanationTab({
               {filtered.map((r) => (
                 <tr key={String(r.feature)} className={trCls}>
                   <td
-                    className="cursor-help px-3 py-1.5 font-medium underline decoration-dotted decoration-slate-300 underline-offset-2"
+                    className="cursor-pointer px-3 py-1.5 font-medium underline decoration-dotted decoration-slate-300 underline-offset-2"
                     title={describeFeature(String(r.feature))}
+                    onClick={() => setActiveDesc(describeFeature(String(r.feature)))}
                   >
                     {labelFor(String(r.feature))}
                   </td>
@@ -183,6 +191,19 @@ export default function ExplanationTab({
             </tbody>
           </table>
         </div>
+        {activeDesc && (
+          <div className="mt-2 flex items-start justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+            <span>{activeDesc}</span>
+            <button
+              type="button"
+              onClick={() => setActiveDesc(null)}
+              aria-label="Close"
+              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-slate-400 hover:bg-slate-200 hover:text-slate-600"
+            >
+              ✕
+            </button>
+          </div>
+        )}
       </Card>
 
       <Card
@@ -190,39 +211,28 @@ export default function ExplanationTab({
         subtitle="Pick a game to see exactly how its stats added up to the model's prediction — an exact per-game breakdown, not an average"
       >
         <div className="mb-4 flex flex-wrap items-end gap-3">
-          <label className="flex flex-col gap-1">
-            <span className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Season</span>
-            <select
-              value={season ?? ""}
-              onChange={(e) => { setGsSeason(Number(e.target.value)); setGsWeek(null); setGsMatchupKey(null); }}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-[#002f6c] focus:outline-none focus:ring-2 focus:ring-[#002f6c]/15"
-            >
-              {gameSeasons.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Week</span>
-            <select
-              value={week ?? ""}
-              onChange={(e) => { setGsWeek(Number(e.target.value)); setGsMatchupKey(null); }}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-[#002f6c] focus:outline-none focus:ring-2 focus:ring-[#002f6c]/15"
-            >
-              {weeksForSeason.map((w) => <option key={w} value={w}>Week {w}</option>)}
-            </select>
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Matchup</span>
-            <select
-              value={matchupKey ?? ""}
-              onChange={(e) => setGsMatchupKey(e.target.value)}
-              className="min-w-52 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-[#002f6c] focus:outline-none focus:ring-2 focus:ring-[#002f6c]/15"
-            >
-              {matchups.map((g) => {
-                const key = `${g.away_team}@${g.home_team}`;
-                return <option key={key} value={key}>{key}</option>;
-              })}
-            </select>
-          </label>
+          <Select
+            label="Season"
+            value={String(season ?? "")}
+            onChange={(v) => { setGsSeason(Number(v)); setGsWeek(null); setGsMatchupKey(null); }}
+            options={gameSeasons.map((s) => ({ value: String(s), label: String(s) }))}
+          />
+          <Select
+            label="Week"
+            value={String(week ?? "")}
+            onChange={(v) => { setGsWeek(Number(v)); setGsMatchupKey(null); }}
+            options={weeksForSeason.map((w) => ({ value: String(w), label: `Week ${w}` }))}
+          />
+          <Select
+            label="Matchup"
+            value={matchupKey ?? ""}
+            onChange={setGsMatchupKey}
+            options={matchups.map((g) => {
+              const key = `${g.away_team}@${g.home_team}`;
+              return { value: key, label: key };
+            })}
+            minWidthClassName="min-w-52"
+          />
         </div>
 
         {selectedGame && (
@@ -257,8 +267,9 @@ export default function ExplanationTab({
                     {contribRows.map((r) => (
                       <tr key={r.feature} className={trCls}>
                         <td
-                          className="cursor-help px-3 py-1.5 font-medium underline decoration-dotted decoration-slate-300 underline-offset-2"
+                          className="cursor-pointer px-3 py-1.5 font-medium underline decoration-dotted decoration-slate-300 underline-offset-2"
                           title={describeFeature(r.feature)}
+                          onClick={() => setActiveDescGame(describeFeature(r.feature))}
                         >
                           {labelFor(r.feature)}
                         </td>
@@ -279,6 +290,19 @@ export default function ExplanationTab({
               </div>
             ) : (
               <p className="text-sm text-slate-400">No feature breakdown available for this game.</p>
+            )}
+            {activeDescGame && (
+              <div className="mt-2 flex items-start justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+                <span>{activeDescGame}</span>
+                <button
+                  type="button"
+                  onClick={() => setActiveDescGame(null)}
+                  aria-label="Close"
+                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-slate-400 hover:bg-slate-200 hover:text-slate-600"
+                >
+                  ✕
+                </button>
+              </div>
             )}
             <p className="mt-2 text-xs text-slate-500">
               This model is linear, so every feature's contribution above is exact — the sum row matches the

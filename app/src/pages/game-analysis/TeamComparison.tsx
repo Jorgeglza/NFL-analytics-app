@@ -12,6 +12,7 @@ import { Loading } from "../../components/Loading";
 import { opponentLabel } from "../grading-model/shared";
 import { usePageTitle } from "../../lib/hooks/usePageTitle";
 import { useSeasonWeek } from "../../context/SeasonWeekContext";
+import { InfoDot } from "../../components/InfoDot";
 
 const STAT_LIST = ["points", "total_yards", "total_tds", "passing_yards", "rushing_yards", "turnovers"];
 const STAT_HIERARCHY: Record<string, string[]> = {
@@ -239,7 +240,7 @@ export default function TeamComparison() {
       return (
         <div
           key={key}
-          className={`relative rounded-xl border text-center ${sub ? "w-14 px-1 py-0.5" : "w-[72px] px-1.5 py-1"} ${
+          className={`relative rounded-xl border text-center ${sub ? "w-14 px-1 py-0.5" : "w-14 px-1.5 py-1 sm:w-[72px]"} ${
             isZero ? "border-dashed border-slate-200 bg-slate-50/40" : "border-slate-200 bg-slate-50/80"
           }`}
           title={isZero ? `${hint ? `${hint} — ` : ""}confirmed zero (data present, not missing)` : hint}
@@ -296,11 +297,11 @@ export default function TeamComparison() {
       );
     }
     return (
-      <div className={`flex items-center justify-center gap-4 ${sub ? "py-1 pl-4 opacity-90" : "py-1.5 text-sm"}`}>
+      <div className={`flex items-center justify-center gap-2 sm:gap-4 ${sub ? "py-1 pl-4 opacity-90" : "py-1.5 text-sm"}`}>
         <div className="flex flex-1 justify-end">
           {StatCells({ s: s1, order: ["prev", "total", "avg"], team: team1, sub })}
         </div>
-        <div className="w-44 text-center">
+        <div className="w-28 text-center sm:w-44">
           <div className="mb-1 flex items-center justify-center gap-1">
             <button
               className={`cursor-pointer select-none font-semibold text-slate-700 transition-colors hover:text-[#002f6c] ${sub ? "text-[0.7rem]" : ""} ${selectedStat === stat ? "text-[#002f6c] underline decoration-2 underline-offset-4" : ""}`}
@@ -539,7 +540,7 @@ export default function TeamComparison() {
           {gameIdOf(team) && (
             <Link
               to={`/game_analysis/matchup_previews?tab=matchup&season=${season}&week=${week}&game=${gameIdOf(team)}`}
-              className="flex-1 rounded-full border border-slate-200 bg-white px-2 py-1 text-center font-medium text-[#002f6c] shadow-sm transition-colors hover:border-[#002f6c]/50"
+              className="flex min-h-11 flex-1 items-center justify-center rounded-full border border-slate-200 bg-white px-2 py-1 text-center font-medium text-[#002f6c] shadow-sm transition-colors hover:border-[#002f6c]/50 sm:min-h-0"
               title={`Open this week's Matchup Preview for ${team}`}
             >
               Matchup preview →
@@ -547,7 +548,7 @@ export default function TeamComparison() {
           )}
           <Link
             to={`/game_analysis/scorecards_teams?season=${season}&team=${team}`}
-            className="flex-1 rounded-full border border-slate-200 bg-white px-2 py-1 text-center font-medium text-[#002f6c] shadow-sm transition-colors hover:border-[#002f6c]/50"
+            className="flex min-h-11 flex-1 items-center justify-center rounded-full border border-slate-200 bg-white px-2 py-1 text-center font-medium text-[#002f6c] shadow-sm transition-colors hover:border-[#002f6c]/50 sm:min-h-0"
             title={`Open ${team}'s season scorecard`}
           >
             Scorecard →
@@ -578,8 +579,12 @@ export default function TeamComparison() {
       {/* Sticky under the navbar (~53px) so season/week stay reachable while
           scrolling the long stat column. Kept tight so the sticky side
           columns fit fully in the viewport. */}
-      <div className="sticky top-[53px] z-30 -mx-4 flex flex-wrap items-end justify-between gap-4 border-b border-slate-200/80 bg-slate-50/90 px-4 pb-2 pt-1 backdrop-blur">
-        <h1 title="Want the full detail behind one of these teams? See Team Scorecard." className="flex items-center gap-2.5 text-2xl font-extrabold tracking-tight text-[#002f6c]"><span className="h-6 w-1.5 rounded-full bg-gradient-to-b from-[#002f6c] to-[#164a9c]" />Team Comparison</h1>
+      <div className="sticky top-[53px] z-30 -mx-3 flex flex-wrap items-end justify-between gap-4 border-b border-slate-200/80 bg-slate-50/90 px-3 pb-2 pt-1 backdrop-blur sm:-mx-4 sm:px-4">
+        <h1 className="flex items-center gap-2.5 text-2xl font-extrabold tracking-tight text-[#002f6c]">
+          <span className="h-6 w-1.5 rounded-full bg-gradient-to-b from-[#002f6c] to-[#164a9c]" />
+          Team Comparison
+          <InfoDot text="Want the full detail behind one of these teams? See Team Scorecard." />
+        </h1>
         <div className="flex gap-4">
           <Select label="Season" value={season} onChange={setSeason} options={seasons.map((s) => ({ value: String(s), label: String(s) }))} />
           <Select label="Week" value={week} onChange={setWeek} options={weeks.map((w) => ({ value: String(w), label: `Week ${w}` }))} />
@@ -619,13 +624,13 @@ export default function TeamComparison() {
           </div>
           <hr className="mb-4" />
           <div className="overflow-x-auto">
-          <div className="min-w-[560px]">
-          <div className="mb-3 flex items-center justify-center gap-4 text-xs text-slate-500">
+          <div className="sm:min-w-[560px]">
+          <div className="mb-3 flex items-center justify-center gap-2 text-xs text-slate-500 sm:gap-4">
             <div className="flex flex-1 items-center justify-end gap-1.5">
               <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: color(team1) }} />
               <span className="font-semibold">{team1}</span>
             </div>
-            <div className="w-44 text-center text-[10px] uppercase tracking-wider text-slate-400">Last · Total · Avg — bar = league rank</div>
+            <div className="w-28 text-center text-[10px] uppercase tracking-wider text-slate-400 sm:w-44">Last · Total · Avg — bar = league rank</div>
             <div className="flex flex-1 items-center justify-start gap-1.5">
               <span className="font-semibold">{team2}</span>
               <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: color(team2) }} />

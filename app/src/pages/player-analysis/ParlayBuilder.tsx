@@ -261,9 +261,9 @@ function LegCard({
           )}
         </div>
         <div className="flex flex-col items-center gap-1.5">
-          <button onClick={onAdd} className="h-8 w-8 rounded-full border border-slate-300 font-bold hover:bg-slate-100">+</button>
+          <button onClick={onAdd} className="h-11 w-11 rounded-full border border-slate-300 font-bold hover:bg-slate-100 sm:h-8 sm:w-8">+</button>
           {removable && (
-            <button onClick={onRemove} className="h-8 w-8 rounded-full border border-slate-300 font-bold hover:bg-slate-100">−</button>
+            <button onClick={onRemove} className="h-11 w-11 rounded-full border border-slate-300 font-bold hover:bg-slate-100 sm:h-8 sm:w-8">−</button>
           )}
         </div>
       </div>
@@ -311,12 +311,12 @@ export default function ParlayBuilder() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <h1 className="flex items-center gap-2.5 text-2xl font-extrabold tracking-tight text-[#002f6c]"><span className="h-6 w-1.5 rounded-full bg-gradient-to-b from-[#002f6c] to-[#164a9c]" />Parlay Builder</h1>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           {[
             ["Expected Probability", expectedProb == null ? "—" : `${(expectedProb * 100).toFixed(2)}%`],
             ["Expected Odds", expectedOdds == null ? "—" : expectedOdds.toFixed(2)],
           ].map(([l, v]) => (
-            <div key={l} className="min-w-40 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-center shadow-sm" style={{ borderTop: "3px solid #002f6c" }}>
+            <div key={l} className="min-w-[calc(50%-2.25rem)] flex-1 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-center shadow-sm sm:min-w-40 sm:flex-none" style={{ borderTop: "3px solid #002f6c" }}>
               <div className="text-[11px] font-medium uppercase tracking-wider text-slate-400">{l}</div>
               <div className="mt-0.5 text-2xl font-bold">{v}</div>
             </div>

@@ -9,9 +9,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ECharts, EChartsOption } from "echarts";
 import type { Row } from "../../lib/data/loader";
 import { useECharts } from "../../components/charts/useECharts";
+import { Select } from "../../components/filters/Select";
 import { withMobile } from "../../components/charts/responsive";
 import { chartH } from "../../components/charts/sizing";
-import { Card, FilterGroup, Kpi, Segmented, tableWrapCls, theadCls, trCls } from "../../components/ui";
+import { Card, FilterGroup, Kpi, RangeInput, Segmented, tableWrapCls, theadCls, trCls } from "../../components/ui";
 import { InfoDot } from "../../components/InfoDot";
 import { WIN_TYPE_COLORS, type WinType } from "../../lib/logic/winType";
 import {
@@ -71,12 +72,7 @@ function lighten(hex: string, amount = 0.6): string {
 type Mode = "Points" | "%";
 type Grouping = "Outcome" | "Pregame";
 
-/** Shared heatmap chart-option builder for both the margin and probability
- * grids — same visual grammar (N-labeled cells, blue/red correctness
- * outline with ties going red, dashed diagonal/threshold reference). */
-function heatmapOptionOf(heatmap: Heatmap, opts: { xName: string; yName: string; xGap: number; yGap: number; diagonal: boolean }): EChartsOption | null {
-  if (!heatmap.cells.length) return null;
-  const maxCellN = Math.max(1, ...heatmap.cells.map((c) => c.n));
+function heatmapSeriesOf(heatmap: Heatmap, diagonal: boolean): NonNullable<EChartsOption["series"]> {
   const series: EChartsOption["series"] = [
     {
       type: "heatmap",
@@ -97,7 +93,7 @@ function heatmapOptionOf(heatmap: Heatmap, opts: { xName: string; yName: string;
       z: 2,
     },
   ];
-  if (opts.diagonal) {
+  if (diagonal) {
     const n = Math.min(heatmap.xLabels.length, heatmap.yLabels.length);
     series.push({
       type: "line",
@@ -109,6 +105,26 @@ function heatmapOptionOf(heatmap: Heatmap, opts: { xName: string; yName: string;
       z: 3,
     });
   }
+  return series as NonNullable<EChartsOption["series"]>;
+}
+
+/** Shared heatmap chart-option builder for both the margin and probability
+ * grids — same visual grammar (N-labeled cells, blue/red correctness
+ * outline with ties going red, dashed diagonal/threshold reference).
+ * `opts.mobileHeatmap`, when given, is a *re-bucketed* grid (coarser bucket
+ * width, e.g. margin buckets doubled from 5pt to 10pt) swapped in under the
+ * mobile media query instead of just shrinking the same cell count — the
+ * desktop 18x18 grid is unreadable at 9px labels no matter how tight the
+ * gutters get. */
+function heatmapOptionOf(
+  heatmap: Heatmap,
+  opts: { xName: string; yName: string; xGap: number; yGap: number; diagonal: boolean; mobileHeatmap?: Heatmap },
+): EChartsOption | null {
+  if (!heatmap.cells.length) return null;
+  const maxCellN = Math.max(1, ...heatmap.cells.map((c) => c.n));
+  const series = heatmapSeriesOf(heatmap, opts.diagonal);
+  const mobile = opts.mobileHeatmap;
+  const mobileMaxCellN = mobile ? Math.max(1, ...mobile.cells.map((c) => c.n)) : maxCellN;
   return withMobile(
     {
       grid: { left: 90, right: 20, top: 30, bottom: 70, containLabel: false },
@@ -149,9 +165,29 @@ function heatmapOptionOf(heatmap: Heatmap, opts: { xName: string; yName: string;
     },
     {
       grid: { left: 36, right: 8, top: 20, bottom: 38, containLabel: true },
-      xAxis: { nameGap: 20, nameTextStyle: { fontSize: 9 } },
-      yAxis: { nameGap: 22, nameTextStyle: { fontSize: 9 } },
-      visualMap: { orient: "horizontal", left: "center", top: "bottom", bottom: 0, itemWidth: 60, itemHeight: 10 },
+      xAxis: {
+        nameGap: 20,
+        nameTextStyle: { fontSize: 9 },
+        ...(mobile ? { data: mobile.xLabels } : {}),
+      },
+      yAxis: {
+        nameGap: 22,
+        nameTextStyle: { fontSize: 9 },
+        ...(mobile ? { data: mobile.yLabels } : {}),
+      },
+      visualMap: { orient: "horizontal", left: "center", top: "bottom", bottom: 0, itemWidth: 60, itemHeight: 10, max: mobileMaxCellN },
+      ...(mobile
+        ? {
+            tooltip: {
+              formatter: (p: unknown) => {
+                const pt = p as { data: { xi: number; yi: number; n: number; correctShare: number | null } };
+                const { xi, yi, n, correctShare } = pt.data;
+                return `${opts.xName}: ${mobile.xLabels[xi]}<br/>${opts.yName}: ${mobile.yLabels[yi]}<br/>n=${n} — ${pct(correctShare)} correct`;
+              },
+            },
+            series: heatmapSeriesOf(mobile, opts.diagonal),
+          }
+        : {}),
     },
   ) as EChartsOption;
 }
@@ -710,9 +746,18 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
   const calibWeeklyRef = useECharts(calibWeeklyOption);
 
   const heatmap = useMemo(() => buildMarginHeatmap(filtered, 5), [filtered]);
+  const heatmapMobile = useMemo(() => buildMarginHeatmap(filtered, 10), [filtered]);
   const heatmapOption = useMemo(
-    () => heatmapOptionOf(heatmap, { xName: "Predicted margin bucket (pts)", yName: "Actual margin bucket (pts)", xGap: 44, yGap: 65, diagonal: true }),
-    [heatmap],
+    () =>
+      heatmapOptionOf(heatmap, {
+        xName: "Predicted margin bucket (pts)",
+        yName: "Actual margin bucket (pts)",
+        xGap: 44,
+        yGap: 65,
+        diagonal: true,
+        mobileHeatmap: heatmapMobile,
+      }),
+    [heatmap, heatmapMobile],
   );
   const heatmapRef = useECharts(heatmapOption);
 
@@ -771,22 +816,8 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
   return (
     <div className="space-y-4">
       <FilterGroup label="Filter">
-        <label className="flex flex-col gap-1">
-          <span className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Season</span>
-          <select value={season} onChange={(e) => setSeason(e.target.value)} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-[#002f6c] focus:outline-none focus:ring-2 focus:ring-[#002f6c]/15">
-            {seasons.map((s) => (
-              <option key={s} value={s}>{s}</option>
-            ))}
-          </select>
-        </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Team</span>
-          <select value={team} onChange={(e) => setTeam(e.target.value)} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-[#002f6c] focus:outline-none focus:ring-2 focus:ring-[#002f6c]/15">
-            {teams.map((t) => (
-              <option key={t} value={t}>{t}</option>
-            ))}
-          </select>
-        </label>
+        <Select label="Season" value={season} onChange={setSeason} options={seasons.map((s) => ({ value: s, label: s }))} />
+        <Select label="Team" value={team} onChange={setTeam} options={teams.map((t) => ({ value: t, label: t }))} />
         <Segmented label="View" options={[{ value: "Points" as Mode, label: "Points" }, { value: "%" as Mode, label: "%" }]} value={mode} onChange={setMode} />
       </FilterGroup>
 
@@ -908,6 +939,11 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
           }
         >
           <div className="mb-3 flex flex-wrap items-center gap-3">
+            {/* The cutoff line is also draggable directly on the chart below
+                (desktop mouse only — dragging would fight page scroll on
+                touch) — this slider is the touch-reachable equivalent,
+                bound to the same state either way works. */}
+            <RangeInput label="Decision cutoff" value={thresholdPct} onChange={setThresholdPct} min={0} max={100} step={1} className="w-40" />
             <span className="text-xs font-medium text-slate-600">
               Decision cutoff: <span className="font-semibold text-slate-800">{thresholdPct.toFixed(0)}%</span> predicted home win probability
             </span>
@@ -919,7 +955,7 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
             {Math.round(thresholdPct) !== 50 && (
               <button
                 onClick={() => setThresholdPct(50)}
-                className="rounded-full border border-slate-300 px-2.5 py-1 text-[11px] font-medium text-slate-600 hover:bg-slate-50"
+                className="rounded-full border border-slate-300 px-2.5 py-2 text-[11px] font-medium text-slate-600 hover:bg-slate-50 sm:py-1"
               >
                 Reset to 50%
               </button>
@@ -928,7 +964,7 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
               <button
                 onClick={() => setThresholdPct(optimalThreshold.thresholdPct)}
                 title={`Sets the cutoff to ${optimalThreshold.thresholdPct.toFixed(1)}%, the highest pooled accuracy (${pct(optimalThreshold.acc)}) achievable on the games currently in view — the best case, not a recommendation for how to actually pick games.`}
-                className="rounded-full border border-[#002f6c]/30 bg-[#002f6c]/5 px-2.5 py-1 text-[11px] font-medium text-[#002f6c] hover:bg-[#002f6c]/10"
+                className="rounded-full border border-[#002f6c]/30 bg-[#002f6c]/5 px-2.5 py-2 text-[11px] font-medium text-[#002f6c] hover:bg-[#002f6c]/10 sm:py-1"
               >
                 Maximize accuracy
               </button>

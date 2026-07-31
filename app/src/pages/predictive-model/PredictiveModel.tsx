@@ -3,6 +3,7 @@
 // Historical-only (no live/upcoming-week picks — see docs/predictive-model.md
 // for why). 4 tabs, mirrors the grading-model page's file layout.
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   getPredictiveModelGames,
   getPredictiveModelGameFeatures,
@@ -29,9 +30,25 @@ const TABS = [
   ["Confidence", "📐", "Calibration and the fitted residual (uncertainty) distribution"],
 ] as const;
 type Tab = (typeof TABS)[number][0];
+const TAB_SLUGS: Record<string, Tab> = { overview: "Overview", performance: "Performance", explanation: "Explanation", confidence: "Confidence" };
+const TAB_TO_SLUG: Record<Tab, string> = { Overview: "overview", Performance: "performance", Explanation: "explanation", Confidence: "confidence" };
 
 export default function PredictiveModel() {
-  const [tab, setTab] = useState<Tab>("Overview");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [tab, setTab] = useState<Tab>(TAB_SLUGS[searchParams.get("tab") ?? ""] ?? "Overview");
+
+  // Keep ?tab= in sync so the URL reflects what's on screen and the browser
+  // back button undoes a tab change instead of leaving the page (P4.17).
+  useEffect(() => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.set("tab", TAB_TO_SLUG[tab]);
+        return next;
+      },
+      { replace: true },
+    );
+  }, [tab, setSearchParams]);
   const [games, setGames] = useState<Row[]>([]);
   const [gameFeatures, setGameFeatures] = useState<Row[]>([]);
   const [seasonSummary, setSeasonSummary] = useState<Row[]>([]);

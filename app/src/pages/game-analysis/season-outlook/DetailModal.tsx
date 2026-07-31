@@ -160,12 +160,12 @@ export default function DetailModal({
           {result.remainingGames.length ? (
             <div className="space-y-2">
               {result.remainingGames.map((g) => (
-                <div key={`${g.week}-${g.opponent}`} className="flex items-center gap-3 text-sm">
-                  <span className="w-14 shrink-0 text-slate-500">Wk {g.week}</span>
-                  <span className="w-28 shrink-0 font-medium text-slate-700">
+                <div key={`${g.week}-${g.opponent}`} className="flex items-center gap-1.5 text-sm sm:gap-3">
+                  <span className="w-10 shrink-0 text-slate-500 sm:w-14">Wk {g.week}</span>
+                  <span className="w-16 shrink-0 truncate font-medium text-slate-700 sm:w-28">
                     {g.home ? "vs" : "@"} {g.opponent}
                   </span>
-                  <span className="w-24 shrink-0 text-xs text-slate-400">
+                  <span className="hidden shrink-0 text-xs text-slate-400 sm:block sm:w-24">
                     {Math.round(g.teamElo)} vs {Math.round(g.opponentElo)}
                   </span>
                   <div className="h-5 flex-1 overflow-hidden rounded-full bg-slate-100">

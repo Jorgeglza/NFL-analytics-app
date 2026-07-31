@@ -243,7 +243,7 @@ export default function WeekPreviewTab({
               title={onOpenMatchup ? "View full matchup breakdown" : undefined}
             >
               {onOpenMatchup && (
-                <span className="pointer-events-none absolute bottom-1.5 right-2 text-[10px] text-slate-300 opacity-0 transition-opacity group-hover:opacity-100">
+                <span className="pointer-events-none absolute bottom-1.5 right-2 text-[10px] text-slate-300 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
                   view matchup →
                 </span>
               )}

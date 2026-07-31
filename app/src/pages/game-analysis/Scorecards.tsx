@@ -11,12 +11,13 @@ import { getTeamMetaMap, type TeamMeta } from "../../lib/team/meta";
 import { Select } from "../../components/filters/Select";
 import { useECharts } from "../../components/charts/useECharts";
 import { Loading } from "../../components/Loading";
-import { Card, tableWrapCls, theadCls, trCls } from "../../components/ui";
+import { Card, tableWrapCls, theadCls, trCls, stickyColCls, stickyColHeadCls, ScrollHint } from "../../components/ui";
 import { TeamLogoLink } from "../../components/team/TeamLogoLink";
 import { opponentLabel } from "../grading-model/shared";
 import { fairProbs } from "../../lib/logic/moneyline";
 import { usePageTitle } from "../../lib/hooks/usePageTitle";
 import { useSeasonWeek } from "../../context/SeasonWeekContext";
+import { InfoDot } from "../../components/InfoDot";
 
 const OFF_ACCENT = "#c0392b";
 const DEF_ACCENT = "#2980b9";
@@ -382,10 +383,10 @@ function ScheduleSection({
   return (
     <Card title="Season schedule" subtitle="Every game this season — click a row for venue, weather, and win-probability detail.">
       <div className={tableWrapCls}>
-        <table className="w-full min-w-[860px] text-sm">
+        <table className="w-full min-w-[860px] border-separate border-spacing-0 text-sm">
           <thead className={theadCls}>
             <tr>
-              <th className="px-3 py-2">Wk</th>
+              <th className={`px-3 py-2 ${stickyColHeadCls}`}>Wk</th>
               <th className="px-3 py-2">Date</th>
               <th className="px-3 py-2">Opponent</th>
               <th className="px-3 py-2">Result</th>
@@ -411,7 +412,7 @@ function ScheduleSection({
                     className={`${trCls} cursor-pointer ${info.played ? "" : "text-slate-400"}`}
                     onClick={() => setOpen((o) => ({ ...o, [info.gameId]: !o[info.gameId] }))}
                   >
-                    <td className="px-3 py-2 font-semibold text-slate-500">
+                    <td className={`px-3 py-3 font-semibold text-slate-500 sm:py-2 ${stickyColCls}`}>
                       <span className={`mr-1.5 inline-block text-slate-400 transition-transform ${isOpen ? "rotate-90" : ""}`}>›</span>
                       W{info.week}
                     </td>
@@ -584,6 +585,7 @@ function ScheduleSection({
             })}
           </tbody>
         </table>
+        <ScrollHint />
       </div>
     </Card>
   );
@@ -787,7 +789,11 @@ export default function Scorecards() {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-4">
-        <h1 title="For a league-wide statistical view, see Spread Win Percentage." className="flex items-center gap-2.5 text-2xl font-extrabold tracking-tight text-[#002f6c]"><span className="h-6 w-1.5 rounded-full bg-gradient-to-b from-[#002f6c] to-[#164a9c]" />Team Scorecard</h1>
+        <h1 className="flex items-center gap-2.5 text-2xl font-extrabold tracking-tight text-[#002f6c]">
+          <span className="h-6 w-1.5 rounded-full bg-gradient-to-b from-[#002f6c] to-[#164a9c]" />
+          Team Scorecard
+          <InfoDot text="For a league-wide statistical view, see Spread Win Percentage." />
+        </h1>
         <div className="flex gap-4">
           <Select label="Season" value={season} onChange={setSeason} options={seasons.map((s) => ({ value: String(s), label: String(s) }))} />
           <Select label="Team" value={team} onChange={setTeam} options={teams.map((t) => ({ value: t, label: meta.get(t)?.name ?? t }))} />
