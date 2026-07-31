@@ -7,6 +7,7 @@ import type { EChartsOption } from "echarts";
 import { getSchedule, type Row } from "../../lib/data/loader";
 import { Select } from "../../components/filters/Select";
 import { useECharts } from "../../components/charts/useECharts";
+import { rowChartH } from "../../components/charts/sizing";
 import { Loading } from "../../components/Loading";
 import { usePageTitle } from "../../lib/hooks/usePageTitle";
 import { WIN_TYPE_COLORS } from "../../lib/logic/winType";
@@ -330,7 +331,7 @@ export default function GamePicks() {
             ))}
           </div>
         </div>
-        <div ref={spreadRef} style={{ height: Math.max(180, 28 * spreadGames.length + 70) }} />
+        <div ref={spreadRef} style={{ height: Math.max(180, rowChartH(spreadGames.length, 28, 70)) }} />
       </div>
     </div>
   );

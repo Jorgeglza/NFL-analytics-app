@@ -14,6 +14,7 @@ import { useMemo, useState } from "react";
 import type { EChartsOption } from "echarts";
 import type { Row } from "../../lib/data/loader";
 import { useECharts } from "../../components/charts/useECharts";
+import { chartH } from "../../components/charts/sizing";
 import { Card, tableWrapCls, theadCls, trCls } from "../../components/ui";
 import { labelFor, pct } from "./shared";
 import { describeFeature } from "./featureDescriptions";
@@ -140,7 +141,7 @@ export default function ExplanationTab({
       </Card>
 
       <Card title={`Top ${TOP_N} features`} subtitle="Ranked by permutation importance, averaged across all walk-forward folds">
-        <div ref={barRef} className="h-[560px]" />
+        <div ref={barRef} className={chartH.lg} />
       </Card>
 
       <Card>

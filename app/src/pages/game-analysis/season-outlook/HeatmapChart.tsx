@@ -9,6 +9,8 @@ import type { EChartsOption } from "echarts";
 import type { HeatmapData } from "./shared";
 import type { TeamMeta } from "../../../lib/team/meta";
 import { useECharts } from "../../../components/charts/useECharts";
+import { rowChartH } from "../../../components/charts/sizing";
+import { withMobile } from "../../../components/charts/responsive";
 
 function colorForElo(elo: number, min: number, max: number): string {
   const t = max > min ? Math.max(0, Math.min(1, (elo - min) / (max - min))) : 0.5;
@@ -53,81 +55,88 @@ export default function HeatmapChart({ data, meta }: { data: HeatmapData; meta: 
       });
     });
 
-    return {
-      grid: { left: 50, right: 12, top: 30, bottom: 10, containLabel: false },
-      xAxis: {
-        type: "category",
-        data: weekLabels,
-        position: "top",
-        axisLabel: { fontSize: 10 },
-        axisTick: { show: false },
-        splitArea: { show: false },
-      },
-      yAxis: { type: "category", data: teamLabels, inverse: true, axisLabel: { fontSize: 10 }, axisTick: { show: false } },
-      tooltip: {
-        trigger: "item",
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        formatter: (p: any) => {
-          const d: Point = points[p.dataIndex];
-          const team = teamLabels[d.value[1]];
-          const week = data.weeks[d.value[0]];
-          return `${meta.get(team)?.name ?? team} — Week ${week}<br/>${d.home ? "vs" : "@"} ${meta.get(d.opponent)?.name ?? d.opponent}<br/>Opponent Elo: <b>${Math.round(d.value[2])}</b>`;
+    return withMobile(
+      {
+        grid: { left: 50, right: 12, top: 30, bottom: 10, containLabel: false },
+        xAxis: {
+          type: "category",
+          data: weekLabels,
+          position: "top",
+          axisLabel: { fontSize: 10 },
+          axisTick: { show: false },
+          splitArea: { show: false },
         },
-      },
-      series: [
-        {
-          type: "custom",
+        yAxis: { type: "category", data: teamLabels, inverse: true, axisLabel: { fontSize: 10 }, axisTick: { show: false } },
+        tooltip: {
+          trigger: "item",
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          renderItem: (params: any, api: any) => {
-            const xIndex = api.value(0);
-            const yIndex = api.value(1);
-            const eloVal = api.value(2);
-            const point = points[params.dataIndex];
-            const center = api.coord([xIndex, yIndex]);
-            const size = api.size([1, 1]);
-            const w = size[0] - 2;
-            const h = size[1] - 2;
-            const x0 = center[0] - w / 2;
-            const y0 = center[1] - h / 2;
-            const logo = meta.get(point.opponent)?.logo;
-            const imgSize = Math.min(w, h) * 0.62;
-
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const children: any[] = [
-              {
-                type: "rect",
-                shape: { x: x0, y: y0, width: w, height: h, r: 3 },
-                style: { fill: colorForElo(eloVal, data.eloMin, data.eloMax) },
-              },
-            ];
-            if (logo) {
-              children.push({
-                type: "image",
-                style: { image: logo, x: center[0] - imgSize / 2, y: center[1] - imgSize / 2, width: imgSize, height: imgSize },
-              });
-            }
-            children.push({
-              type: "text",
-              style: {
-                text: String(Math.round(eloVal)),
-                x: x0 + w - 2,
-                y: y0 + h - 2,
-                fontSize: 8,
-                fill: "rgba(0,0,0,0.6)",
-                textAlign: "right",
-                textVerticalAlign: "bottom",
-              },
-            });
-            return { type: "group", children };
+          formatter: (p: any) => {
+            const d: Point = points[p.dataIndex];
+            const team = teamLabels[d.value[1]];
+            const week = data.weeks[d.value[0]];
+            return `${meta.get(team)?.name ?? team} — Week ${week}<br/>${d.home ? "vs" : "@"} ${meta.get(d.opponent)?.name ?? d.opponent}<br/>Opponent Elo: <b>${Math.round(d.value[2])}</b>`;
           },
-          data: points.map((p) => p.value),
         },
-      ],
-    } as EChartsOption;
+        series: [
+          {
+            type: "custom",
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            renderItem: (params: any, api: any) => {
+              const xIndex = api.value(0);
+              const yIndex = api.value(1);
+              const eloVal = api.value(2);
+              const point = points[params.dataIndex];
+              const center = api.coord([xIndex, yIndex]);
+              const size = api.size([1, 1]);
+              const w = size[0] - 2;
+              const h = size[1] - 2;
+              const x0 = center[0] - w / 2;
+              const y0 = center[1] - h / 2;
+              const logo = meta.get(point.opponent)?.logo;
+              const imgSize = Math.min(w, h) * 0.62;
+
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const children: any[] = [
+                {
+                  type: "rect",
+                  shape: { x: x0, y: y0, width: w, height: h, r: 3 },
+                  style: { fill: colorForElo(eloVal, data.eloMin, data.eloMax) },
+                },
+              ];
+              if (logo) {
+                children.push({
+                  type: "image",
+                  style: { image: logo, x: center[0] - imgSize / 2, y: center[1] - imgSize / 2, width: imgSize, height: imgSize },
+                });
+              }
+              children.push({
+                type: "text",
+                style: {
+                  text: String(Math.round(eloVal)),
+                  x: x0 + w - 2,
+                  y: y0 + h - 2,
+                  fontSize: 8,
+                  fill: "rgba(0,0,0,0.6)",
+                  textAlign: "right",
+                  textVerticalAlign: "bottom",
+                },
+              });
+              return { type: "group", children };
+            },
+            data: points.map((p) => p.value),
+          },
+        ],
+      },
+      {
+        grid: { left: 30, right: 4, top: 22, bottom: 4, containLabel: false },
+        xAxis: { axisLabel: { fontSize: 8 } },
+        yAxis: { axisLabel: { fontSize: 8 } },
+      },
+    ) as EChartsOption;
   }, [data, meta]);
 
   const ref = useECharts(option);
 
   if (!option) return <div className="py-8 text-center text-sm text-slate-400">No schedule data yet.</div>;
-  return <div ref={ref} style={{ height: Math.max(320, data.rows.length * 22 + 60) }} />;
+  return <div ref={ref} style={{ height: Math.max(320, rowChartH(data.rows.length)) }} />;
 }

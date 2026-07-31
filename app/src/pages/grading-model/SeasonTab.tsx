@@ -4,6 +4,7 @@ import type { Row } from "../../lib/data/loader";
 import type { TeamMeta } from "../../lib/team/meta";
 import { Select } from "../../components/filters/Select";
 import { useECharts } from "../../components/charts/useECharts";
+import { rowChartH, chartH } from "../../components/charts/sizing";
 import { seasonRecords } from "./shared";
 import { rankedBarOption, offDefScatterOption, type TeamPoint } from "./charts";
 
@@ -72,14 +73,14 @@ export default function SeasonTab({
 
       <Select label="Season" value={sel} onChange={setSeason} options={seasons.map((s) => ({ value: String(s), label: String(s) }))} />
       {[
-        { title: `🏆 Overall Grades – ${sel}`, ref: overallRef, h: "h-[600px]" },
-        { title: `📊 Offense vs Defense Grade (Avg per Team) – ${sel}`, ref: scatterRef, h: "h-[700px]" },
-        { title: `🚀 Offensive Grades – ${sel}`, ref: offRef, h: "h-[600px]" },
-        { title: `🛡️ Defensive Grades – ${sel}`, ref: defRef, h: "h-[600px]" },
+        { title: `🏆 Overall Grades – ${sel}`, ref: overallRef, height: rowChartH(teamAvgs.length) },
+        { title: `📊 Offense vs Defense Grade (Avg per Team) – ${sel}`, ref: scatterRef, className: chartH.xl },
+        { title: `🚀 Offensive Grades – ${sel}`, ref: offRef, height: rowChartH(teamAvgs.length) },
+        { title: `🛡️ Defensive Grades – ${sel}`, ref: defRef, height: rowChartH(teamAvgs.length) },
       ].map((c) => (
         <div key={c.title} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <h3 className="mb-2 text-sm font-semibold text-slate-700">{c.title}</h3>
-          <div ref={c.ref} className={c.h} />
+          <div ref={c.ref} className={c.className} style={c.height ? { height: c.height } : undefined} />
         </div>
       ))}
     </div>

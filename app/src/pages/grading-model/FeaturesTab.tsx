@@ -6,6 +6,7 @@ import { useMemo, useState } from "react";
 import type { EChartsOption } from "echarts";
 import type { Row } from "../../lib/data/loader";
 import { useECharts } from "../../components/charts/useECharts";
+import { chartH } from "../../components/charts/sizing";
 import { Segmented, FilterGroup, tableWrapCls, theadCls, trCls } from "../../components/ui";
 import { statLabel } from "../player-analysis/statPicker";
 import { Glossary } from "../../components/Glossary";
@@ -111,7 +112,7 @@ export default function FeaturesTab({ importance }: { importance: Row[] }) {
       <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <h3 className="mb-1 text-sm font-semibold text-slate-700">Top {TOP_N} Drivers — ranked by {impType} importance</h3>
         <p className="mb-2 text-xs text-slate-500">All three models shown per stat, so you can see where they agree or diverge.</p>
-        <div ref={barRef} className="h-[560px]" />
+        <div ref={barRef} className={chartH.lg} />
       </div>
 
       <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">

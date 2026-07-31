@@ -6,6 +6,7 @@ import { getTeamWeek, type Row, type ContribParams } from "../../lib/data/loader
 import type { TeamMeta } from "../../lib/team/meta";
 import { Select } from "../../components/filters/Select";
 import { useECharts } from "../../components/charts/useECharts";
+import { chartH } from "../../components/charts/sizing";
 import { weekContributions, type GradeType } from "../../lib/logic/contributions";
 import { buildStatGroups, statLabel } from "../player-analysis/statPicker";
 import { teamPalette, opponentLabel } from "./shared";
@@ -360,7 +361,7 @@ export default function TeamsTab({
         <h3 className="mb-1 text-sm font-semibold text-slate-700">
           {meta.get(team)?.name ?? team} – {gradeType} Contributions by Week ({sel})
         </h3>
-        <div ref={stackedRef} className="h-[520px]" />
+        <div ref={stackedRef} className={chartH.lg} />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -417,7 +418,7 @@ export default function TeamsTab({
         <div className="mb-2 flex items-end gap-4">
           <Select label="Select Stat" value={selStat} onChange={setStat} groups={statGroups} />
         </div>
-        <div ref={statRef} className="h-[520px]" />
+        <div ref={statRef} className={chartH.lg} />
       </div>
     </div>
   );

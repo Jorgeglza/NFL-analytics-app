@@ -6,6 +6,7 @@ import type { Row } from "../../lib/data/loader";
 import type { TeamMeta } from "../../lib/team/meta";
 import { Select } from "../../components/filters/Select";
 import { useECharts } from "../../components/charts/useECharts";
+import { rowChartH, chartH } from "../../components/charts/sizing";
 import { percentile, sampleStd, type GradeType } from "../../lib/logic/contributions";
 import { seasonRecords, weekGameInfo } from "./shared";
 import { rankedBarOption, offDefScatterOption, type TeamPoint } from "./charts";
@@ -205,11 +206,11 @@ export default function WeeklyTab({
 
       <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <h3 className="mb-1 text-sm font-semibold text-slate-700">{gradeType} – Team Ranking (Season {sel}, Week {selWeek})</h3>
-        <div ref={rankRef} className="h-[600px]" />
+        <div ref={rankRef} style={{ height: rowChartH(points.length) }} />
       </div>
       <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <h3 className="mb-1 text-sm font-semibold text-slate-700">📊 Offense vs Defense Grade – Season {sel}, Week {selWeek}</h3>
-        <div ref={odRef} className="h-[700px]" />
+        <div ref={odRef} className={chartH.xl} />
       </div>
 
       <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">

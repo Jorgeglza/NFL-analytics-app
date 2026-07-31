@@ -14,6 +14,7 @@ import { getPlayerWeek, getTeamWeek, getTeamWeekRanks, getSchedule, getMeta, typ
 import { getTeamMetaMap, type TeamMeta } from "../../lib/team/meta";
 import { Select } from "../../components/filters/Select";
 import { useECharts } from "../../components/charts/useECharts";
+import { withMobile } from "../../components/charts/responsive";
 import { opponentLabel } from "../grading-model/shared";
 import { Loading } from "../../components/Loading";
 import { buildMismatchStatGroups, statLabel } from "./statPicker";
@@ -284,33 +285,36 @@ export default function MatchupBets() {
       rank: wksAll.map((wk) => rankOfOpp(oppOf(team, wk), wk)),
     }));
     const maxRank = Math.max(32, ...series.flatMap((sr) => sr.rank.filter((r): r is number => r != null)));
-    return {
-      grid: { left: 10, right: 45, top: 30, bottom: 25, containLabel: true },
-      legend: { bottom: 0, textStyle: { fontSize: 10 } },
-      tooltip: {
-        trigger: "axis",
-        formatter: (params: unknown) => {
-          const ps = params as { seriesName: string; dataIndex: number; value: number | null; seriesType: string }[];
-          const idx = ps[0]?.dataIndex ?? 0;
-          const lines = [`Week ${wksAll[idx]}`];
-          for (const sr of series) {
-            lines.push(`<b>${sr.team}</b> — Opp: ${sr.opps[idx] ?? "—"} | Avg allowed: ${sr.avg[idx] ?? "—"} | Rank: ${sr.rank[idx] ?? "—"}`);
-          }
-          return lines.join("<br/>");
+    return withMobile(
+      {
+        grid: { left: 10, right: 45, top: 30, bottom: 25, containLabel: true },
+        legend: { bottom: 0, textStyle: { fontSize: 10 } },
+        tooltip: {
+          trigger: "axis",
+          formatter: (params: unknown) => {
+            const ps = params as { seriesName: string; dataIndex: number; value: number | null; seriesType: string }[];
+            const idx = ps[0]?.dataIndex ?? 0;
+            const lines = [`Week ${wksAll[idx]}`];
+            for (const sr of series) {
+              lines.push(`<b>${sr.team}</b> — Opp: ${sr.opps[idx] ?? "—"} | Avg allowed: ${sr.avg[idx] ?? "—"} | Rank: ${sr.rank[idx] ?? "—"}`);
+            }
+            return lines.join("<br/>");
+          },
         },
+        xAxis: { type: "category", data: wksAll.map(String), name: "Week", nameLocation: "middle", nameGap: 24 },
+        yAxis: [
+          { type: "value", name: `${allowedCol.replace(/_/g, " ")}` },
+          { type: "value", name: "Opp Rank", min: 1, max: maxRank, splitLine: { show: false } },
+        ],
+        series: [
+          { name: `${away} Opp Allowed`, type: "bar", data: series[0].avg, itemStyle: { color: color(away), opacity: 0.95 } },
+          { name: `${home} Opp Allowed`, type: "bar", data: series[1].avg, itemStyle: { color: color(home), opacity: 0.65 } },
+          { name: `${away} Opp Rank`, type: "line", yAxisIndex: 1, data: series[0].rank, lineStyle: { color: color(away), width: 2 }, itemStyle: { color: color(away) }, symbolSize: 5 },
+          { name: `${home} Opp Rank`, type: "line", yAxisIndex: 1, data: series[1].rank, lineStyle: { color: color(home), width: 2 }, itemStyle: { color: color(home) }, symbolSize: 5 },
+        ],
       },
-      xAxis: { type: "category", data: wksAll.map(String), name: "Week", nameLocation: "middle", nameGap: 24 },
-      yAxis: [
-        { type: "value", name: `${allowedCol.replace(/_/g, " ")}` },
-        { type: "value", name: "Opp Rank", min: 1, max: maxRank, splitLine: { show: false } },
-      ],
-      series: [
-        { name: `${away} Opp Allowed`, type: "bar", data: series[0].avg, itemStyle: { color: color(away), opacity: 0.95 } },
-        { name: `${home} Opp Allowed`, type: "bar", data: series[1].avg, itemStyle: { color: color(home), opacity: 0.65 } },
-        { name: `${away} Opp Rank`, type: "line", yAxisIndex: 1, data: series[0].rank, lineStyle: { color: color(away), width: 2 }, itemStyle: { color: color(away) }, symbolSize: 5 },
-        { name: `${home} Opp Rank`, type: "line", yAxisIndex: 1, data: series[1].rank, lineStyle: { color: color(home), width: 2 }, itemStyle: { color: color(home) }, symbolSize: 5 },
-      ],
-    } as EChartsOption;
+      { grid: { left: 4, right: 30, top: 24, bottom: 32, containLabel: true } },
+    ) as EChartsOption;
   }, [tw, regSched, away, home, selStat, w, ranks, meta]);
 
   // ---------- pivot ----------

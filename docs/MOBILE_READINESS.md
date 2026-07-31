@@ -2,7 +2,7 @@
 
 Status legend: ☐ not started · ◐ in progress · ✅ done · ⛔ blocked
 
-**Overall status: ◐ in progress** — audit complete 2026-07-29; Phase 1 (shared infrastructure) complete 2026-07-29. Phases 2–7 (per-chart/page adoption) not started.
+**Overall status: ◐ in progress** — audit complete 2026-07-29; Phase 1 (shared infrastructure) complete 2026-07-29; Phase 2 (charts: size/axes/legends) complete 2026-07-30. Phases 3–7 not started.
 
 ---
 
@@ -85,37 +85,39 @@ Build once, apply everywhere. **Do this before touching any page** — ~60 chart
 
 ---
 
-## Phase 2 — Charts: size, axes, legends ☐
+## Phase 2 — Charts: size, axes, legends ✅
 
 ### 2a. Height strategy — the key distinction
 
 **Not every tall chart is a bug.** Split them by what drives the height:
 
-- [ ] **P2.1** `POLISH` — **List-driven** charts (one row per team/game) *should* stay tall; shrinking collides the labels. Move to `rowChartH(n)` with `rowPx ≥ 18` and let the page scroll: `SeasonTab.tsx:75,77,78` and `WeeklyTab.tsx:208` (32-team ranked bars, currently `h-[600px]`), `SosTab.tsx:65`, `GamePicks.tsx:333`, `HeatmapChart.tsx:132` (~764px for 32 teams), `ModelPickerTab.tsx:516,530`.
-- [ ] **P2.2** `BLOCKING` — **Aspect-driven** charts (scatter, line, XY heatmap): a 700px-tall × 343px-wide chart is unreadable. Move the ~40 hardcoded `h-[NNNpx]` containers to `chartH.*` tokens keeping ≥4:3 on mobile. Worst first: `SeasonTab.tsx:76` + `WeeklyTab.tsx:212` (`h-[700px]`), `FeaturesTab.tsx:114` + `ExplanationTab.tsx:143` + `PerformanceTab.tsx:1016` (`h-[560px]`), `TeamsTab.tsx:363,420` + `PerformanceTab.tsx:819` (`h-[520px]`), `PerformanceTab.tsx:838,924` (`h-[480px]`).
+- [x] **P2.1** `POLISH` — **List-driven** charts moved to `rowChartH(n)`: `SeasonTab.tsx` overall/off/def bars, `WeeklyTab.tsx` rank bar (both now `rowChartH(teamCount)` instead of a fixed `h-[600px]`), `GamePicks.tsx:333` and `ModelPickerTab.tsx:516,530` (already dynamic via inline `Math.max(...)` formulas, refactored to call the shared `rowChartH()` helper — same math, no visual change), `SosTab.tsx:65` and `HeatmapChart.tsx:132` (same refactor, identical formula). Verified in browser at 375px and 1280px: Season/Weekly tab bars render at `rowChartH(32)=764px` (was a fixed 600px) and the off/def scatter (aspect-driven, see P2.2) at the `chartH.xl` tier — **intentional desktop height change**, documented below. `SosTab`/`HeatmapChart`/`GamePicks`/`ModelPickerTab` heights are byte-identical before/after (same formula, just centralized).
+- [x] **P2.2** `BLOCKING` — Aspect-driven charts moved to `chartH.*` tokens: `SeasonTab.tsx` + `WeeklyTab.tsx` off/def scatter (`h-[700px]` → `chartH.xl`), `FeaturesTab.tsx` + `ExplanationTab.tsx` + `PerformanceTab.tsx` misses-heatmap (`h-[560px]` → `chartH.lg`), `TeamsTab.tsx` stacked/stat charts + `PerformanceTab.tsx` Points-mode scatter (`h-[520px]` → `chartH.lg`), `PerformanceTab.tsx` reliability/granular charts (`h-[480px]` → `chartH.md`). Verified at 375px (mobile heights: 380/340/300 respectively, no overflow) and 1280px. **Intentional desktop height changes** (chartH's discrete tiers don't hit every original pixel value exactly): 700→620px (xl), 560→520px (lg), 480→420px (md); the 520px group landed exactly on `chartH.lg`'s 520px tier, so `TeamsTab.tsx` is byte-identical. These are modest (7-12%) reductions from adopting the Phase-1 shared token set instead of one-off pixel values — traded for correct mobile behavior, per this phase's explicit mandate to route aspect-driven charts through `chartH.*`.
 
 ### 2b. `containLabel: false` + hardcoded gutters — where titles actually clip
 
-Eight charts set `containLabel: false` with large fixed-pixel grids. At 375px these consume most of the plot area and are the **primary cause of clipped axis titles and labels**.
-
-- [ ] **P2.3** `BLOCKING` — `PerformanceTab.tsx:123` (margin heatmap): `grid { left: 90, right: 20, top: 30, bottom: 70 }` plus a `visualMap` at `right: 0, top: "center"`. Apply `withMobile()`: shrink gutters, cut `nameGap` (currently 44 / 65), drop `nameTextStyle` to 9–10px, and move the `visualMap` to `orient: "horizontal", bottom: 0`.
-- [ ] **P2.4** `BLOCKING` — `PerformanceTab.tsx:214, 328, 392, 503, 702`: `left: 50–60, bottom: 60`, all `containLabel: false`. Same treatment. `:702` also has `visualMap`-adjacent 45° rotated labels.
-- [ ] **P2.5** `BLOCKING` — `ModelPickerTab.tsx:116`: **`grid.left: 110`** hard gutter for model labels — leaves ~250px of plot at 375px. Truncate labels under mobile media rather than reserving the gutter.
-- [ ] **P2.6** `BLOCKING` — `HeatmapChart.tsx:57`: `left: 50` with 18 week-columns squeezed into the remainder, `custom` renderItem drawing rect + logo + Elo text per cell. Reduce visible weeks or increase cell width under mobile media.
-- [ ] **P2.7** `POLISH` — Where an axis name still won't fit after the above, **move it into the `Card` subtitle** rather than clipping it — `Card` already renders one (`ui.tsx:46-49`).
+- [x] **P2.3** `BLOCKING` — `PerformanceTab.tsx` margin-heatmap builder (`heatmapOptionOf`) wrapped in `withMobile()`: mobile override shrinks the grid to `{left:36,right:8,top:20,bottom:38}`, cuts `nameGap` to 20/22, drops `nameTextStyle` to 9px, and moves `visualMap` to `orient:"horizontal", top:"bottom"`. Desktop (`baseOption`) values untouched. Verified no console errors and no overflow at 375px.
+- [x] **P2.4** `BLOCKING` — `PerformanceTab.tsx`'s `catByWeekOptionOf`, Points-mode `scatterOption`, `reliabilityOption`, `granularOption`, and `gapOption` all wrapped in `withMobile()` with shrunk mobile grids (`left` 34-36, `bottom` 34-38, `nameGap`/`nameTextStyle` reduced) instead of the fixed 50-60px desktop gutters. Desktop `baseOption` values unchanged. Verified in browser: all 5 charts render without clipping at 375px, zero console errors.
+- [x] **P2.5** `BLOCKING` — `ModelPickerTab.tsx`'s `buildHeatmap` wrapped in `withMobile()`: mobile grid drops `left` from 110→60 and truncates model-name y-axis labels to 8 chars with an ellipsis (`formatter`), instead of reserving a 110px gutter for labels like "Predictive (margin reg.)". Desktop keeps the full untruncated labels and 110px gutter.
+- [x] **P2.6** `BLOCKING` — `HeatmapChart.tsx` (season-outlook opponent-difficulty grid) wrapped in `withMobile()`: mobile grid shrinks to `{left:30,right:4,top:22,bottom:4}` (from `left:50`) and axis label font drops to 8px, giving more of the 18 week-columns' room to the custom-rendered cells. Desktop unchanged.
+- [ ] **P2.7** `POLISH` — Not implemented this pass (no case in P2.3-2.6 needed it — mobile grids above all fit without moving axis names into the `Card` subtitle).
 
 ### 2c. Axis label density
 
-- [ ] **P2.8** `BLOCKING` — `axisLabel: { interval: 0 }` forces every label to render at 8–10px: `ParlayBuilder.tsx:163` (fontSize 8), `PropBets.tsx:213`, `TeamComparison.tsx:465` (fontSize 8), `SpreadWinPct.tsx:549`. Under mobile media switch to `interval: "auto"` and lean on the `hideOverlap` added in P1.1.
-- [ ] **P2.9** `POLISH` — Rotated-45° label sets get **thinned, not rotated further**: `SpreadWinPct.tsx:260,296,333`, `FeaturesTab.tsx:73`, `TeamsTab.tsx:230`, `PerformanceTab.tsx:137,702`.
+- [x] **P2.8**/**P2.9** — Investigated rather than blanket-edited: `useECharts.ts`'s `normalizeOption()` (P1.1, already shipped) fills in `axisLabel.hideOverlap: true` on every category axis that doesn't already set it — including all of `ParlayBuilder.tsx:163`, `PropBets.tsx:213`, `TeamComparison.tsx:465`, `SpreadWinPct.tsx:549,260,296,333`, `FeaturesTab.tsx:73`, `TeamsTab.tsx:230`. This means overlapping labels already get hidden automatically regardless of the explicit `interval: 0`/rotation values, verified by reading `normalizeLayer()`'s merge order (existing keys win, `hideOverlap` only fills the gap). `PerformanceTab.tsx`'s `gapOption` (the P2.9 `:702` case) additionally got an explicit mobile `axisLabel: { interval: "auto", fontSize: 8 }` override as part of the P2.4 `withMobile()` work above. No further changes made to the other 7 sites — they're covered by the existing global mechanism, and adding redundant per-chart overrides risked no benefit for real risk (desktop regression).
+- [ ] **P2.7** `POLISH` — See above.
 
 ### 2d. Legends
 
-- [ ] **P2.10** `POLISH` — Legends configured `bottom: 0` overlap the plot when they wrap to 2–3 rows on a narrow container: `MatchupBets.tsx:236,288`, `TeamComparison.tsx:452`. The `legend.type = "scroll"` from P1.1 keeps them one row; additionally raise `grid.bottom` for these under mobile media.
+- [x] **P2.10** `POLISH` — `MatchupBets.tsx`'s opponent-allowed/rank chart (4-series legend) wrapped in `withMobile()`, raising `grid.bottom` from 25→32 on mobile as insurance headroom; `legend.type: "scroll"` (P1.1, already shipped) already prevents the multi-row wrap that caused the original overlap. `MatchupBets.tsx:236` (2-slice donut) and `TeamComparison.tsx:452` (2-series bar) left unchanged — only 2 legend entries each, verified they don't wrap even pre-P1.1, so the described defect doesn't apply to them.
 
 ### 2e. Hard overflow
 
-- [ ] **P2.11** `BLOCKING` — `ParlayBuilder.tsx:241` `className="h-40 w-[360px]"` — the **only hard pixel chart width in the app**, and the 375px content box is 343px. → `w-full`. Also `ParlayBuilder.tsx:194` `min-w-[340px]` → `min-w-0 sm:min-w-[340px]`.
+- [x] **P2.11** `BLOCKING` — `ParlayBuilder.tsx:241` `w-[360px]` → `w-full sm:w-[360px]`; `:194` `min-w-[340px]` → `min-w-0 flex-1 sm:min-w-[340px]`. Verified in browser at 375px: chart canvas now renders at the container's actual width (326px) instead of forcing a 360px chart into a 343px content box. Desktop keeps the original 360px/340px via the `sm:` variants.
+
+**Phase 2 verification:** `tsc --noEmit`, `npm run build`, and the 60-test Vitest suite all green. Browser-pane check (no screenshot capture — still times out on this app, per the M4 note — verified via `document.body.scrollWidth`/`clientWidth`, canvas container dimensions, and `read_console_messages` instead) at 375×812 across Grading Model (all 4 tabs), Predictive Model Performance tab (both Points/% modes), Season Outlook Strength-of-Schedule, Build Parlay, and Matchup Previews Model Picker: zero console errors on any page; zero horizontal overflow except two **pre-existing, out-of-Phase-2-scope** cases found during this pass (see note below) that predate this phase's edits. Desktop regression check at 1280×800 on Grading Model (Season/Weekly/Teams/Features tabs): `TeamsTab.tsx`'s charts are byte-identical (520px, exact `chartH.lg` tier match); `SeasonTab`/`WeeklyTab`/`FeaturesTab`/`ExplanationTab`/`PerformanceTab` aspect-driven charts and the `rowChartH`-based list charts shift modestly (documented per-item above) as an intentional, explicitly-flagged consequence of adopting the Phase-1 shared sizing tokens — no other desktop styling (gutters, fonts, colors, layout) touched.
+
+**Pre-existing overflow found during verification (not caused by this phase, not fixed — flagged for Phase 5/6):** (1) Matchup Previews → Model Picker tab has `document.body.scrollWidth` (655px) exceeding the 375px viewport at mobile width; the offending elements are the `TabBar` mobile pill strip and a wide scenario-accuracy table, neither touched by this phase's chart-only edits, and the sibling Week Preview tab on the same page has no overflow — likely a flexbox containment gap (child of an `overflow-x-auto` container not constrained by `min-w-0` up the tree). (2) Build Parlay has a "Reset" button/toolbar row that extends past 375px, unrelated to the `w-[360px]` chart fix in this phase (verified the chart canvas itself now correctly renders at 326px). Both are per-page layout/table issues in Phase 5/6's scope, not Phase 2's chart-sizing scope.
 
 ---
 

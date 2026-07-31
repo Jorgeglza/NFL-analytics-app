@@ -5,6 +5,7 @@ import type { TeamMeta } from "../../../lib/team/meta";
 import { computeStrengthOfSchedule, computeOpponentHeatmap } from "./shared";
 import HeatmapChart from "./HeatmapChart";
 import { useECharts } from "../../../components/charts/useECharts";
+import { rowChartH } from "../../../components/charts/sizing";
 import { tableWrapCls, theadCls, trCls } from "../../../components/ui";
 
 export default function SosTab({ schedule, season, week, meta }: { schedule: Row[]; season: string; week: string; meta: Map<string, TeamMeta> }) {
@@ -62,7 +63,7 @@ export default function SosTab({ schedule, season, week, meta }: { schedule: Row
 
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <h2 className="mb-2 text-sm font-semibold text-slate-700">Remaining strength of schedule — hardest first</h2>
-        {chartOption ? <div ref={chartRef} style={{ height: Math.max(240, 22 * rows.length + 40) }} /> : <div className="py-8 text-center text-sm text-slate-400">No data yet.</div>}
+        {chartOption ? <div ref={chartRef} style={{ height: Math.max(240, rowChartH(rows.length, 22, 40)) }} /> : <div className="py-8 text-center text-sm text-slate-400">No data yet.</div>}
       </div>
 
       <div className={tableWrapCls}>

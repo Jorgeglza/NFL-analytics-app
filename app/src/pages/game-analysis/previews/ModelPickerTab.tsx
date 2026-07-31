@@ -6,6 +6,8 @@ import type { EChartsOption } from "echarts";
 import type { Row } from "../../../lib/data/loader";
 import { Segmented } from "../../../components/ui";
 import { useECharts } from "../../../components/charts/useECharts";
+import { rowChartH } from "../../../components/charts/sizing";
+import { withMobile } from "../../../components/charts/responsive";
 import {
   MODEL_KEYS,
   MODEL_COLORS,
@@ -112,42 +114,51 @@ function buildHeatmap(
     domainLo = Math.max(0, mid - 6);
     domainHi = Math.min(100, mid + 6);
   }
-  const option = {
-    grid: { left: 110, right: 12, top: 10, bottom: 30, containLabel: false },
-    tooltip: {
-      formatter: (p: unknown) => {
-        const d = p as { data: { value: [number, number, number]; n: number; correct: number } };
-        const [xi, yi] = d.data.value;
-        const label = modelKeys[yi][1];
-        const pct = d.data.value[2];
-        return `${label} — ${tooltipUnit} ${tooltipValues[xi]}<br/>${pct < 0 ? "No games" : `${pct.toFixed(0)}% (${d.data.correct}/${d.data.n})`}`;
+  const truncate = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
+  const option = withMobile(
+    {
+      grid: { left: 110, right: 12, top: 10, bottom: 30, containLabel: false },
+      tooltip: {
+        formatter: (p: unknown) => {
+          const d = p as { data: { value: [number, number, number]; n: number; correct: number } };
+          const [xi, yi] = d.data.value;
+          const label = modelKeys[yi][1];
+          const pct = d.data.value[2];
+          return `${label} — ${tooltipUnit} ${tooltipValues[xi]}<br/>${pct < 0 ? "No games" : `${pct.toFixed(0)}% (${d.data.correct}/${d.data.n})`}`;
+        },
       },
-    },
-    xAxis: { type: "category", data: xAxisLabels, position: "bottom", axisLabel: { fontSize: 10 }, splitArea: { show: false } },
-    yAxis: { type: "category", data: modelKeys.map(([, l]) => l), axisLabel: { fontSize: 11 } },
-    visualMap: { show: false, min: 0, max: 100 },
-    series: [
-      {
-        type: "heatmap",
-        data: data.map((d) => d.value),
-        itemStyle: {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          color: (params: any) => {
-            const pct = params.value[2];
-            return pct < 0 ? "#f1f5f9" : colorForAcc(pct, domainLo, domainHi);
+      xAxis: { type: "category", data: xAxisLabels, position: "bottom", axisLabel: { fontSize: 10 }, splitArea: { show: false } },
+      yAxis: { type: "category", data: modelKeys.map(([, l]) => l), axisLabel: { fontSize: 11 } },
+      visualMap: { show: false, min: 0, max: 100 },
+      series: [
+        {
+          type: "heatmap",
+          data: data.map((d) => d.value),
+          itemStyle: {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            color: (params: any) => {
+              const pct = params.value[2];
+              return pct < 0 ? "#f1f5f9" : colorForAcc(pct, domainLo, domainHi);
+            },
+          },
+          label: {
+            show: true,
+            fontSize: 9,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            formatter: (p: any) => (p.value[2] < 0 ? "" : `${Math.round(p.value[2])}`),
+            color: "#1e293b",
           },
         },
-        label: {
-          show: true,
-          fontSize: 9,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          formatter: (p: any) => (p.value[2] < 0 ? "" : `${Math.round(p.value[2])}`),
-          color: "#1e293b",
-        },
-      },
-    ],
+      ],
+    },
+    {
+      grid: { left: 60, right: 8, top: 10, bottom: 24, containLabel: false },
+      yAxis: { axisLabel: { fontSize: 9, formatter: (v: string) => truncate(v, 8) } },
+      xAxis: { axisLabel: { fontSize: 8 } },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } as any as EChartsOption;
+  ) as any as EChartsOption;
   return { option, domainLo, domainHi };
 }
 
@@ -513,7 +524,7 @@ export default function ModelPickerTab({
           <div className="mb-1.5 text-xs font-semibold text-slate-600">Heatmap — accuracy % per model, week by week ({sel})</div>
           {heat ? (
             <>
-              <div ref={heatRef} style={{ height: Math.max(220, modelKeys.length * 34 + 60) }} />
+              <div ref={heatRef} style={{ height: Math.max(220, rowChartH(modelKeys.length, 34, 60)) }} />
               <div className="mt-1.5 text-[10px] text-slate-400">Color scale stretched to this view's spread ({Math.round(heat.domainLo)}%–{Math.round(heat.domainHi)}%) — values outside it clamp to the end colors.</div>
             </>
           ) : (
@@ -527,7 +538,7 @@ export default function ModelPickerTab({
           <div className="mb-1.5 text-xs font-semibold text-slate-600">Heatmap — accuracy % per model, full season by full season</div>
           {seasonHeat ? (
             <>
-              <div ref={seasonHeatRef} style={{ height: Math.max(220, modelKeys.length * 34 + 60) }} />
+              <div ref={seasonHeatRef} style={{ height: Math.max(220, rowChartH(modelKeys.length, 34, 60)) }} />
               <div className="mt-1.5 text-[10px] text-slate-400">Color scale stretched to this view's spread ({Math.round(seasonHeat.domainLo)}%–{Math.round(seasonHeat.domainHi)}%) — values outside it clamp to the end colors.</div>
             </>
           ) : (

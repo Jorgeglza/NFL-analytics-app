@@ -191,7 +191,7 @@ function LegCard({
 
   return (
     <div className="mb-3 flex flex-wrap items-center gap-4 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-      <div className="min-w-[340px] flex-1">
+      <div className="min-w-0 flex-1 sm:min-w-[340px]">
         <div className="flex flex-wrap items-end gap-2">
           <Select label="Season" value={leg.season} onChange={(v) => set({ season: v })} options={seasons.map((s) => ({ value: String(s), label: String(s) }))} />
           <Select label="Season Type" value={leg.seasonType} onChange={(v) => set({ seasonType: v })} options={seasonTypeOptions(seasonTypes)} />
@@ -238,7 +238,7 @@ function LegCard({
           }}
         />
       )}
-      <div ref={barRef} className="h-40 w-[360px]" />
+      <div ref={barRef} className="h-40 w-full sm:w-[360px]" />
 
       <div className="flex flex-col items-center gap-2">
         <div

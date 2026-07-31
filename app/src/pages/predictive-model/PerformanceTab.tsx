@@ -9,6 +9,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ECharts, EChartsOption } from "echarts";
 import type { Row } from "../../lib/data/loader";
 import { useECharts } from "../../components/charts/useECharts";
+import { withMobile } from "../../components/charts/responsive";
+import { chartH } from "../../components/charts/sizing";
 import { Card, FilterGroup, Kpi, Segmented, tableWrapCls, theadCls, trCls } from "../../components/ui";
 import { InfoDot } from "../../components/InfoDot";
 import { WIN_TYPE_COLORS, type WinType } from "../../lib/logic/winType";
@@ -107,43 +109,51 @@ function heatmapOptionOf(heatmap: Heatmap, opts: { xName: string; yName: string;
       z: 3,
     });
   }
-  return {
-    grid: { left: 90, right: 20, top: 30, bottom: 70, containLabel: false },
-    tooltip: {
-      formatter: (p: unknown) => {
-        const pt = p as { data: { xi: number; yi: number; n: number; correctShare: number | null } };
-        const { xi, yi, n, correctShare } = pt.data;
-        return `${opts.xName}: ${heatmap.xLabels[xi]}<br/>${opts.yName}: ${heatmap.yLabels[yi]}<br/>n=${n} — ${pct(correctShare)} correct`;
+  return withMobile(
+    {
+      grid: { left: 90, right: 20, top: 30, bottom: 70, containLabel: false },
+      tooltip: {
+        formatter: (p: unknown) => {
+          const pt = p as { data: { xi: number; yi: number; n: number; correctShare: number | null } };
+          const { xi, yi, n, correctShare } = pt.data;
+          return `${opts.xName}: ${heatmap.xLabels[xi]}<br/>${opts.yName}: ${heatmap.yLabels[yi]}<br/>n=${n} — ${pct(correctShare)} correct`;
+        },
       },
+      xAxis: {
+        type: "category",
+        data: heatmap.xLabels,
+        name: opts.xName,
+        nameLocation: "middle",
+        nameGap: opts.xGap,
+        axisLabel: { rotate: 45, fontSize: 9 },
+      },
+      yAxis: {
+        type: "category",
+        data: heatmap.yLabels,
+        name: opts.yName,
+        nameLocation: "middle",
+        nameGap: opts.yGap,
+        nameRotate: 90,
+        axisLabel: { fontSize: 9 },
+      },
+      visualMap: {
+        min: 0,
+        max: maxCellN,
+        right: 0,
+        top: "center",
+        calculable: false,
+        text: ["N", ""],
+        inRange: { color: ["#eff6ff", "#bfdbfe", "#60a5fa", "#1d4ed8"] },
+      },
+      series,
     },
-    xAxis: {
-      type: "category",
-      data: heatmap.xLabels,
-      name: opts.xName,
-      nameLocation: "middle",
-      nameGap: opts.xGap,
-      axisLabel: { rotate: 45, fontSize: 9 },
+    {
+      grid: { left: 36, right: 8, top: 20, bottom: 38, containLabel: true },
+      xAxis: { nameGap: 20, nameTextStyle: { fontSize: 9 } },
+      yAxis: { nameGap: 22, nameTextStyle: { fontSize: 9 } },
+      visualMap: { orient: "horizontal", left: "center", top: "bottom", bottom: 0, itemWidth: 60, itemHeight: 10 },
     },
-    yAxis: {
-      type: "category",
-      data: heatmap.yLabels,
-      name: opts.yName,
-      nameLocation: "middle",
-      nameGap: opts.yGap,
-      nameRotate: 90,
-      axisLabel: { fontSize: 9 },
-    },
-    visualMap: {
-      min: 0,
-      max: maxCellN,
-      right: 0,
-      top: "center",
-      calculable: false,
-      text: ["N", ""],
-      inRange: { color: ["#eff6ff", "#bfdbfe", "#60a5fa", "#1d4ed8"] },
-    },
-    series,
-  } as EChartsOption;
+  ) as EChartsOption;
 }
 
 /** Shared "N games per category, per week" stacked-bar builder — used by
@@ -198,18 +208,25 @@ function catByWeekOptionOf(
       }),
     });
   });
-  return {
-    grid: { left: 50, right: 20, top: 10, bottom: 60, containLabel: false },
-    tooltip: {
-      formatter: (p: unknown) => {
-        const pt = p as { name: string; data: CellDatum };
-        return `${pt.name} — ${pt.data.category}<br/>Correct: ${pt.data.correct}<br/>Wrong: ${pt.data.wrong}<br/>Accuracy: ${pct(pt.data.n ? pt.data.correct / pt.data.n : null)} (n=${pt.data.n})`;
+  return withMobile(
+    {
+      grid: { left: 50, right: 20, top: 10, bottom: 60, containLabel: false },
+      tooltip: {
+        formatter: (p: unknown) => {
+          const pt = p as { name: string; data: CellDatum };
+          return `${pt.name} — ${pt.data.category}<br/>Correct: ${pt.data.correct}<br/>Wrong: ${pt.data.wrong}<br/>Accuracy: ${pct(pt.data.n ? pt.data.correct / pt.data.n : null)} (n=${pt.data.n})`;
+        },
       },
+      xAxis: { type: "category", data: weekLabels, name: "Week", nameLocation: "middle", nameGap: 32 },
+      yAxis: { type: "value", name: "Games (N)", nameLocation: "middle", nameGap: 32 },
+      series,
     },
-    xAxis: { type: "category", data: weekLabels, name: "Week", nameLocation: "middle", nameGap: 32 },
-    yAxis: { type: "value", name: "Games (N)", nameLocation: "middle", nameGap: 32 },
-    series,
-  } as EChartsOption;
+    {
+      grid: { left: 34, right: 8, top: 10, bottom: 38, containLabel: true },
+      xAxis: { nameGap: 18, nameTextStyle: { fontSize: 9 } },
+      yAxis: { nameGap: 18, nameTextStyle: { fontSize: 9 } },
+    },
+  ) as EChartsOption;
 }
 
 export default function PerformanceTab({ games }: { games: Row[] }) {
@@ -310,50 +327,57 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
     // Category chips above double as the legend/filter, same convention as
     // the %-mode granular chart — no chart legend here.
     const orderedKeys = activeCatOrder.filter((k) => byType.has(k) && activeCategories.has(k));
-    return {
-      // Generous, explicit padding (rather than relying only on containLabel)
-      // so both axis titles have guaranteed room and never get clipped.
-      grid: { left: 60, right: 30, top: 10, bottom: 60, containLabel: false },
-      tooltip: { formatter: tooltipFormatter },
-      xAxis: {
-        type: "value",
-        name: "Predicted margin (home − away, pts)",
-        nameLocation: "middle",
-        nameGap: 32,
-        min: -maxAbs,
-        max: maxAbs,
-      },
-      yAxis: {
-        type: "value",
-        name: "Actual margin (home − away, pts)",
-        nameLocation: "middle",
-        nameGap: 42,
-        nameRotate: 90,
-        min: -maxAbs,
-        max: maxAbs,
-      },
-      series: [
-        {
-          type: "line",
-          data: [
-            [-maxAbs, -maxAbs],
-            [maxAbs, maxAbs],
-          ],
-          lineStyle: { color: "#94a3b8", type: "dashed", width: 1 },
-          symbol: "none",
-          silent: true,
-          tooltip: { show: false },
-          z: 1,
+    return withMobile(
+      {
+        // Generous, explicit padding (rather than relying only on containLabel)
+        // so both axis titles have guaranteed room and never get clipped.
+        grid: { left: 60, right: 30, top: 10, bottom: 60, containLabel: false },
+        tooltip: { formatter: tooltipFormatter },
+        xAxis: {
+          type: "value",
+          name: "Predicted margin (home − away, pts)",
+          nameLocation: "middle",
+          nameGap: 32,
+          min: -maxAbs,
+          max: maxAbs,
         },
-        ...orderedKeys.map((key) => ({
-          name: key,
-          type: "scatter" as const,
-          itemStyle: { color: colorOf(key), opacity: 0.7 },
-          data: byType.get(key) ?? [],
-          z: 2,
-        })),
-      ],
-    } as EChartsOption;
+        yAxis: {
+          type: "value",
+          name: "Actual margin (home − away, pts)",
+          nameLocation: "middle",
+          nameGap: 42,
+          nameRotate: 90,
+          min: -maxAbs,
+          max: maxAbs,
+        },
+        series: [
+          {
+            type: "line",
+            data: [
+              [-maxAbs, -maxAbs],
+              [maxAbs, maxAbs],
+            ],
+            lineStyle: { color: "#94a3b8", type: "dashed", width: 1 },
+            symbol: "none",
+            silent: true,
+            tooltip: { show: false },
+            z: 1,
+          },
+          ...orderedKeys.map((key) => ({
+            name: key,
+            type: "scatter" as const,
+            itemStyle: { color: colorOf(key), opacity: 0.7 },
+            data: byType.get(key) ?? [],
+            z: 2,
+          })),
+        ],
+      },
+      {
+        grid: { left: 34, right: 10, top: 10, bottom: 34, containLabel: true },
+        xAxis: { nameGap: 16, nameTextStyle: { fontSize: 9 } },
+        yAxis: { nameGap: 18, nameTextStyle: { fontSize: 9 } },
+      },
+    ) as EChartsOption;
   }, [filtered, activeCategoryOf, activeCatOrder, activeCategories]);
   const scatterRef = useECharts(scatterOption);
 
@@ -375,50 +399,58 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
       binHi: b.binHi * 100,
       wellCalibrated: Math.abs(b.meanPredicted - b.observedRate) <= CALIBRATION_TOLERANCE_PCT,
     }));
-    const sizeOf = (_value: unknown, params: { data: { n: number } }) => 10 + 30 * Math.sqrt(params.data.n / maxN);
-    return {
-      grid: { left: 60, right: 30, top: 40, bottom: 60, containLabel: false },
-      legend: { top: 0, data: ["Well-calibrated bucket", "Miscalibrated bucket"] },
-      tooltip: {
-        formatter: (p: unknown) => {
-          const pt = p as { data: { binLo: number; binHi: number; n: number; value: [number, number] } };
-          return `Predicted ${pt.data.binLo.toFixed(0)}-${pt.data.binHi.toFixed(0)}% bucket (n=${pt.data.n})<br/>Avg predicted ${pt.data.value[0].toFixed(1)}%<br/>Observed win rate ${pt.data.value[1].toFixed(1)}%`;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sizeOf = (_value: unknown, params: any) => 10 + 30 * Math.sqrt(params.data.n / maxN);
+    return withMobile(
+      {
+        grid: { left: 60, right: 30, top: 40, bottom: 60, containLabel: false },
+        legend: { top: 0, data: ["Well-calibrated bucket", "Miscalibrated bucket"] },
+        tooltip: {
+          formatter: (p: unknown) => {
+            const pt = p as { data: { binLo: number; binHi: number; n: number; value: [number, number] } };
+            return `Predicted ${pt.data.binLo.toFixed(0)}-${pt.data.binHi.toFixed(0)}% bucket (n=${pt.data.n})<br/>Avg predicted ${pt.data.value[0].toFixed(1)}%<br/>Observed win rate ${pt.data.value[1].toFixed(1)}%`;
+          },
         },
+        xAxis: { type: "value", name: "Mean predicted win probability", nameLocation: "middle", nameGap: 32, min: 0, max: 100 },
+        yAxis: { type: "value", name: "Observed win rate", nameLocation: "middle", nameGap: 42, nameRotate: 90, min: 0, max: 100 },
+        series: [
+          {
+            type: "line",
+            name: "Perfect calibration",
+            data: [
+              [0, 0],
+              [100, 100],
+            ],
+            lineStyle: { color: "#94a3b8", type: "dashed", width: 1 },
+            symbol: "none",
+            silent: true,
+            tooltip: { show: false },
+            z: 1,
+          },
+          {
+            name: "Well-calibrated bucket",
+            type: "scatter",
+            itemStyle: { color: "#2563eb", opacity: 0.75 },
+            data: points.filter((p) => p.wellCalibrated),
+            symbolSize: sizeOf,
+            z: 2,
+          },
+          {
+            name: "Miscalibrated bucket",
+            type: "scatter",
+            itemStyle: { color: "#dc2626", opacity: 0.75 },
+            data: points.filter((p) => !p.wellCalibrated),
+            symbolSize: sizeOf,
+            z: 2,
+          },
+        ],
       },
-      xAxis: { type: "value", name: "Mean predicted win probability", nameLocation: "middle", nameGap: 32, min: 0, max: 100 },
-      yAxis: { type: "value", name: "Observed win rate", nameLocation: "middle", nameGap: 42, nameRotate: 90, min: 0, max: 100 },
-      series: [
-        {
-          type: "line",
-          name: "Perfect calibration",
-          data: [
-            [0, 0],
-            [100, 100],
-          ],
-          lineStyle: { color: "#94a3b8", type: "dashed", width: 1 },
-          symbol: "none",
-          silent: true,
-          tooltip: { show: false },
-          z: 1,
-        },
-        {
-          name: "Well-calibrated bucket",
-          type: "scatter",
-          itemStyle: { color: "#2563eb", opacity: 0.75 },
-          data: points.filter((p) => p.wellCalibrated),
-          symbolSize: sizeOf,
-          z: 2,
-        },
-        {
-          name: "Miscalibrated bucket",
-          type: "scatter",
-          itemStyle: { color: "#dc2626", opacity: 0.75 },
-          data: points.filter((p) => !p.wellCalibrated),
-          symbolSize: sizeOf,
-          z: 2,
-        },
-      ],
-    } as EChartsOption;
+      {
+        grid: { left: 34, right: 10, top: 30, bottom: 34, containLabel: true },
+        xAxis: { nameGap: 16, nameTextStyle: { fontSize: 9 } },
+        yAxis: { nameGap: 18, nameTextStyle: { fontSize: 9 } },
+      },
+    ) as EChartsOption;
   }, [reliability]);
   const reliabilityRef = useECharts(reliabilityOption);
 
@@ -487,48 +519,55 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
     // The category KPI row above doubles as the legend/filter (per request),
     // so no chart legend here — only active categories get a series at all.
     const orderedKeys = activeCatOrder.filter((k) => byType.has(k) && activeCategories.has(k));
-    return {
-      grid: { left: 60, right: 30, top: 10, bottom: 60, containLabel: false },
-      tooltip: { formatter: tooltipFormatter },
-      xAxis: { type: "value", name: "Predicted home win probability (%)", nameLocation: "middle", nameGap: 32, min: 0, max: 100 },
-      yAxis: { type: "value", name: "Actual margin (home − away, pts)", nameLocation: "middle", nameGap: 42, nameRotate: 90, min: -maxAbsMargin, max: maxAbsMargin },
-      series: [
-        {
-          id: "threshold-line",
-          type: "line",
-          data: [[thresholdPct, -maxAbsMargin], [thresholdPct, maxAbsMargin]],
-          lineStyle: { color: "#0f172a", type: "solid", width: 2 },
-          symbol: "none",
-          silent: true,
-          tooltip: { show: false },
-          label: {
-            show: true,
-            formatter: () => `${thresholdPct.toFixed(0)}% cutoff`,
-            position: "insideEndTop",
-            fontSize: 10,
-            fontWeight: "bold" as const,
-            color: "#0f172a",
+    return withMobile(
+      {
+        grid: { left: 60, right: 30, top: 10, bottom: 60, containLabel: false },
+        tooltip: { formatter: tooltipFormatter },
+        xAxis: { type: "value", name: "Predicted home win probability (%)", nameLocation: "middle", nameGap: 32, min: 0, max: 100 },
+        yAxis: { type: "value", name: "Actual margin (home − away, pts)", nameLocation: "middle", nameGap: 42, nameRotate: 90, min: -maxAbsMargin, max: maxAbsMargin },
+        series: [
+          {
+            id: "threshold-line",
+            type: "line",
+            data: [[thresholdPct, -maxAbsMargin], [thresholdPct, maxAbsMargin]],
+            lineStyle: { color: "#0f172a", type: "solid", width: 2 },
+            symbol: "none",
+            silent: true,
+            tooltip: { show: false },
+            label: {
+              show: true,
+              formatter: () => `${thresholdPct.toFixed(0)}% cutoff`,
+              position: "insideEndTop",
+              fontSize: 10,
+              fontWeight: "bold" as const,
+              color: "#0f172a",
+            },
+            z: 3,
           },
-          z: 3,
-        },
-        {
-          type: "line",
-          data: [[0, 0], [100, 0]],
-          lineStyle: { color: "#94a3b8", type: "dashed", width: 1 },
-          symbol: "none",
-          silent: true,
-          tooltip: { show: false },
-          z: 1,
-        },
-        ...orderedKeys.map((key) => ({
-          name: key,
-          type: "scatter" as const,
-          itemStyle: { color: colorOf(key), opacity: 0.8 },
-          data: byType.get(key) ?? [],
-          z: 2,
-        })),
-      ],
-    } as EChartsOption;
+          {
+            type: "line",
+            data: [[0, 0], [100, 0]],
+            lineStyle: { color: "#94a3b8", type: "dashed", width: 1 },
+            symbol: "none",
+            silent: true,
+            tooltip: { show: false },
+            z: 1,
+          },
+          ...orderedKeys.map((key) => ({
+            name: key,
+            type: "scatter" as const,
+            itemStyle: { color: colorOf(key), opacity: 0.8 },
+            data: byType.get(key) ?? [],
+            z: 2,
+          })),
+        ],
+      } as EChartsOption,
+      {
+        grid: { left: 34, right: 10, top: 10, bottom: 34, containLabel: true },
+        xAxis: { nameGap: 16, nameTextStyle: { fontSize: 9 } },
+        yAxis: { nameGap: 18, nameTextStyle: { fontSize: 9 } },
+      },
+    ) as EChartsOption;
   }, [filtered, activeCategories, grouping, activeCategoryOf, activeCatOrder, correctFn, thresholdPct]);
   const granularChartRef = useRef<ECharts | null>(null);
   const granularRef = useECharts(granularOption, {
@@ -686,36 +725,43 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
   const gapOption = useMemo<EChartsOption | null>(() => {
     if (!reliability.length) return null;
     const gaps = reliability.map((b) => (b.meanPredicted - b.observedRate) * 100);
-    return {
-      grid: { left: 60, right: 20, top: 20, bottom: 60, containLabel: false },
-      tooltip: {
-        formatter: (p: unknown) => {
-          const arr = p as { dataIndex: number }[];
-          const b = reliability[arr[0].dataIndex];
-          const gap = (b.meanPredicted - b.observedRate) * 100;
-          return `Predicted ${(b.binLo * 100).toFixed(0)}-${(b.binHi * 100).toFixed(0)}% bucket (n=${b.n})<br/>Avg predicted ${pct(b.meanPredicted)}<br/>Observed ${pct(b.observedRate)}<br/>Gap ${gap >= 0 ? "+" : ""}${gap.toFixed(1)}pt`;
+    return withMobile(
+      {
+        grid: { left: 60, right: 20, top: 20, bottom: 60, containLabel: false },
+        tooltip: {
+          formatter: (p: unknown) => {
+            const arr = p as { dataIndex: number }[];
+            const b = reliability[arr[0].dataIndex];
+            const gap = (b.meanPredicted - b.observedRate) * 100;
+            return `Predicted ${(b.binLo * 100).toFixed(0)}-${(b.binHi * 100).toFixed(0)}% bucket (n=${b.n})<br/>Avg predicted ${pct(b.meanPredicted)}<br/>Observed ${pct(b.observedRate)}<br/>Gap ${gap >= 0 ? "+" : ""}${gap.toFixed(1)}pt`;
+          },
         },
-      },
-      xAxis: {
-        type: "category",
-        data: reliability.map((b) => `${(b.binLo * 100).toFixed(0)}-${(b.binHi * 100).toFixed(0)}%`),
-        name: "Predicted win probability bucket",
-        nameLocation: "middle",
-        nameGap: 44,
-        axisLabel: { rotate: 45, fontSize: 10 },
-      },
-      yAxis: { type: "value", name: "Predicted − observed (pts)", nameLocation: "middle", nameGap: 42 },
-      series: [
-        {
-          type: "bar",
-          data: gaps.map((g) => ({
-            value: g,
-            itemStyle: { color: Math.abs(g) > CALIBRATION_TOLERANCE_PCT * 100 ? "#dc2626" : "#2563eb" },
-          })),
-          markLine: { symbol: "none", lineStyle: { color: "#0f172a" }, data: [{ yAxis: 0 }], label: { show: false } },
+        xAxis: {
+          type: "category",
+          data: reliability.map((b) => `${(b.binLo * 100).toFixed(0)}-${(b.binHi * 100).toFixed(0)}%`),
+          name: "Predicted win probability bucket",
+          nameLocation: "middle",
+          nameGap: 44,
+          axisLabel: { rotate: 45, fontSize: 10 },
         },
-      ],
-    } as EChartsOption;
+        yAxis: { type: "value", name: "Predicted − observed (pts)", nameLocation: "middle", nameGap: 42 },
+        series: [
+          {
+            type: "bar",
+            data: gaps.map((g) => ({
+              value: g,
+              itemStyle: { color: Math.abs(g) > CALIBRATION_TOLERANCE_PCT * 100 ? "#dc2626" : "#2563eb" },
+            })),
+            markLine: { symbol: "none", lineStyle: { color: "#0f172a" }, data: [{ yAxis: 0 }], label: { show: false } },
+          },
+        ],
+      },
+      {
+        grid: { left: 34, right: 10, top: 14, bottom: 34, containLabel: true },
+        xAxis: { nameGap: 20, nameTextStyle: { fontSize: 9 }, axisLabel: { interval: "auto" as const, fontSize: 8 } },
+        yAxis: { nameGap: 18, nameTextStyle: { fontSize: 9 } },
+      },
+    ) as EChartsOption;
   }, [reliability]);
   const gapRef = useECharts(gapOption);
 
@@ -804,7 +850,7 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
               );
             })}
           </div>
-          <div ref={scatterRef} className="h-[520px]" />
+          <div ref={scatterRef} className={chartH.lg} />
           <div className="mt-4">
             <h4 className="mb-1 text-sm font-semibold text-slate-700">Games and accuracy by category, per week</h4>
             <p className="mb-2 text-xs text-slate-500">
@@ -823,7 +869,7 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
           }
           subtitle="Bucketed by predicted probability. On the dashed diagonal = perfectly calibrated. Blue = within 10pt of the diagonal, red = off by more."
         >
-          <div ref={reliabilityRef} className="h-[480px]" />
+          <div ref={reliabilityRef} className={chartH.md} />
         </Card>
       )}
 
@@ -909,7 +955,7 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
               );
             })}
           </div>
-          <div ref={granularRef} className="h-[480px]" />
+          <div ref={granularRef} className={chartH.md} />
           <div className="mt-4">
             <h4 className="mb-1 text-sm font-semibold text-slate-700">Games and accuracy by category, per week</h4>
             <p className="mb-2 text-xs text-slate-500">
@@ -1001,7 +1047,7 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
           title="What's different about the misses?"
           subtitle="Predicted vs. actual margin, bucketed. Cell = N games in that bucket pair. Blue outline = majority correct, red outline = majority wrong. Dashed diagonal = predicted matched actual exactly."
         >
-          <div ref={heatmapRef} className="h-[560px]" />
+          <div ref={heatmapRef} className={chartH.lg} />
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
               <div className="text-xs font-semibold text-slate-600">Correct picks (n={correctStats?.n ?? 0})</div>
