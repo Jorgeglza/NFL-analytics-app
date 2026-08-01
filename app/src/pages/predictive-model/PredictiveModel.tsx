@@ -61,14 +61,12 @@ export default function PredictiveModel() {
   useEffect(() => {
     Promise.all([
       getPredictiveModelGames(),
-      getPredictiveModelGameFeatures(),
       getPredictiveModelSeasonSummary(),
       getPredictiveModelImportance(),
       getPredictiveModelCalibration(),
       getPredictiveModelMeta(),
-    ]).then(([g, gf, ss, imp, cal, m]) => {
+    ]).then(([g, ss, imp, cal, m]) => {
       setGames(g);
-      setGameFeatures(gf);
       setSeasonSummary(ss);
       setImportance(imp);
       setCalibration(cal);
@@ -76,7 +74,15 @@ export default function PredictiveModel() {
     });
   }, []);
 
-  const loading = !games.length || !gameFeatures.length || !seasonSummary.length || !calibration || !meta;
+  // game_features.json (906 KB gz) is only needed by the Explanation tab —
+  // deferred so the other 3 tabs don't wait on it up front (P7.3).
+  useEffect(() => {
+    if (tab === "Explanation" && !gameFeatures.length) {
+      getPredictiveModelGameFeatures().then(setGameFeatures);
+    }
+  }, [tab, gameFeatures.length]);
+
+  const loading = !games.length || !seasonSummary.length || !calibration || !meta;
 
   return (
     <div className="space-y-4">
@@ -99,7 +105,11 @@ export default function PredictiveModel() {
           {tab === "Overview" && <OverviewTab seasonSummary={seasonSummary} testSeasons={meta!.test_seasons} />}
           {tab === "Performance" && <PerformanceTab games={games} />}
           {tab === "Explanation" && (
-            <ExplanationTab importance={importance} games={games} gameFeatures={gameFeatures} featureCols={meta!.feature_cols} />
+            gameFeatures.length ? (
+              <ExplanationTab importance={importance} games={games} gameFeatures={gameFeatures} featureCols={meta!.feature_cols} />
+            ) : (
+              <Loading label="Loading game features…" />
+            )
           )}
           {tab === "Confidence" && <ConfidenceTab calibration={calibration!} />}
         </>

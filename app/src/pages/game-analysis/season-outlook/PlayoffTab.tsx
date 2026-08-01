@@ -68,7 +68,7 @@ export default function PlayoffTab({ schedule, season, week, meta }: { schedule:
                   <tr key={r.team} className={`${trCls} cursor-pointer`} onClick={() => setSelectedTeam(r.team)}>
                     <td className="px-3 py-3 font-semibold text-slate-800 sm:py-2">
                       <div className="flex items-center gap-2">
-                        {meta.get(r.team)?.logo && <img src={meta.get(r.team)!.logo} alt="" className="h-5 w-5 object-contain" />}
+                        {meta.get(r.team)?.logo && <img src={meta.get(r.team)!.logo} alt="" className="h-5 w-5 object-contain" loading="lazy" decoding="async" />}
                         {meta.get(r.team)?.name ?? r.team}
                       </div>
                     </td>

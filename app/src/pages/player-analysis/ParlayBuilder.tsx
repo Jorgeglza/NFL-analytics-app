@@ -8,7 +8,7 @@ import { getTeamMetaMap, type TeamMeta } from "../../lib/team/meta";
 import { Select } from "../../components/filters/Select";
 import { useECharts } from "../../components/charts/useECharts";
 import { opponentLabel } from "../grading-model/shared";
-import { Loading } from "../../components/Loading";
+import { PageSkeleton } from "../../components/Skeleton";
 import { buildStatGroups, statLabel, americanOdds, headshotCrop, randomItem, randomPassRushRecStat, seasonTypeOptions, HIT_COLOR, MISS_COLOR, NEUTRAL_COLOR } from "./statPicker";
 
 const EXCLUDE = new Set([
@@ -305,7 +305,7 @@ export default function ParlayBuilder() {
   const expectedProb = probs.length ? probs.reduce((a, b) => a * b, 1) : null;
   const expectedOdds = expectedProb != null && expectedProb > 0 ? 1 / expectedProb : null;
 
-  if (!legs.length) return <Loading label="Loading player data…" />;
+  if (!legs.length) return <PageSkeleton cards={2} blocks={2} />;
 
   return (
     <div className="space-y-4">

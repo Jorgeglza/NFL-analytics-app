@@ -74,7 +74,7 @@ export default function PowerRankingsTab({
                   <td className="px-3 py-3 sm:py-2"><MovementBadge movement={r.movement} /></td>
                   <td className="px-3 py-3 sm:py-2">
                     <div className="flex items-center gap-2 font-semibold text-slate-800">
-                      {tm?.logo && <img src={tm.logo} alt="" className="h-5 w-5 object-contain" />}
+                      {tm?.logo && <img src={tm.logo} alt="" className="h-5 w-5 object-contain" loading="lazy" decoding="async" />}
                       {tm?.name ?? r.team}
                     </div>
                   </td>

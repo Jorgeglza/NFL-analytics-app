@@ -794,7 +794,7 @@ export default function Scorecards() {
           Team Scorecard
           <InfoDot text="For a league-wide statistical view, see Spread Win Percentage." />
         </h1>
-        <div className="flex gap-4">
+        <div className="flex flex-wrap gap-4">
           <Select label="Season" value={season} onChange={setSeason} options={seasons.map((s) => ({ value: String(s), label: String(s) }))} />
           <Select label="Team" value={team} onChange={setTeam} options={teams.map((t) => ({ value: t, label: meta.get(t)?.name ?? t }))} />
         </div>
@@ -804,7 +804,7 @@ export default function Scorecards() {
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm" style={{ borderTop: `4px solid ${color}` }}>
         <div className="flex flex-wrap items-center gap-x-8 gap-y-4 p-4">
           <div className="flex items-center gap-4">
-            {tm?.logo && <img src={tm.logo} alt={team} className="h-16" />}
+            {tm?.logo && <img src={tm.logo} alt={team} className="h-16" loading="lazy" decoding="async" />}
             <div>
               <div className="text-lg font-extrabold" style={{ color }}>{tm?.name ?? team}</div>
               <div className="text-sm text-slate-500">

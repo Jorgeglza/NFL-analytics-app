@@ -71,16 +71,16 @@ export default function MatchupPreviews() {
       setSchedule(s);
       setGrades(g);
       setMeta(m);
-      const twEntries = await Promise.all(
-        mt.seasons.map(async (season) => {
-          const tw = await getTeamWeek(season);
-          return [season, tw.filter((r) => r.game_type === "REG" || r.game_type == null)] as [number, Row[]];
-        }),
-      );
+      const [twEntries, rkEntries] = await Promise.all([
+        Promise.all(
+          mt.seasons.map(async (season) => {
+            const tw = await getTeamWeek(season);
+            return [season, tw.filter((r) => r.game_type === "REG" || r.game_type == null)] as [number, Row[]];
+          }),
+        ),
+        Promise.all(mt.seasons.map(async (season) => [season, await getTeamWeekRanks(season)] as [number, Row[]])),
+      ]);
       setTeamWeekBySeason(new Map(twEntries));
-      const rkEntries = await Promise.all(
-        mt.seasons.map(async (season) => [season, await getTeamWeekRanks(season)] as [number, Row[]]),
-      );
       setRanksBySeason(new Map(rkEntries));
     })();
     Promise.all([getPredictiveModelGames(), getPredictiveModelMeta()])

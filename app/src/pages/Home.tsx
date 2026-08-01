@@ -77,7 +77,7 @@ export default function Home() {
   const fmt = (n?: number) => (n == null ? "—" : n.toLocaleString());
 
   return (
-    <div className="-mx-4 -my-6">
+    <div className="-mx-3 -my-6 sm:-mx-4">
       {/* Hero */}
       <section className="bg-gradient-to-br from-[#002f6c] via-[#0b3d85] to-[#164a9c] px-4 py-14 text-white">
         <div className="mx-auto flex max-w-screen-xl flex-wrap items-center gap-x-10 gap-y-8">

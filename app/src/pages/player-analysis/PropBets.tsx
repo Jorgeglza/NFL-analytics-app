@@ -8,7 +8,7 @@ import { getTeamMetaMap, type TeamMeta } from "../../lib/team/meta";
 import { Select } from "../../components/filters/Select";
 import { useECharts } from "../../components/charts/useECharts";
 import { opponentLabel } from "../grading-model/shared";
-import { Loading } from "../../components/Loading";
+import { PageSkeleton } from "../../components/Skeleton";
 import { buildStatGroups, statLabel, americanOdds, headshotCrop, randomItem, randomPassRushRecStat, randomDefenseStat, seasonTypeOptions, HIT_COLOR, MISS_COLOR, NEUTRAL_COLOR } from "./statPicker";
 import { useSeasonWeek } from "../../context/SeasonWeekContext";
 import { stickyColHeadCls, ScrollHint } from "../../components/ui";
@@ -271,7 +271,7 @@ export default function PropBets() {
   const fmt = (v: number | null | undefined) =>
     v == null ? "" : Number.isInteger(v) ? String(v) : v.toFixed(1);
 
-  if (!rows.length) return <Loading label="Loading player data…" />;
+  if (!rows.length) return <PageSkeleton cards={2} blocks={2} />;
 
   return (
     <div className="space-y-4">

@@ -685,7 +685,7 @@ export default function MatchupTab({
             {[away, home].map((t) => (
               <div key={t}>
                 <div className="mb-1 flex items-center gap-1.5 text-xs font-bold" style={{ color: meta.get(t)?.color }}>
-                  {meta.get(t)?.logo && <img src={meta.get(t)!.logo} alt={t} className="h-5" />}
+                  {meta.get(t)?.logo && <img src={meta.get(t)!.logo} alt={t} className="h-5" loading="lazy" decoding="async" />}
                   {t}
                 </div>
                 <div className="overflow-x-auto">
@@ -723,7 +723,7 @@ export default function MatchupTab({
               <div className="mb-3 flex items-center justify-center gap-3">
                 {([[away, h2h.winsA], [home, h2h.winsB]] as const).map(([t, wcount], i) => (
                   <div key={t} className={`flex items-center gap-2 ${i === 1 ? "flex-row-reverse" : ""}`}>
-                    {meta.get(t)?.logo && <img src={meta.get(t)!.logo} alt={t} className="h-8" />}
+                    {meta.get(t)?.logo && <img src={meta.get(t)!.logo} alt={t} className="h-8" loading="lazy" decoding="async" />}
                     <span className="text-2xl font-extrabold tabular-nums" style={{ color: meta.get(t)?.color }}>{wcount}</span>
                     {i === 0 && <span className="text-sm font-light text-slate-400">–</span>}
                   </div>

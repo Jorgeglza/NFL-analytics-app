@@ -10,7 +10,7 @@ import type { EChartsOption } from "echarts";
 import { getPlayerWeek, getMeta, type Row } from "../../lib/data/loader";
 import { getTeamMetaMap, readableTextColor, type TeamMeta } from "../../lib/team/meta";
 import { Select } from "../../components/filters/Select";
-import { Loading } from "../../components/Loading";
+import { PageSkeleton } from "../../components/Skeleton";
 import { useECharts } from "../../components/charts/useECharts";
 import { LazyMount } from "../../components/LazyMount";
 import { RangeSlider } from "../../components/RangeSlider";
@@ -81,7 +81,7 @@ function LeagueLeaders({ stat, leaders, meta, onSelectTeam }: {
               className="flex w-full items-center gap-1 rounded-lg px-1 py-0.5 text-left transition-colors hover:bg-slate-50 sm:gap-2"
             >
               <span className="w-5 shrink-0 text-right text-xs font-semibold text-slate-400">{i + 1}</span>
-              {tm?.logo && <img src={tm.logo} alt={p.team} className="h-5 w-5 shrink-0" />}
+              {tm?.logo && <img src={tm.logo} alt={p.team} className="h-5 w-5 shrink-0" loading="lazy" decoding="async" />}
               <span className="w-20 shrink-0 truncate text-sm font-medium text-slate-800 sm:w-40">{p.name}</span>
               <span className="w-8 shrink-0 text-xs text-slate-400 sm:w-10">{p.team}</span>
               <div className="relative h-5 min-w-8 flex-1 rounded bg-slate-100">
@@ -142,7 +142,7 @@ function TeamCard({ team, stat, players, xMax, meta }: {
           <div className="text-base font-extrabold">{team}</div>
           <div className="text-xs opacity-85">{statLabel(stat)}</div>
         </div>
-        {meta?.logo && <img src={meta.logo} alt={team} className="h-6" />}
+        {meta?.logo && <img src={meta.logo} alt={team} className="h-6" loading="lazy" decoding="async" />}
       </div>
       <div className="rounded-lg bg-white/90 p-1">
         <div ref={ref} className="h-[200px]" />
@@ -268,7 +268,7 @@ export default function PlayerTeamStats() {
     return { blocks, xMax, leaders };
   }, [typed, selStat, weekLo, weekHi, meta]);
 
-  if (!meta) return <Loading />;
+  if (!meta) return <PageSkeleton cards={1} blocks={3} />;
 
   // Delayed re-correction (Win Types' pattern): team cards are lazy-mounted,
   // so their real height differs from the placeholder and shifts the target

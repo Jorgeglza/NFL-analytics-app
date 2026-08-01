@@ -80,7 +80,7 @@ export default function SosTab({ schedule, season, week, meta }: { schedule: Row
               <tr key={r.team} className={trCls}>
                 <td className="px-3 py-2 font-semibold text-slate-800">
                   <div className="flex items-center gap-2">
-                    {meta.get(r.team)?.logo && <img src={meta.get(r.team)!.logo} alt="" className="h-5 w-5 object-contain" />}
+                    {meta.get(r.team)?.logo && <img src={meta.get(r.team)!.logo} alt="" className="h-5 w-5 object-contain" loading="lazy" decoding="async" />}
                     {meta.get(r.team)?.name ?? r.team}
                   </div>
                 </td>

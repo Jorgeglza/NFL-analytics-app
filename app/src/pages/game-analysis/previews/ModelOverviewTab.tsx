@@ -155,7 +155,7 @@ export default function ModelOverviewTab({
         onClick={() => setActiveRec(rec)}
       >
         <div className="relative flex flex-col items-center">
-          {logo ? <img src={logo} alt={p.team ?? ""} className="h-6" /> : <div className="text-xs font-bold">{p.team ?? "—"}</div>}
+          {logo ? <img src={logo} alt={p.team ?? ""} className="h-6" loading="lazy" decoding="async" /> : <div className="text-xs font-bold">{p.team ?? "—"}</div>}
           {p.correct === true && <span className="absolute -right-0.5 -top-1 text-[9px] font-black text-[#2CA25F]">✓</span>}
           {p.correct === false && <span className="absolute -right-0.5 -top-1 text-[9px] font-black text-[#C8102E]">✗</span>}
         </div>

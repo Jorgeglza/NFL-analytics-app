@@ -145,7 +145,7 @@ export default function DetailModal({
       onClose={onClose}
       title={
         <div className="flex items-center gap-2">
-          {meta?.logo && <img src={meta.logo} alt="" className="h-6 w-6 object-contain" />}
+          {meta?.logo && <img src={meta.logo} alt="" className="h-6 w-6 object-contain" loading="lazy" decoding="async" />}
           {meta?.name ?? breakdown.team} — Rank #{breakdown.rank}
         </div>
       }

@@ -23,10 +23,16 @@ async function fetchJson<T>(path: string): Promise<T> {
   return cache.get(path) as Promise<T>;
 }
 
-export function toRecords(frame: CompactFrame): Row[] {
+// `cols` (optional) projects the expansion down to a subset of the frame's
+// columns — every row still carries ~100+ keys otherwise, which is the
+// actual memory/CPU cost on a low-RAM phone (the network payload is
+// unaffected either way, since `fetchJson` caches the full parsed frame).
+export function toRecords(frame: CompactFrame, cols?: string[]): Row[] {
+  const useCols = cols ? cols.filter((c) => frame.cols.includes(c)) : frame.cols;
+  const idx = useCols.map((c) => frame.cols.indexOf(c));
   return frame.rows.map((row) => {
     const rec: Row = {};
-    frame.cols.forEach((c, i) => (rec[c] = row[i]));
+    useCols.forEach((c, i) => (rec[c] = row[idx[i]]));
     return rec;
   });
 }
@@ -48,8 +54,8 @@ export const getTeamWeek = async (season: number) =>
   toRecords(await fetchJson<CompactFrame>(`team_week/${season}.json`));
 export const getTeamWeekRanks = async (season: number) =>
   toRecords(await fetchJson<CompactFrame>(`team_week_ranks/${season}.json`));
-export const getPlayerWeek = async (season: number) =>
-  toRecords(await fetchJson<CompactFrame>(`player_week/${season}.json`));
+export const getPlayerWeek = async (season: number, cols?: string[]) =>
+  toRecords(await fetchJson<CompactFrame>(`player_week/${season}.json`), cols);
 
 // Predictive Model page (P2) — own subfolder, isolated pipeline package
 // (pipeline/predictive_model/export_page.py). See docs/predictive-model.md.

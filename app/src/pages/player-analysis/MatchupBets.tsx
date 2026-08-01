@@ -16,7 +16,7 @@ import { Select } from "../../components/filters/Select";
 import { useECharts } from "../../components/charts/useECharts";
 import { withMobile } from "../../components/charts/responsive";
 import { opponentLabel } from "../grading-model/shared";
-import { Loading } from "../../components/Loading";
+import { PageSkeleton } from "../../components/Skeleton";
 import { stickyColHeadCls, ScrollHint } from "../../components/ui";
 import { buildMismatchStatGroups, statLabel } from "./statPicker";
 import { defaultWeekNearToday } from "../game-analysis/previews/engine";
@@ -413,7 +413,7 @@ export default function MatchupBets() {
 
   const fmt = (v: number | null | undefined) => (v == null ? "" : Number.isInteger(v) ? String(v) : v.toFixed(1));
 
-  if (!pw.length || !meta) return <Loading label="Loading matchup data…" />;
+  if (!pw.length || !meta) return <PageSkeleton cards={2} blocks={2} />;
 
   const bandColor = (band: string) =>
     band === "Strong" ? "bg-emerald-100 text-emerald-800 border-emerald-200"
@@ -440,11 +440,11 @@ export default function MatchupBets() {
       {/* 2. General KPIs / game info */}
       <div className="flex flex-wrap items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex items-center gap-2.5">
-          {meta?.get(away)?.logo && <img src={meta.get(away)!.logo} alt={away} className="h-9 w-9 object-contain" />}
+          {meta?.get(away)?.logo && <img src={meta.get(away)!.logo} alt={away} className="h-9 w-9 object-contain" loading="lazy" decoding="async" />}
           <span className="text-xl font-extrabold text-slate-800">{away}</span>
           <span className="text-sm font-medium text-slate-400">@</span>
           <span className="text-xl font-extrabold text-slate-800">{home}</span>
-          {meta?.get(home)?.logo && <img src={meta.get(home)!.logo} alt={home} className="h-9 w-9 object-contain" />}
+          {meta?.get(home)?.logo && <img src={meta.get(home)!.logo} alt={home} className="h-9 w-9 object-contain" loading="lazy" decoding="async" />}
           {selGame?.gameday && <span className="ml-1 text-xs text-slate-400">{selGame.gameday}</span>}
         </div>
         <div className="ml-auto flex flex-wrap gap-3">
@@ -571,7 +571,7 @@ export default function MatchupBets() {
             <tbody>
               {pivot.players.map((p) => (
                 <tr key={p.player} className={`cursor-pointer border-t border-slate-100 hover:bg-slate-50 ${p.player === selPlayer ? "bg-blue-50" : ""}`} onClick={() => setSelectedPlayer(p.player)}>
-                  <td className="px-2 py-1">{meta?.get(p.team)?.logo && <img src={meta.get(p.team)!.logo} alt={p.team} className="h-6 w-6 object-contain" />}</td>
+                  <td className="px-2 py-1">{meta?.get(p.team)?.logo && <img src={meta.get(p.team)!.logo} alt={p.team} className="h-6 w-6 object-contain" loading="lazy" decoding="async" />}</td>
                   <td
                     className={`sticky left-0 z-10 px-2 py-1 text-left shadow-[2px_0_4px_-2px_rgba(0,0,0,0.15)] ${p.player === selPlayer ? "bg-blue-50" : "bg-white"}`}
                   >
@@ -636,7 +636,7 @@ export default function MatchupBets() {
         <div className="mt-3 flex flex-wrap gap-3">
           <div className="min-w-80 flex-1 rounded-xl border border-slate-100 bg-slate-50/60 p-3">
             <div className="mb-2 flex min-h-14 items-center gap-3">
-              {headshot && <img src={headshot} alt={playerRow.player} className="h-14 w-14 rounded-full object-cover" />}
+              {headshot && <img src={headshot} alt={playerRow.player} className="h-14 w-14 rounded-full object-cover" loading="lazy" decoding="async" />}
               <span className="text-sm font-semibold">{playerRow.player} — {statLabel(selStat)}</span>
             </div>
             <div ref={playerBarRef} className="h-[360px]" />

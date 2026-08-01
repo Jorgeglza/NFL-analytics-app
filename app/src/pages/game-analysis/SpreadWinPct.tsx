@@ -10,6 +10,7 @@ import { getSchedule, type Row } from "../../lib/data/loader";
 import { Select } from "../../components/filters/Select";
 import { MultiSelect } from "../../components/filters/MultiSelect";
 import { useECharts } from "../../components/charts/useECharts";
+import { LazyMount } from "../../components/LazyMount";
 import type { EChartsOption } from "echarts";
 import { wilson } from "../../lib/logic/wilson";
 import { WIN_TYPE_COLORS, CATEGORY_CODES, type WinType } from "../../lib/logic/winType";
@@ -770,7 +771,7 @@ export default function SpreadWinPct() {
                 Apply to a week — see recommended picks ↓
               </button>
             </div>
-            <div className="flex gap-3">
+            <div className="flex flex-wrap gap-3">
               {verdict.tiers.map((t) => (
                 <div key={t.short} className="w-28 rounded-xl border border-slate-200 px-2 py-2 text-center" title={`${t.label}: ${t.n.toLocaleString()} games${t.ci ? ` — 95% CI ${(100 * t.ci.low).toFixed(0)}–${(100 * t.ci.high).toFixed(0)}%` : ""}`}>
                   <div className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Fav {t.short}</div>
@@ -816,9 +817,17 @@ export default function SpreadWinPct() {
           </div>
         </div>
         {mixView === "stacked" ? (
-          stackedOption ? <div ref={stackedRef} className="h-[380px]" /> : <div className="grid h-[380px] place-items-center text-sm text-slate-400">No bins meet Min N</div>
+          stackedOption ? (
+            <LazyMount minHeight={380}>
+              <div ref={stackedRef} className="h-[380px]" />
+            </LazyMount>
+          ) : (
+            <div className="grid h-[380px] place-items-center text-sm text-slate-400">No bins meet Min N</div>
+          )
         ) : heatOption ? (
-          <div ref={heatRef} className="h-[380px]" />
+          <LazyMount minHeight={380}>
+            <div ref={heatRef} className="h-[380px]" />
+          </LazyMount>
         ) : (
           <div className="grid h-[380px] place-items-center text-sm text-slate-400">No bins meet Min N</div>
         )}
@@ -862,11 +871,13 @@ export default function SpreadWinPct() {
           (the target week itself is always excluded from its own history).
         </p>
         <div className="mb-3 flex flex-wrap items-end justify-between gap-4">
-          <div className="flex items-end gap-4">
-            <Select label="Season" value={recoSeason} onChange={(v) => setRecoSeason(v)} options={allSeasons.map((s) => ({ value: String(s), label: String(s) }))} />
-            <Select label="Week" value={recoWeek} onChange={setRecoWeek} options={recoWeeks.map((w) => ({ value: String(w), label: String(w) }))} />
+          <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-end sm:gap-4">
+            <div className="flex items-end gap-4">
+              <Select label="Season" value={recoSeason} onChange={(v) => setRecoSeason(v)} options={allSeasons.map((s) => ({ value: String(s), label: String(s) }))} />
+              <Select label="Week" value={recoWeek} onChange={setRecoWeek} options={recoWeeks.map((w) => ({ value: String(w), label: String(w) }))} />
+            </div>
             {reco?.record && (
-              <div className="flex items-center gap-1.5 self-center rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold shadow-sm" title="How these recommendations scored against final results">
+              <div className="flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold shadow-sm sm:self-center" title="How these recommendations scored against final results">
                 <span className="uppercase tracking-wider text-slate-400">Graded</span>
                 <span className="text-[#3C9A5F]">{reco.record.correct}✓</span>
                 <span className="text-[#C8102E]">{reco.record.total - reco.record.correct}✗</span>
@@ -902,7 +913,9 @@ export default function SpreadWinPct() {
             )}
           </div>
           {backtestOption ? (
-            <div ref={backtestRef} className="h-[220px]" />
+            <LazyMount minHeight={220}>
+              <div ref={backtestRef} className="h-[220px]" />
+            </LazyMount>
           ) : (
             <div className="grid h-[220px] place-items-center text-sm text-slate-400">No data for this week</div>
           )}
@@ -970,7 +983,9 @@ export default function SpreadWinPct() {
           , against the long-run historic baseline. Hover a week for the exact counts.
         </p>
         {seasonTrendOption ? (
-          <div ref={seasonTrendRef} className="h-[260px]" />
+          <LazyMount minHeight={260}>
+            <div ref={seasonTrendRef} className="h-[260px]" />
+          </LazyMount>
         ) : (
           <div className="grid h-[260px] place-items-center text-sm text-slate-400">No graded weeks yet this season</div>
         )}

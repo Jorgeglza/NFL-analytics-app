@@ -9,6 +9,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ECharts, EChartsOption } from "echarts";
 import type { Row } from "../../lib/data/loader";
 import { useECharts } from "../../components/charts/useECharts";
+import { LazyMount } from "../../components/LazyMount";
 import { Select } from "../../components/filters/Select";
 import { withMobile } from "../../components/charts/responsive";
 import { chartH } from "../../components/charts/sizing";
@@ -881,13 +882,17 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
               );
             })}
           </div>
-          <div ref={scatterRef} className={chartH.lg} />
+          <LazyMount minHeight={340}>
+            <div ref={scatterRef} className={chartH.lg} />
+          </LazyMount>
           <div className="mt-4">
             <h4 className="mb-1 text-sm font-semibold text-slate-700">Games and accuracy by category, per week</h4>
             <p className="mb-2 text-xs text-slate-500">
               Each week's column groups one stacked bar per active category (toggle above to show/hide) — bar height = N games, the solid segment is correct picks, the lighter segment is wrong.
             </p>
-            <div ref={catByWeekStandardRef} className="h-[420px]" />
+            <LazyMount minHeight={420}>
+              <div ref={catByWeekStandardRef} className="h-[420px]" />
+            </LazyMount>
           </div>
         </Card>
       ) : (
@@ -900,7 +905,9 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
           }
           subtitle="Bucketed by predicted probability. On the dashed diagonal = perfectly calibrated. Blue = within 10pt of the diagonal, red = off by more."
         >
-          <div ref={reliabilityRef} className={chartH.md} />
+          <LazyMount minHeight={300}>
+            <div ref={reliabilityRef} className={chartH.md} />
+          </LazyMount>
         </Card>
       )}
 
@@ -991,13 +998,17 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
               );
             })}
           </div>
-          <div ref={granularRef} className={chartH.md} />
+          <LazyMount minHeight={300}>
+            <div ref={granularRef} className={chartH.md} />
+          </LazyMount>
           <div className="mt-4">
             <h4 className="mb-1 text-sm font-semibold text-slate-700">Games and accuracy by category, per week</h4>
             <p className="mb-2 text-xs text-slate-500">
               Each week's column groups one stacked bar per active category (toggle above to show/hide) — bar height = N games, the solid segment is correct picks, the lighter segment is wrong.
             </p>
-            <div ref={catByWeekRef} className="h-[420px]" />
+            <LazyMount minHeight={420}>
+              <div ref={catByWeekRef} className="h-[420px]" />
+            </LazyMount>
           </div>
         </Card>
       )}
@@ -1070,11 +1081,15 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
 
       {mode === "Points" ? (
         <Card title="Accuracy by week" subtitle="How the model performs at each point in the season, pooled across the current filter">
-          <div ref={weeklyRef} className="h-[320px]" />
+          <LazyMount minHeight={320}>
+            <div ref={weeklyRef} className="h-[320px]" />
+          </LazyMount>
         </Card>
       ) : (
         <Card title="Calibration by week" subtitle="Avg predicted probability vs. observed win rate, pooled across the current filter">
-          <div ref={calibWeeklyRef} className="h-[320px]" />
+          <LazyMount minHeight={320}>
+            <div ref={calibWeeklyRef} className="h-[320px]" />
+          </LazyMount>
         </Card>
       )}
 
@@ -1083,7 +1098,9 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
           title="What's different about the misses?"
           subtitle="Predicted vs. actual margin, bucketed. Cell = N games in that bucket pair. Blue outline = majority correct, red outline = majority wrong. Dashed diagonal = predicted matched actual exactly."
         >
-          <div ref={heatmapRef} className={chartH.lg} />
+          <LazyMount minHeight={340}>
+            <div ref={heatmapRef} className={chartH.lg} />
+          </LazyMount>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
               <div className="text-xs font-semibold text-slate-600">Correct picks (n={correctStats?.n ?? 0})</div>
@@ -1112,7 +1129,9 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
           title="Calibration gap by bucket"
           subtitle="Predicted minus observed win rate for each probability bucket — the direction and size of over/under-confidence. Blue = within 10pt (well-calibrated), red = off by more."
         >
-          <div ref={gapRef} className="h-[380px]" />
+          <LazyMount minHeight={380}>
+            <div ref={gapRef} className="h-[380px]" />
+          </LazyMount>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
               <div className="text-xs font-semibold text-slate-600">Correct picks (n={correctStats?.n ?? 0})</div>

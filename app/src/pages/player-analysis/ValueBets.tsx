@@ -10,7 +10,7 @@ import { getPlayerWeek, getTeamWeek, getSchedule, getMeta, type Row } from "../.
 import { getTeamMetaMap, type TeamMeta } from "../../lib/team/meta";
 import { Select } from "../../components/filters/Select";
 import { useECharts } from "../../components/charts/useECharts";
-import { Loading } from "../../components/Loading";
+import { PageSkeleton } from "../../components/Skeleton";
 import { stickyColCls, stickyColHeadCls, ScrollHint } from "../../components/ui";
 import { buildMismatchStatGroups, statLabel, PROP_MARKET_SECTIONS } from "./statPicker";
 import { useSeasonWeek } from "../../context/SeasonWeekContext";
@@ -438,7 +438,7 @@ export default function ValueBets() {
   const matchupHref = (gameId: string | null, player?: string) =>
     `/player_analysis/matchup_bets?season=${season}&week=${selWeek}${gameId ? `&game=${gameId}` : ""}&stat=${selStat}${player ? `&player=${encodeURIComponent(player)}` : ""}`;
 
-  if (!pw.length || !tw.length) return <Loading label="Loading value-bet data…" />;
+  if (!pw.length || !tw.length) return <PageSkeleton cards={3} blocks={2} />;
 
   const bestScore = (base: number) => (base > 0 ? "text-emerald-700" : base < 0 ? "text-red-700" : "text-slate-500");
 
@@ -462,9 +462,9 @@ export default function ValueBets() {
             {weekOverview.map((g) => (
               <div key={g.gameId} className="rounded-xl border border-slate-100 bg-slate-50/60 p-3">
                 <div className="mb-2 flex items-center gap-2">
-                  {logo(g.away) && <img src={logo(g.away)!} alt={g.away} className="h-5 w-5 object-contain" />}
+                  {logo(g.away) && <img src={logo(g.away)!} alt={g.away} className="h-5 w-5 object-contain" loading="lazy" decoding="async" />}
                   <span className="text-sm font-bold text-slate-800">{g.away} @ {g.home}</span>
-                  {logo(g.home) && <img src={logo(g.home)!} alt={g.home} className="h-5 w-5 object-contain" />}
+                  {logo(g.home) && <img src={logo(g.home)!} alt={g.home} className="h-5 w-5 object-contain" loading="lazy" decoding="async" />}
                   <Link to={matchupHref(g.gameId)} className="ml-auto text-[11px] font-medium text-[#002f6c] hover:underline">
                     Zoom in →
                   </Link>
@@ -584,7 +584,7 @@ export default function ValueBets() {
             <tbody>
               {visiblePlayers.map((p) => (
                 <tr key={`${p.player}|${p.team}`} className="border-t border-slate-100 hover:bg-slate-50">
-                  <td className="px-2 py-1">{logo(p.team) && <img src={logo(p.team)!} alt={p.team} className="h-6 w-6 object-contain" />}</td>
+                  <td className="px-2 py-1">{logo(p.team) && <img src={logo(p.team)!} alt={p.team} className="h-6 w-6 object-contain" loading="lazy" decoding="async" />}</td>
                   <td className={`px-2 py-1 text-left ${stickyColCls}`}>{p.team}</td>
                   <td className="whitespace-nowrap px-2 py-1 text-left font-medium">{p.player}</td>
                   <td className="px-2 py-1 text-center">{p.opp}</td>
