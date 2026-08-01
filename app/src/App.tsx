@@ -61,7 +61,7 @@ function Placeholder({ name, description }: { name: string; description: string 
 
 export default function App() {
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen overflow-x-hidden">
       <Navbar />
       <RouteTitle />
       <main className="safe-bottom mx-auto max-w-screen-2xl px-3 py-6 sm:px-4">

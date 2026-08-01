@@ -77,9 +77,9 @@ export default function Home() {
   const fmt = (n?: number) => (n == null ? "—" : n.toLocaleString());
 
   return (
-    <div className="-mx-3 -my-6 sm:-mx-4">
-      {/* Hero */}
-      <section className="bg-gradient-to-br from-[#002f6c] via-[#0b3d85] to-[#164a9c] px-4 py-14 text-white">
+    <div className="-my-6">
+      {/* Hero — breaks out to full viewport width regardless of main's max-width */}
+      <section className="relative left-1/2 w-screen -translate-x-1/2 bg-gradient-to-br from-[#002f6c] via-[#0b3d85] to-[#164a9c] px-4 py-14 text-white">
         <div className="mx-auto flex max-w-screen-xl flex-wrap items-center gap-x-10 gap-y-8">
           <div className="min-w-72 flex-1">
           <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">NFL Analytics</h1>
