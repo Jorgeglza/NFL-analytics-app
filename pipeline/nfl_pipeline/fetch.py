@@ -85,14 +85,33 @@ def fetch_weekly(years=None, refresh=False) -> pd.DataFrame:
 
 
 def fetch_schedules(years=None, refresh=False) -> pd.DataFrame:
+    """Schedule rows (played + future/unplayed), cached per year.
+
+    Per-year caching (like fetch_weekly) so a new season's schedule is picked
+    up automatically the moment SEASONS rolls forward (see config.py's August
+    cutover), without needing --refresh to bust a stale multi-year blob.
+    """
     years = years or SEASONS
-    path = _cache_path("schedules")
-    if path.exists() and not refresh:
-        return pd.read_parquet(path)
     import nfl_data_py as nfl
-    df = nfl.import_schedules(years)
-    df.to_parquet(path, index=False)
-    return df
+    frames = []
+    for year in years:
+        path = _cache_path(f"schedules_{year}")
+        if path.exists() and not refresh:
+            frames.append(pd.read_parquet(path))
+            continue
+        try:
+            df = nfl.import_schedules([year])
+        except Exception as e:
+            # New season's schedule may not be published yet right at the
+            # August cutover. Skip it with a warning; any other year failing
+            # is fatal.
+            if year == max(years):
+                print(f"WARNING: no schedule for newest season {year} yet, skipping ({e})")
+                continue
+            raise
+        df.to_parquet(path, index=False)
+        frames.append(df)
+    return pd.concat(frames, ignore_index=True)
 
 
 def fetch_team_desc(refresh=False) -> pd.DataFrame:

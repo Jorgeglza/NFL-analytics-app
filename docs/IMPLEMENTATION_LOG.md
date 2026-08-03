@@ -502,6 +502,31 @@ Full work list, with per-item checkboxes and severities: **`docs/MOBILE_READINES
 
 ## Session notes (newest first)
 
+### 2026-08-03 — Fixed: 2026 season rollover wasn't actually reliable (fetch_schedules cache bug)
+- User asked to review the Aug-1 season-rollover feature (`config.current_season()`, documented
+  2026-07-21). Found it was **not working**: `app/public/data/schedule.json` on `main` had zero
+  2026 rows despite today being past the cutover — `data/raw_cache/schedules.parquet` was cached
+  Jul 17 (pre-cutover) as a single multi-year blob, and `fetch_schedules()` only refetched on
+  `--refresh`. `fetch_weekly()` already cached per-year, so a new season fetched naturally with no
+  cache file yet — `fetch_schedules` was the inconsistent one and the actual bug. Production
+  (`weekly-refresh.yml`) always passes `--refresh` so this would've self-healed next Tuesday
+  regardless, but the "schedule shows up automatically on Aug 1" promise wasn't actually true in
+  the meantime (and had already shipped stale to `main`).
+- **Fix**: `fetch.py:fetch_schedules` rewritten to cache per year (`schedules_{year}.parquet`,
+  mirroring `fetch_weekly`'s loop/skip pattern), including the same skip-newest-season-on-failure
+  grace period. No caller changes — `transform.py:load_schedule_df` unchanged.
+- Regenerated data (`--stage all --refresh` once, deleted the orphaned `schedules.parquet`):
+  `schedule.json` now has 272 2026 rows (all unplayed, `home_score`/`away_score` null); `meta.json`
+  correctly still reports `current_season: 2025` and excludes 2026 from `seasons` (no `team_week`
+  data yet, per the 2026-08-02 fix in `known-issues.md` #18) — the two "current season" concepts
+  stay correctly decoupled. Re-ran `--stage all` **without** `--refresh` immediately after: 2026
+  rows persisted, confirming the new season no longer depends on a full refresh to appear.
+- Verified live: Home's "this week" banner now shows Week 1 2026 (Sep 8–13) with real matchups and
+  "Make this week's picks →"; Matchup Previews defaults to 2026 Week 1, all 7 models render picks,
+  predictive model correctly excludes itself (no training data for 2026 yet) instead of crashing;
+  zero console errors. `--stage validate` green. No frontend code changes needed — `defaultWeek.ts`/
+  `SeasonWeekContext`/`defaultWeekNearToday` already derive purely from exported JSON.
+
 ### 2026-07-28 — Power Rankings folded into Season Outlook as its first tab; per-tab sub-URLs; expected-wins KPI now states game count
 - **Power Rankings moved into Season Outlook**: was its own standalone nav item/page
   (`/game_analysis/power_rankings`); now the first of Season Outlook's 3 tabs (ahead of
