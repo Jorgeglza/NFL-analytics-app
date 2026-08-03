@@ -14,7 +14,7 @@ import { LazyMount } from "../../components/LazyMount";
 import type { EChartsOption } from "echarts";
 import { wilson } from "../../lib/logic/wilson";
 import { WIN_TYPE_COLORS, CATEGORY_CODES, type WinType } from "../../lib/logic/winType";
-import { Loading } from "../../components/Loading";
+import { Loading, ErrorRetry } from "../../components/Loading";
 import { InfoDot } from "../../components/InfoDot";
 
 const WIN_TYPE_CATS: WinType[] = ["Favorite home", "Favorite away", "Underdog home", "Underdog away"];
@@ -143,23 +143,28 @@ export default function SpreadWinPct() {
   const [recoWeek, setRecoWeek] = useState("");
   const [mixView, setMixView] = useState<"stacked" | "heatmap">("stacked");
   const [trendView, setTrendView] = useState<"favorite" | "home">("favorite");
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [retryTick, setRetryTick] = useState(0);
 
   useEffect(() => {
-    getSchedule().then((rows) => {
-      setSchedule(rows);
-      const reg = rows.filter((r) => r.game_type === "REG");
-      const seasons = [...new Set(reg.map((r) => Number(r.season)))].sort((a, b) => a - b);
-      const weeks = [...new Set(reg.map((r) => Number(r.week)))].sort((a, b) => a - b);
-      if (seasons.length) {
-        const latest = seasons[seasons.length - 1];
-        setSeasonsSel([String(latest)]);
-        setWeeksSel(weeks.map(String));
-        setRecoSeason(String(latest));
-        const wks = reg.filter((r) => Number(r.season) === latest).map((r) => Number(r.week));
-        setRecoWeek(String(Math.max(...wks)));
-      }
-    });
-  }, []);
+    setLoadError(null);
+    getSchedule()
+      .then((rows) => {
+        setSchedule(rows);
+        const reg = rows.filter((r) => r.game_type === "REG");
+        const seasons = [...new Set(reg.map((r) => Number(r.season)))].sort((a, b) => a - b);
+        const weeks = [...new Set(reg.map((r) => Number(r.week)))].sort((a, b) => a - b);
+        if (seasons.length) {
+          const latest = seasons[seasons.length - 1];
+          setSeasonsSel([String(latest)]);
+          setWeeksSel(weeks.map(String));
+          setRecoSeason(String(latest));
+          const wks = reg.filter((r) => Number(r.season) === latest).map((r) => Number(r.week));
+          setRecoWeek(String(Math.max(...wks)));
+        }
+      })
+      .catch((err) => setLoadError(err instanceof Error ? err.message : "Failed to load"));
+  }, [retryTick]);
 
   const reg = useMemo(
     () => schedule.filter((r) => r.game_type === "REG").map(toGame).filter((g): g is Game => g != null),
@@ -677,6 +682,7 @@ export default function SpreadWinPct() {
   const backtestRef = useECharts(backtestOption);
   const seasonTrendRef = useECharts(seasonTrendOption);
 
+  if (loadError) return <ErrorRetry onRetry={() => setRetryTick((t) => t + 1)} />;
   if (!schedule.length) return <Loading label="Loading schedule…" />;
 
   return (

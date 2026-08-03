@@ -8,7 +8,7 @@ import { getSchedule, type Row } from "../../lib/data/loader";
 import { Select } from "../../components/filters/Select";
 import { useECharts } from "../../components/charts/useECharts";
 import { rowChartH } from "../../components/charts/sizing";
-import { Loading } from "../../components/Loading";
+import { Loading, ErrorRetry } from "../../components/Loading";
 import { usePageTitle } from "../../lib/hooks/usePageTitle";
 import { WIN_TYPE_COLORS } from "../../lib/logic/winType";
 import { useSeasonWeek } from "../../context/SeasonWeekContext";
@@ -43,6 +43,8 @@ export default function GamePicks() {
   const [manual, setManual] = useState<string[]>(loadManual);
   const [spreadSort, setSpreadSort] = useState<"time" | "spread">("time");
   const deepLinkApplied = useRef(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [retryTick, setRetryTick] = useState(0);
 
   usePageTitle(season && week ? `Game Picks — Wk ${week}, ${season}` : "Game Picks");
 
@@ -51,8 +53,11 @@ export default function GamePicks() {
   }, [manual]);
 
   useEffect(() => {
-    getSchedule().then(setSchedule);
-  }, []);
+    setLoadError(null);
+    getSchedule()
+      .then(setSchedule)
+      .catch((err) => setLoadError(err instanceof Error ? err.message : "Failed to load"));
+  }, [retryTick]);
 
   // Deep-linked (e.g. from Home's "this week" launchpad or another page) —
   // the URL params win over whatever the shared season/week context has,
@@ -202,6 +207,7 @@ export default function GamePicks() {
   const countsRef = useECharts(countsOption);
   const spreadRef = useECharts(spreadOption);
 
+  if (loadError) return <ErrorRetry onRetry={() => setRetryTick((t) => t + 1)} />;
   if (!schedule.length) return <Loading label="Loading schedule…" />;
 
   const weekIdx = weeks.indexOf(Number(week));

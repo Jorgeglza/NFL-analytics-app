@@ -10,7 +10,7 @@ import { computePowerRankings, type PowerRankingRow } from "../../lib/logic/powe
 import { METRICS, seriesFor } from "./team-trends/shared";
 import { Select } from "../../components/filters/Select";
 import { useECharts } from "../../components/charts/useECharts";
-import { Loading } from "../../components/Loading";
+import { Loading, ErrorRetry } from "../../components/Loading";
 import { usePageTitle } from "../../lib/hooks/usePageTitle";
 import { PageHeader, tableWrapCls, theadCls, trCls } from "../../components/ui";
 
@@ -30,6 +30,8 @@ export default function TeamTrends() {
   const [team2, setTeam2] = useState("SF");
   const [team3, setTeam3] = useState(NONE);
   const deepLinkApplied = useRef(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [retryTick, setRetryTick] = useState(0);
 
   usePageTitle(season ? `Team Trends — ${season}` : "Team Trends");
 
@@ -51,22 +53,28 @@ export default function TeamTrends() {
   }, [searchParams]);
 
   useEffect(() => {
-    Promise.all([getSchedule(), getTeamMetaMap()]).then(([s, m]) => {
-      setSchedule(s);
-      setMeta(m);
-      if (!season) {
-        const seasons = [...new Set(s.map((r) => Number(r.season)))].sort((a, b) => b - a);
-        if (seasons.length) setSeason(String(seasons[0]));
-      }
-    });
-    getGrades().then(setGrades);
+    setLoadError(null);
+    const onErr = (err: unknown) => setLoadError(err instanceof Error ? err.message : "Failed to load");
+    Promise.all([getSchedule(), getTeamMetaMap()])
+      .then(([s, m]) => {
+        setSchedule(s);
+        setMeta(m);
+        if (!season) {
+          const seasons = [...new Set(s.map((r) => Number(r.season)))].sort((a, b) => b - a);
+          if (seasons.length) setSeason(String(seasons[0]));
+        }
+      })
+      .catch(onErr);
+    getGrades().then(setGrades).catch(onErr);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [retryTick]);
 
   useEffect(() => {
     if (!season) return;
-    getTeamWeek(Number(season)).then(setTeamWeek);
-  }, [season]);
+    getTeamWeek(Number(season))
+      .then(setTeamWeek)
+      .catch((err) => setLoadError(err instanceof Error ? err.message : "Failed to load"));
+  }, [season, retryTick]);
 
   const seasons = useMemo(() => [...new Set(schedule.map((r) => Number(r.season)))].sort((a, b) => b - a), [schedule]);
   const teamOptions = useMemo(
@@ -157,6 +165,7 @@ export default function TeamTrends() {
   }, [teams, seriesByTeam, metric, meta]);
   const chartRef = useECharts(chartOption);
 
+  if (loadError) return <ErrorRetry onRetry={() => setRetryTick((t) => t + 1)} />;
   if (!schedule.length || !grades.length || !meta) return <Loading label="Loading trends…" />;
 
   return (

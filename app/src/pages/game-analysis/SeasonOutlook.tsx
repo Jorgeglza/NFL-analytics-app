@@ -11,7 +11,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { getSchedule, getGrades, type Row } from "../../lib/data/loader";
 import { getTeamMetaMap, type TeamMeta } from "../../lib/team/meta";
 import { Select } from "../../components/filters/Select";
-import { Loading } from "../../components/Loading";
+import { Loading, ErrorRetry } from "../../components/Loading";
 import { usePageTitle } from "../../lib/hooks/usePageTitle";
 import { useSeasonWeek } from "../../context/SeasonWeekContext";
 import { PageHeader } from "../../components/ui";
@@ -44,6 +44,8 @@ export default function SeasonOutlook() {
   const [grades, setGrades] = useState<Row[]>([]);
   const [meta, setMeta] = useState<Map<string, TeamMeta> | null>(null);
   const { season, week, setSeason, setWeek } = useSeasonWeek();
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [retryTick, setRetryTick] = useState(0);
 
   usePageTitle(`Season Outlook — ${tab}`);
 
@@ -53,12 +55,15 @@ export default function SeasonOutlook() {
   }, [tabSlug, navigate]);
 
   useEffect(() => {
-    Promise.all([getSchedule(), getGrades(), getTeamMetaMap()]).then(([s, g, m]) => {
-      setSchedule(s);
-      setGrades(g);
-      setMeta(m);
-    });
-  }, []);
+    setLoadError(null);
+    Promise.all([getSchedule(), getGrades(), getTeamMetaMap()])
+      .then(([s, g, m]) => {
+        setSchedule(s);
+        setGrades(g);
+        setMeta(m);
+      })
+      .catch((err) => setLoadError(err instanceof Error ? err.message : "Failed to load"));
+  }, [retryTick]);
 
   const seasons = useMemo(() => [...new Set(schedule.map((r) => Number(r.season)))].sort((a, b) => b - a), [schedule]);
   const weeks = useMemo(
@@ -96,7 +101,9 @@ export default function SeasonOutlook() {
 
       <TabBar tabs={TABS.map(([t, , icon, desc]) => [t, icon, desc] as const)} active={tab} onChange={setTab} gridClassName="sm:grid-cols-3" />
 
-      {loading ? (
+      {loadError ? (
+        <ErrorRetry onRetry={() => setRetryTick((t) => t + 1)} />
+      ) : loading ? (
         <Loading label="Loading season data…" />
       ) : (
         <>

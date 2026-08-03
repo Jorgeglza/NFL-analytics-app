@@ -13,7 +13,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { EChartsOption } from "echarts";
 import { getSchedule, type Row } from "../../lib/data/loader";
 import { useECharts } from "../../components/charts/useECharts";
-import { Loading } from "../../components/Loading";
+import { Loading, ErrorRetry } from "../../components/Loading";
 import { Card, Segmented } from "../../components/ui";
 import { LazyMount } from "../../components/LazyMount";
 import { Glossary } from "../../components/Glossary";
@@ -419,10 +419,15 @@ export default function WinTypes() {
   const [schedule, setSchedule] = useState<Row[]>([]);
   const [mode, setMode] = useState<"season" | "week">("season");
   const [glossaryOpen, setGlossaryOpen] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [retryTick, setRetryTick] = useState(0);
 
   useEffect(() => {
-    getSchedule().then(setSchedule);
-  }, []);
+    setLoadError(null);
+    getSchedule()
+      .then(setSchedule)
+      .catch((err) => setLoadError(err instanceof Error ? err.message : "Failed to load"));
+  }, [retryTick]);
 
   // both views use regular-season games only, like the old page
   const reg = useMemo(() => schedule.filter((r) => r.game_type === "REG"), [schedule]);
@@ -500,7 +505,9 @@ export default function WinTypes() {
         </Card>
       )}
 
-      {!reg.length && <Loading label="Loading schedule…" />}
+      {loadError && <ErrorRetry onRetry={() => setRetryTick((t) => t + 1)} />}
+
+      {!reg.length && !loadError && <Loading label="Loading schedule…" />}
 
       {reg.length > 0 && (
         <>

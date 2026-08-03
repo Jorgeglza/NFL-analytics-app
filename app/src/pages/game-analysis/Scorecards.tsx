@@ -10,7 +10,7 @@ import { getTeamWeek, getTeamWeekRanks, getGrades, getMeta, getSchedule, type Ro
 import { getTeamMetaMap, type TeamMeta } from "../../lib/team/meta";
 import { Select } from "../../components/filters/Select";
 import { useECharts } from "../../components/charts/useECharts";
-import { Loading } from "../../components/Loading";
+import { Loading, ErrorRetry } from "../../components/Loading";
 import { Card, tableWrapCls, theadCls, trCls, stickyColCls, stickyColHeadCls, ScrollHint } from "../../components/ui";
 import { TeamLogoLink } from "../../components/team/TeamLogoLink";
 import { opponentLabel } from "../grading-model/shared";
@@ -601,17 +601,22 @@ export default function Scorecards() {
   const [ranks, setRanks] = useState<Row[]>([]);
   const [grades, setGrades] = useState<Row[]>([]);
   const [schedule, setSchedule] = useState<Row[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [retryTick, setRetryTick] = useState(0);
 
   usePageTitle(`Team Scorecard: ${team}`);
 
   useEffect(() => {
-    Promise.all([getTeamMetaMap(), getMeta(), getGrades()]).then(([m, mt, g]) => {
-      setMeta(m);
-      setGrades(g);
-      const ss = [...mt.seasons].sort((a, b) => b - a);
-      setSeasons(ss);
-    });
-  }, []);
+    setLoadError(null);
+    Promise.all([getTeamMetaMap(), getMeta(), getGrades()])
+      .then(([m, mt, g]) => {
+        setMeta(m);
+        setGrades(g);
+        const ss = [...mt.seasons].sort((a, b) => b - a);
+        setSeasons(ss);
+      })
+      .catch((err) => setLoadError(err instanceof Error ? err.message : "Failed to load"));
+  }, [retryTick]);
 
   // Deep-linked season (e.g. from Team Comparison) wins over the shared
   // season/week context, applied once per mount.
@@ -628,12 +633,14 @@ export default function Scorecards() {
 
   useEffect(() => {
     if (!season) return;
-    Promise.all([getTeamWeek(Number(season)), getTeamWeekRanks(Number(season)), getSchedule()]).then(([tw, rk, sch]) => {
-      setTeamWeek(tw.filter((r) => r.game_type === "REG" || r.game_type == null));
-      setRanks(rk);
-      setSchedule(sch);
-    });
-  }, [season]);
+    Promise.all([getTeamWeek(Number(season)), getTeamWeekRanks(Number(season)), getSchedule()])
+      .then(([tw, rk, sch]) => {
+        setTeamWeek(tw.filter((r) => r.game_type === "REG" || r.game_type == null));
+        setRanks(rk);
+        setSchedule(sch);
+      })
+      .catch((err) => setLoadError(err instanceof Error ? err.message : "Failed to load"));
+  }, [season, retryTick]);
 
   const teams = useMemo(() => [...new Set(teamWeek.map((r) => String(r.team)))].sort(), [teamWeek]);
   const df = useMemo(
@@ -783,6 +790,7 @@ export default function Scorecards() {
       win: Number(r.win) === 1,
     }));
 
+  if (loadError) return <ErrorRetry onRetry={() => setRetryTick((t) => t + 1)} />;
   if (!meta) return <Loading />;
   const tm = meta.get(team);
 
