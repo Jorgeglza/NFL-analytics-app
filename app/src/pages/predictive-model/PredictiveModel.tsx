@@ -15,7 +15,7 @@ import {
   type PredictiveModelCalibration,
   type PredictiveModelMeta,
 } from "../../lib/data/loader";
-import { Loading } from "../../components/Loading";
+import { Loading, ErrorRetry } from "../../components/Loading";
 import { TabBar } from "../../components/TabBar";
 import { usePageTitle } from "../../lib/hooks/usePageTitle";
 import OverviewTab from "./OverviewTab";
@@ -55,32 +55,42 @@ export default function PredictiveModel() {
   const [importance, setImportance] = useState<Row[]>([]);
   const [calibration, setCalibration] = useState<PredictiveModelCalibration | null>(null);
   const [meta, setMeta] = useState<PredictiveModelMeta | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [retryTick, setRetryTick] = useState(0);
+  const [gameFeaturesError, setGameFeaturesError] = useState<string | null>(null);
+  const [gameFeaturesRetryTick, setGameFeaturesRetryTick] = useState(0);
 
   usePageTitle(`Predictive Model — ${tab}`);
 
   useEffect(() => {
+    setLoadError(null);
     Promise.all([
       getPredictiveModelGames(),
       getPredictiveModelSeasonSummary(),
       getPredictiveModelImportance(),
       getPredictiveModelCalibration(),
       getPredictiveModelMeta(),
-    ]).then(([g, ss, imp, cal, m]) => {
-      setGames(g);
-      setSeasonSummary(ss);
-      setImportance(imp);
-      setCalibration(cal);
-      setMeta(m);
-    });
-  }, []);
+    ])
+      .then(([g, ss, imp, cal, m]) => {
+        setGames(g);
+        setSeasonSummary(ss);
+        setImportance(imp);
+        setCalibration(cal);
+        setMeta(m);
+      })
+      .catch((err) => setLoadError(err instanceof Error ? err.message : "Failed to load"));
+  }, [retryTick]);
 
   // game_features.json (906 KB gz) is only needed by the Explanation tab —
   // deferred so the other 3 tabs don't wait on it up front (P7.3).
   useEffect(() => {
     if (tab === "Explanation" && !gameFeatures.length) {
-      getPredictiveModelGameFeatures().then(setGameFeatures);
+      setGameFeaturesError(null);
+      getPredictiveModelGameFeatures()
+        .then(setGameFeatures)
+        .catch((err) => setGameFeaturesError(err instanceof Error ? err.message : "Failed to load"));
     }
-  }, [tab, gameFeatures.length]);
+  }, [tab, gameFeatures.length, gameFeaturesRetryTick]);
 
   const loading = !games.length || !seasonSummary.length || !calibration || !meta;
 
@@ -98,14 +108,18 @@ export default function PredictiveModel() {
 
       <TabBar tabs={TABS} active={tab} onChange={setTab} gridClassName="sm:grid-cols-4" />
 
-      {loading ? (
+      {loadError ? (
+        <ErrorRetry onRetry={() => setRetryTick((t) => t + 1)} />
+      ) : loading ? (
         <Loading label="Loading predictive model data…" />
       ) : (
         <>
           {tab === "Overview" && <OverviewTab seasonSummary={seasonSummary} testSeasons={meta!.test_seasons} />}
           {tab === "Performance" && <PerformanceTab games={games} />}
           {tab === "Explanation" && (
-            gameFeatures.length ? (
+            gameFeaturesError ? (
+              <ErrorRetry onRetry={() => setGameFeaturesRetryTick((t) => t + 1)} />
+            ) : gameFeatures.length ? (
               <ExplanationTab importance={importance} games={games} gameFeatures={gameFeatures} featureCols={meta!.feature_cols} />
             ) : (
               <Loading label="Loading game features…" />

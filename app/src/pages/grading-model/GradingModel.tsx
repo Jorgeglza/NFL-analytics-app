@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { getGrades, getFeatureImportance, getSchedule, getContribParams, type Row, type ContribParams } from "../../lib/data/loader";
 import { getTeamMetaMap, type TeamMeta } from "../../lib/team/meta";
-import { Loading } from "../../components/Loading";
+import { Loading, ErrorRetry } from "../../components/Loading";
 import { TabBar } from "../../components/TabBar";
 import { usePageTitle } from "../../lib/hooks/usePageTitle";
 import { useSeasonWeek } from "../../context/SeasonWeekContext";
@@ -43,6 +43,8 @@ export default function GradingModel() {
   const [schedule, setSchedule] = useState<Row[]>([]);
   const [meta, setMeta] = useState<Map<string, TeamMeta> | null>(null);
   const [contribParams, setContribParams] = useState<ContribParams | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [retryTick, setRetryTick] = useState(0);
 
   // Season is shared app-wide (audit §1); team is Teams-tab-specific but
   // still lifted so a click on a team in one tab (e.g. Weekly's ranking
@@ -58,16 +60,17 @@ export default function GradingModel() {
   usePageTitle(tab === "Teams" ? `Grading Model — Teams: ${teamsTeam}` : `Grading Model — ${tab}`);
 
   useEffect(() => {
-    Promise.all([getGrades(), getFeatureImportance(), getSchedule(), getTeamMetaMap(), getContribParams()]).then(
-      ([g, fi, s, m, cp]) => {
+    setLoadError(null);
+    Promise.all([getGrades(), getFeatureImportance(), getSchedule(), getTeamMetaMap(), getContribParams()])
+      .then(([g, fi, s, m, cp]) => {
         setGrades(g);
         setImportance(fi);
         setSchedule(s);
         setMeta(m);
         setContribParams(cp);
-      },
-    );
-  }, []);
+      })
+      .catch((err) => setLoadError(err instanceof Error ? err.message : "Failed to load"));
+  }, [retryTick]);
 
   const loading = !grades.length || !meta || !contribParams;
 
@@ -81,7 +84,9 @@ export default function GradingModel() {
       {/* Prominent section tabs — cards, not a lost pill bar (matches Matchup Previews). */}
       <TabBar tabs={TABS} active={tab} onChange={setTab} gridClassName="sm:grid-cols-4" />
 
-      {loading ? (
+      {loadError ? (
+        <ErrorRetry onRetry={() => setRetryTick((t) => t + 1)} />
+      ) : loading ? (
         <Loading label="Loading model data…" />
       ) : (
         <>
