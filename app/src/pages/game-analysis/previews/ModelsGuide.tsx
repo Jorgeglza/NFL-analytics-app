@@ -3,7 +3,7 @@
 // actual inputs each model consumed and the probability it produced.
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { getSchedule, getGrades, getTeamWeek, getMeta, getPredictiveModelGames, getPredictiveModelMeta, type Row } from "../../../lib/data/loader";
+import { getSchedule, getGrades, getTeamWeek, getMeta, getPredictiveModelGames, getPredictiveModelMeta, getPredictiveModelUpcoming, getPredictiveModelUpcomingMeta, type Row } from "../../../lib/data/loader";
 import { Select } from "../../../components/filters/Select";
 import { Loading, ErrorRetry } from "../../../components/Loading";
 import { useIsMobileViewport } from "../../../lib/useIsMobileViewport";
@@ -29,6 +29,7 @@ import {
   MODEL_KEYS,
   buildPredictiveIndex,
   type PredictiveIndex,
+  type PredictiveCoverage,
 } from "./engine";
 
 const pctf = (p: number | null | undefined, d = 1) => (p == null ? "—" : `${(100 * p).toFixed(d)}%`);
@@ -87,7 +88,7 @@ export default function ModelsGuide() {
   const [gameId, setGameId] = useState(backParams.get("game") ?? "");
   const [predIdx, setPredIdx] = useState<PredictiveIndex | null>(null);
   const [predictiveUnavailable, setPredictiveUnavailable] = useState(false);
-  const [predictiveCoverage, setPredictiveCoverage] = useState<{ min: number; max: number } | null>(null);
+  const [predictiveCoverage, setPredictiveCoverage] = useState<PredictiveCoverage | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [retryTick, setRetryTick] = useState(0);
   const isMobile = useIsMobileViewport();
@@ -120,11 +121,19 @@ export default function ModelsGuide() {
         if (!cancelled) setLoadError(err instanceof Error ? err.message : "Failed to load");
       }
     })();
-    Promise.all([getPredictiveModelGames(), getPredictiveModelMeta()])
-      .then(([rows, m]) => {
+    Promise.all([getPredictiveModelGames(), getPredictiveModelMeta(), getPredictiveModelUpcoming(), getPredictiveModelUpcomingMeta()])
+      .then(([rows, m, upcomingRows, um]) => {
         if (cancelled) return;
-        setPredIdx(buildPredictiveIndex(rows));
-        setPredictiveCoverage(m.test_seasons.length ? { min: Math.min(...m.test_seasons), max: Math.max(...m.test_seasons) } : null);
+        setPredIdx(buildPredictiveIndex([...rows, ...upcomingRows]));
+        setPredictiveCoverage(
+          m.test_seasons.length
+            ? {
+                min: Math.min(...m.test_seasons),
+                max: Math.max(...m.test_seasons),
+                upcoming: um.season != null && um.week != null && um.n_games > 0 ? { season: um.season, week: um.week } : undefined,
+              }
+            : null,
+        );
       })
       .catch(() => {
         if (!cancelled) setPredictiveUnavailable(true);
@@ -301,15 +310,16 @@ export default function ModelsGuide() {
                 (Elo, rolling EPA/success rate, injuries, rest, weather, divisional game). Win probability comes from a fitted
                 normal residual distribution around the predicted margin. <b>Research finding: no confirmed edge over the
                 market</b> — see the <a className="underline" href="#/data/predictive_model">Predictive Model page</a> and{" "}
-                <code>docs/predictive-model.md</code> for the full investigation. Historical only — no prediction is produced
-                for upcoming/unplayed games yet, so it silently sits out of the Average for those.
+                <code>docs/predictive-model.md</code> for the full investigation. Historical seasons plus a live prediction
+                for the single next upcoming week (refreshed twice-weekly by its own pipeline) — any other unplayed
+                game silently sits out of the Average.
               </>
             }
             inputs={[
               "Elo rating differential (dominant feature by an order of magnitude)",
               "Rolling EPA / success-rate / explosive-play-rate differentials (last 3 games)",
               "Rest days, divisional game, weather (temp/wind/roof), QB-starter continuity, injury counts",
-              `Coverage: seasons ${predictiveCoverage ? `${predictiveCoverage.min}–${predictiveCoverage.max}` : "—"} only (precomputed by the pipeline, not computed live in the browser)`,
+              `Coverage: seasons ${predictiveCoverage ? `${predictiveCoverage.min}–${predictiveCoverage.max}` : "—"}${predictiveCoverage?.upcoming ? `, plus the live Week ${predictiveCoverage.upcoming.week} (${predictiveCoverage.upcoming.season}) prediction` : ""} — precomputed by the pipeline, not computed live in the browser`,
             ]}
           >
             <div>Predicted home win probability (precomputed): <b>{pctf(ex.bundle.predictive[1])}</b></div>

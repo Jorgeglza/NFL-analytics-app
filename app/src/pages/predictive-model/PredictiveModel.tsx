@@ -1,7 +1,8 @@
 // Predictive Model page (P2) — exploration/explanation surface for the
 // margin-regression model chosen in docs/predictive-model-decision.md.
-// Historical-only (no live/upcoming-week picks — see docs/predictive-model.md
-// for why). 4 tabs, mirrors the grading-model page's file layout.
+// Overview tab also surfaces the live next-upcoming-week prediction (P3,
+// pipeline/predictive_model/export_upcoming.py) — the rest of the page stays
+// historical-only, see docs/predictive-model.md.
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
@@ -11,9 +12,12 @@ import {
   getPredictiveModelImportance,
   getPredictiveModelCalibration,
   getPredictiveModelMeta,
+  getPredictiveModelUpcoming,
+  getPredictiveModelUpcomingMeta,
   type Row,
   type PredictiveModelCalibration,
   type PredictiveModelMeta,
+  type PredictiveModelUpcomingMeta,
 } from "../../lib/data/loader";
 import { Loading, ErrorRetry } from "../../components/Loading";
 import { TabBar } from "../../components/TabBar";
@@ -59,6 +63,11 @@ export default function PredictiveModel() {
   const [retryTick, setRetryTick] = useState(0);
   const [gameFeaturesError, setGameFeaturesError] = useState<string | null>(null);
   const [gameFeaturesRetryTick, setGameFeaturesRetryTick] = useState(0);
+  // Live upcoming-week predictions — fetched separately so a missing/malformed
+  // export never blocks the rest of the (historical) page, same isolation as
+  // Matchup Previews' predIdx load.
+  const [upcoming, setUpcoming] = useState<Row[]>([]);
+  const [upcomingMeta, setUpcomingMeta] = useState<PredictiveModelUpcomingMeta | null>(null);
 
   usePageTitle(`Predictive Model — ${tab}`);
 
@@ -79,6 +88,14 @@ export default function PredictiveModel() {
         setMeta(m);
       })
       .catch((err) => setLoadError(err instanceof Error ? err.message : "Failed to load"));
+    Promise.all([getPredictiveModelUpcoming(), getPredictiveModelUpcomingMeta()])
+      .then(([rows, m]) => {
+        setUpcoming(rows);
+        setUpcomingMeta(m);
+      })
+      .catch(() => {
+        // Best-effort: the Overview tab's "This week" card just stays hidden.
+      });
   }, [retryTick]);
 
   // game_features.json (906 KB gz) is only needed by the Explanation tab —
@@ -114,7 +131,9 @@ export default function PredictiveModel() {
         <Loading label="Loading predictive model data…" />
       ) : (
         <>
-          {tab === "Overview" && <OverviewTab seasonSummary={seasonSummary} testSeasons={meta!.test_seasons} />}
+          {tab === "Overview" && (
+            <OverviewTab seasonSummary={seasonSummary} testSeasons={meta!.test_seasons} upcoming={upcoming} upcomingMeta={upcomingMeta} />
+          )}
           {tab === "Performance" && <PerformanceTab games={games} />}
           {tab === "Explanation" && (
             gameFeaturesError ? (

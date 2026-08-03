@@ -76,3 +76,18 @@ and in `page-mapping.md`.
     `seasons` now derives from `team_week_df["season"].unique()` — the same set the per-season export
     loop actually iterates over — instead of the raw `SEASONS` config constant. `current_season` (a
     separate field, derived from played games) was already correct and is unchanged.
+
+19. **`predictive_model/export_upcoming.py` crashed on the first week of a brand-new season.**
+    (`pipeline/predictive_model/features.py`, discovered/fixed 2026-08-03 while wiring live
+    predictions into the app.) `_field_position_situational()` returns an empty
+    `pd.DataFrame(columns=[...])` when no play-by-play has been published yet for a season (true for
+    every season's Week 1, before any games are played) — merging that all-`object`-dtype empty frame
+    onto `build_team_features()`'s frame left `l3_start_field_pos`/`l3_start_ep` as `object`-dtype
+    `None` instead of `float64` `NaN` for that season. `_add_nonlinear_transforms()`'s `np.sign()`
+    call can't handle an object-`None` array (`TypeError: unorderable types for comparison`), so
+    scoring the very first live prediction of a season would always fail — including in
+    `.github/workflows/predictive-refresh.yml`'s cron, not just locally. **Fixed** at the root in
+    `_signed_square()`/`_signed_sqrt()` with `pd.to_numeric(s, errors="coerce")` before `np.sign()` —
+    real `NaN` and object-`None` now behave identically (propagate through as missing, imputed
+    downstream like any other feature). No impact on `nfl_pipeline`'s parity-critical grading path —
+    this package is fully isolated, see `docs/predictive-model.md`.

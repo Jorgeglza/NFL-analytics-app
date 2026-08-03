@@ -218,14 +218,25 @@ export function buildScheduleEloIndex(schedule: Row[]): EloIndex {
   return buildEloIndex(scheduleToEloGames(schedule));
 }
 
-// ---------- predictive model (margin regression) — historical-only, precomputed ----------
-// Reuses app/public/data/predictive_model/games.json (pipeline/predictive_model/export_page.py),
-// which already carries a closed-form home_win_prob per historical game. No feature/model
-// porting to TS: this is a lookup, not a re-implementation. Games not covered (any
-// upcoming/unplayed week, or seasons before the export's first test season) simply have no
-// entry — probBundle resolves that to null, which the consensus nanmean already skips.
-// See docs/predictive-model.md / docs/predictive-model-decision.md for the research behind it.
+// ---------- predictive model (margin regression) — precomputed lookup ----------
+// Reuses app/public/data/predictive_model/games.json (historical, every completed test-season
+// game — pipeline/predictive_model/export_page.py) merged with upcoming.json (the single next
+// unplayed REG week, refreshed independently — pipeline/predictive_model/export_upcoming.py /
+// .github/workflows/predictive-refresh.yml). Both already carry a closed-form home_win_prob per
+// game. No feature/model porting to TS: this is a lookup, not a re-implementation. Games not
+// covered (seasons before the export's first test season, or any week beyond the one live
+// upcoming export) simply have no entry — probBundle resolves that to null, which the consensus
+// nanmean already skips. See docs/predictive-model.md / docs/predictive-model-decision.md for
+// the research behind the model (still no confirmed edge over the market).
 export type PredictiveIndex = Map<string, number>; // key -> home_win_prob
+
+// Coverage summary shown by every consumer's "predictive model" disclaimer footer —
+// `upcoming` is only set once export_upcoming.py has produced a real prediction for a game.
+export interface PredictiveCoverage {
+  min: number;
+  max: number;
+  upcoming?: { season: number; week: number };
+}
 
 export function predictiveKey(season: number | string, week: number | string, awayTeam: string, homeTeam: string): string {
   return `${season}|${week}|${awayTeam}|${homeTeam}`;
@@ -238,6 +249,13 @@ export function buildPredictiveIndex(rows: Row[]): PredictiveIndex {
     idx.set(predictiveKey(Number(r.season), Number(r.week), String(r.away_team), String(r.home_team)), Number(r.home_win_prob));
   }
   return idx;
+}
+
+/** Shared footer disclaimer wording for every tab that surfaces the predictive model. */
+export function predictiveDisclaimer(coverage: PredictiveCoverage | null): string {
+  const range = coverage ? `seasons ${coverage.min}–${coverage.max}` : "no seasons";
+  const live = coverage?.upcoming ? `, plus a live prediction for Week ${coverage.upcoming.week} (${coverage.upcoming.season})` : "";
+  return `⚠ Predictive model: historical (${range})${live}; excluded automatically outside that coverage.`;
 }
 
 // ---------- probability bundle ----------

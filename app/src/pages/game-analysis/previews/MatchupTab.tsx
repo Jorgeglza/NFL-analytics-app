@@ -30,6 +30,8 @@ import {
   type TeamWeekIndex,
   type EloIndex,
   type PredictiveIndex,
+  type PredictiveCoverage,
+  predictiveDisclaimer,
 } from "./engine";
 
 const fmtMl = (ml: number | null) => (ml == null ? "—" : ml > 0 ? `+${Math.round(ml)}` : String(Math.round(ml)));
@@ -102,7 +104,7 @@ export default function MatchupTab({
   eloIdx: EloIndex;
   predIdx?: PredictiveIndex;
   predictiveUnavailable?: boolean;
-  predictiveCoverage?: { min: number; max: number } | null;
+  predictiveCoverage?: PredictiveCoverage | null;
   /** Preselect a game (e.g. jumped here from a Week Preview card) — takes priority over URL params. */
   initialSelection?: { season: string; week: string; game: string } | null;
 }) {
@@ -607,9 +609,9 @@ export default function MatchupTab({
               <ModelBlock color={MODEL_COLORS.predictive} title="Predictive (margin reg.)" pick={pickOf(bundle.predictive)} prob={probOf(bundle.predictive)}>
                 <ProbBar label="Predicted home win prob." p={bundle.predictive[1]} color={MODEL_COLORS.predictive} />
                 <div className="text-[10px] text-slate-400">
-                  Historical-only walk-forward margin regression (Elo/EPA/injury/rest/weather diffs) — no prediction available for
-                  upcoming/unplayed games{predictiveCoverage ? ` or seasons before ${predictiveCoverage.min}` : ""}.
-                  Research found <b>no confirmed edge over the market</b> (see Models Guide).
+                  Walk-forward margin regression (Elo/EPA/injury/rest/weather diffs) — historical seasons
+                  {predictiveCoverage ? ` ${predictiveCoverage.min}–${predictiveCoverage.max}` : ""}, plus a live prediction for the
+                  single next upcoming week once scored. Research found <b>no confirmed edge over the market</b> (see Models Guide).
                 </div>
               </ModelBlock>
             )}
@@ -624,9 +626,7 @@ export default function MatchupTab({
         </div>
       )}
       {!predictiveUnavailable && (
-        <p className="text-[11px] text-slate-400">
-          ⚠ Predictive model: historical only{predictiveCoverage ? ` (seasons ${predictiveCoverage.min}–${predictiveCoverage.max})` : ""}; no prediction yet for upcoming games — excluded automatically from those picks/averages.
-        </p>
+        <p className="text-[11px] text-slate-400">{predictiveDisclaimer(predictiveCoverage ?? null)}</p>
       )}
       {predictiveUnavailable && (
         <p className="text-[11px] text-slate-400">⚠ Predictive model: data unavailable this session — excluded from the model list and Average above.</p>

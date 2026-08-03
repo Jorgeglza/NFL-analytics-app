@@ -78,14 +78,11 @@ Full work list, with per-item checkboxes and severities: **`docs/MOBILE_READINES
 - Verified as already correct, do not churn: viewport meta; **Tailwind v4 wraps `hover:` in `@media (hover: hover)` by default** (checked in `node_modules/tailwindcss/dist/lib.mjs`, v4.3.2) so hover states do not stick on touch; `Navbar.tsx` mobile menu; `useECharts` ResizeObserver; 17 of 19 tables already wrapped in `overflow-x-auto`.
 - ✅ **Phase 8 data loading reliability & payload (2026-08-02)** — a post-close-out follow-up (users reported mobile data "sometimes won't load"), full per-item writeup in `docs/MOBILE_READINESS.md`'s Phase 8 section. Root-caused three independent issues: (1) `player_week/2025.json` was 13.7 MB (~7x every other season) because a silent `nfl_data_py`→`nflreadpy` fallback for 2025 only pulled in every position plus 91 extra stat columns — fixed at the `export_json.py` export layer only (no `fetch.py`/model/parity impact), confirmed via `git status` that only `player_week/2025.json` changed after a full re-export; (2) `loader.ts`'s `fetchJson` had no timeout/retry and cached failures forever — added a 15s `AbortController` timeout, 2x retry-with-backoff on network/timeout failures only, cache eviction on final failure, and a new `ErrorRetry` UI component instead of an infinite spinner; (3) `MatchupPreviews.tsx`/`ModelsGuide.tsx` eagerly fetched every season's `team_week`/`team_week_ranks` (~14 MB/~9 MB) regardless of device — now gated by a new `useIsMobileViewport()` hook (mirrors the `sm`/640px breakpoint): mobile fetches only `meta.current_season` eagerly and the rest in the background, desktop reproduces the original single eager fetch with zero code-path change (verified via `read_network_requests` at both 375px and 1280px). **Also found and fixed live during verification**: `meta.json`'s `seasons` list included the current (unpublished, post-August-rollover) season even though no data files existed for it — a pre-existing bug, invisible before this session's reliability work made failures visible instead of an infinite hang, now fixed by deriving `meta.seasons` from the seasons that actually got exported. Documented both fixes in `docs/known-issues.md` #17-18. Verified: `tsc --noEmit`/`npm run build`/60-test suite green; pipeline `--stage export`/`--stage parity`/`--stage validate` green; browser-pane checks at 375px and 1280px on Matchup Previews, Models Guide, and Prop Bets Players confirmed zero console errors and correct fetch-pattern split. **Follow-up P8.4 (same day)**: wired the same `loadError`/`retryTick`/`ErrorRetry` pattern into the 5 player-analysis pages (`PropBets`, `ValueBets`, `MatchupBets`, `ParlayBuilder`, `PlayerTeamStats`), which had only gotten the invisible half of P8.2 (bounded failure, no visible recovery). Verified live with a real failure simulation — patched `fetch` to reject `player_week` requests, confirmed `ErrorRetry` renders after retries exhaust, then confirmed clicking Retry genuinely re-fetches and recovers (not just a pattern-matching inspection). **Follow-up P8.5 (same day)**: same gap existed on the two "Data" pages (`GradingModel.tsx`, `PredictiveModel.tsx`) — no multi-season payload problem there, but the same missing `ErrorRetry`. Wired identically (`PredictiveModel.tsx` got two independent error states since its Explanation-tab `game_features.json` fetch already had its own deferred loading state from P7.3). Live failure-path re-test wasn't possible for these two given a tooling limitation (both files were already cached in-tab, and a full reload needed to force a fresh request also wipes a monkey-patched `fetch` before React's effect fires) — documented as such rather than faked; confidence rests on the pattern being identical to P8.4's already-live-tested one. **Follow-up P8.6 (same day)**: a full route sweep found the identical gap in the remaining 7 routes with data fetches — `TeamTrends`, `SeasonOutlook`, `GamePicks`, `WinTypes`, `SpreadWinPct`, `TeamComparison`, `Scorecards` (none have the multi-season payload problem; `Home.tsx` already degrades gracefully and didn't need it; `GlossaryPage` has no fetch). Wired identically across all 7. Live failure-path re-tested successfully on `TeamTrends.tsx` (block → switch season to force a fresh fetch → `ErrorRetry` renders → unblock → Retry recovers). This test also caught a pure tooling artifact worth remembering: a transient dev-server HMR reconnect left the browser-automation tool's cached element ref stale, so a coordinate-based Retry click silently no-opped until a direct `element.click()` via `javascript_tool` confirmed the retry mechanism itself was correct all along — not a code bug. This closes out `ErrorRetry` coverage across every route in the app that fetches data.
 
-### F1 — Fantasy Draft page (independent track, non-blocking for M0–M5) ☐
-- ☐ Design doc written (`docs/fantasy-pipeline.md`, 2026-07-21) — not yet implemented.
-- Deliberately isolated from the main pipeline: own `pipeline/fantasy_pipeline/` package (own
-  sqlite file, own JSON output dir, duplicated export utilities rather than importing
-  `nfl_pipeline`'s), run **manually only** — no GitHub Actions automation — so a fragile
-  scrape can never break the weekly refresh, build, or deploy.
-- Phase 1 (rank table page) and Phase 2 (draft-guidance tool) both scoped; see the design doc
-  for the full plan before starting implementation.
+### F1 — Fantasy Draft page — ⛔ scrapped (2026-08-03)
+- Was scoped as a fully independent pipeline scraping consensus rankings from CBS/ESPN/TheScore.
+  Per explicit user direction (2026-08-03: "for the fantasy draft page, drop all plans") this is
+  dropped entirely, not just deferred — `docs/fantasy-pipeline.md` (the design doc) deleted. Not
+  on any future roadmap; would need re-scoping from scratch if ever revisited.
 
 ### P1 — Predictive model research spike (independent track, non-blocking) ⛔
 - ✅ Design doc + result written (`docs/predictive-model.md`, 2026-07-24).
@@ -452,12 +449,47 @@ Full work list, with per-item checkboxes and severities: **`docs/MOBILE_READINES
   unverifiable without rerunning 8 rounds of scripts — committing them costs nothing at
   build/runtime since `data/` isn't part of the app bundle (only `app/public/data/` is).
 
-### P3 — Live/upcoming-week predictions (independent track, follows P2)
+### P3 — Live/upcoming-week predictions (independent track, follows P2) ✅
 - ✅ Pipeline automation done (2026-07-25/26). Scope split per user decision: this round
   covers *only* the pipeline/automation side (item (c) below resolved as "own independent
-  weekly cron"); surfacing predictions in the Model Picker tab
-  (`app/src/pages/game-analysis/previews/ModelPickerTab.tsx`) and as a live-week section on
-  the `/data/predictive_model` page remains a separate, not-yet-started follow-up.
+  weekly cron").
+- ✅ **Frontend surfacing done (2026-08-03)**, per user direction to implement this as the top
+  priority follow-up. `predictive_model/games.json` (historical) and the new `upcoming.json`
+  (live, from this section's export) are simply concatenated before
+  `engine.ts:buildPredictiveIndex()` — both already carry the same
+  `season/week/home_team/away_team/home_win_prob` shape, so no new lookup logic was needed, just
+  merging the two row sets at the two places that build the index
+  (`MatchupPreviews.tsx`/`ModelsGuide.tsx`). This means the predictive model's pick now appears
+  live everywhere `probBundle()` is already consumed — Week Preview cards, the Matchup tab's
+  model-breakdown card, Model Overview's "Upcoming only" filter, and the Models Guide worked
+  example — with no per-page special-casing. New shared `PredictiveCoverage` type +
+  `predictiveDisclaimer()` helper (`engine.ts`) replace the 4 near-duplicated "historical only"
+  footer strings across `WeekPreviewTab`/`MatchupTab`/`ModelOverviewTab`/`ModelsGuide` with one
+  wording that now also states the live week when present (`ModelPickerTab`'s footer is
+  deliberately unchanged — that tab only ever grades completed games, so upcoming coverage
+  doesn't change its behavior). New loaders `getPredictiveModelUpcoming()` /
+  `getPredictiveModelUpcomingMeta()` in `loader.ts`.
+  New "This week" card on `/data/predictive_model`'s Overview tab (`OverviewTab.tsx`, fetched
+  independently in `PredictiveModel.tsx` so a missing/malformed export just hides the card
+  instead of blocking the historical page) — one row per upcoming game: market spread, predicted
+  home margin, model home win%, market fair home win%, plus the fitted residual σ. Same
+  "no confirmed edge, exploration not picks" framing as the rest of the page.
+- **Bug found and fixed while regenerating real data**: `export_upcoming.py` crashed
+  (`TypeError: unorderable types for comparison` in `np.sign`) the first time it ran against a
+  season with zero completed games (2026, pre-kickoff) — `features._field_position_situational()`
+  returns an empty `pd.DataFrame(columns=[...])` when no play-by-play exists yet for that season,
+  and merging that all-`object`-dtype frame onto `feats` left `l3_start_field_pos`/`l3_start_ep`
+  as `object`-dtype `None` instead of `float64` `NaN`, which `np.sign()` can't handle. Fixed at
+  the root in `_signed_square()`/`_signed_sqrt()` (`features.py`) with a `pd.to_numeric(...,
+  errors="coerce")` first — real `NaN` and `object`-`None` now behave identically (propagate
+  through, imputed downstream like any other missing feature). This bug would have hit
+  `predictive-refresh.yml`'s live cron the same way the first time a new season's Week 1 export
+  ran, so it's a real production fix, not just a local-repro issue.
+- Verified: real 2026 Week 1 export produced (16 games, σ≈13.1, 2895 training games) after the
+  fix; `tsc --noEmit`, `npm run build`, and the 60-test Vitest suite all green; browser-pane
+  check across Predictive Model → Overview, Matchup Previews (Week Preview / Matchup / Model
+  Overview "Upcoming only"), and Models Guide — live predictions render correctly (e.g. NE @ SEA
+  → SEA 62% home win prob, consistent across every surface), zero console errors anywhere.
 - Built: `features.build_upcoming_game_table(season, week)` + `features.next_unplayed_week()`
   — reuses `build_team_features()` unchanged (every per-team feature already excludes the
   current week's own result via `shift(1)`, so this is a filter change on `build_game_table`'s

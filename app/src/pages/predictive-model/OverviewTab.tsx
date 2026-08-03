@@ -1,10 +1,11 @@
-// Overview: KPIs, accuracy-by-season table, and a trend chart up front —
-// the full research story (why this model, the complexity/accuracy
-// comparison) is collapsed by default so the tab reads as a dashboard, not
-// a research memo. Click "Why this model?" to expand it.
+// Overview: "this week" live predictions (if any) lead the tab, then KPIs,
+// accuracy-by-season table, and a trend chart — the full research story (why
+// this model, the complexity/accuracy comparison) is collapsed by default so
+// the tab reads as a dashboard, not a research memo. Click "Why this model?"
+// to expand it.
 import { useMemo, useState } from "react";
 import type { EChartsOption } from "echarts";
-import type { Row } from "../../lib/data/loader";
+import type { Row, PredictiveModelUpcomingMeta } from "../../lib/data/loader";
 import { useECharts } from "../../components/charts/useECharts";
 import { Card, Kpi, tableWrapCls, theadCls, trCls } from "../../components/ui";
 import { pct } from "./shared";
@@ -22,10 +23,27 @@ const COMPLEXITY_ROWS: { config: string; features: string; complexity: number; a
   { config: "Original baseline (HGB, round1 features)", features: "17", complexity: 4, acc: "62.69%" },
 ];
 
-export default function OverviewTab({ seasonSummary, testSeasons }: { seasonSummary: Row[]; testSeasons: number[] }) {
+export default function OverviewTab({
+  seasonSummary,
+  testSeasons,
+  upcoming,
+  upcomingMeta,
+}: {
+  seasonSummary: Row[];
+  testSeasons: number[];
+  upcoming: Row[];
+  upcomingMeta: PredictiveModelUpcomingMeta | null;
+}) {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const pooled = seasonSummary.find((r) => r.season === "pooled");
   const bySeasonAsc = seasonSummary.filter((r) => r.season !== "pooled").sort((a, b) => Number(a.season) - Number(b.season));
+  const upcomingRows = useMemo(
+    () =>
+      [...upcoming].sort(
+        (a, b) => String(a.gameday ?? "").localeCompare(String(b.gameday ?? "")) || String(a.away_team).localeCompare(String(b.away_team)),
+      ),
+    [upcoming],
+  );
 
   const trendOption = useMemo<EChartsOption | null>(() => {
     if (!bySeasonAsc.length) return null;
@@ -47,6 +65,55 @@ export default function OverviewTab({ seasonSummary, testSeasons }: { seasonSumm
 
   return (
     <div className="space-y-4">
+      {upcomingMeta && upcomingMeta.n_games > 0 && (
+        <Card
+          accent="#6B7280"
+          title={`This week — Season ${upcomingMeta.season}, Week ${upcomingMeta.week}`}
+          subtitle="Live predictions for the next scheduled-but-unplayed week, refit on every completed game through last week and scored twice weekly (see docs/predictive-model.md — no confirmed edge over the market, so read these as exploration, not picks)."
+        >
+          <div className={`overflow-x-auto ${tableWrapCls}`}>
+            <table className="w-full text-sm">
+              <thead className={theadCls}>
+                <tr>
+                  <th className="px-3 py-2">Game</th>
+                  <th className="px-3 py-2 text-right">Market spread</th>
+                  <th className="px-3 py-2 text-right">Predicted margin (home)</th>
+                  <th className="px-3 py-2 text-right">Model home win%</th>
+                  <th className="px-3 py-2 text-right">Market fair home win%</th>
+                </tr>
+              </thead>
+              <tbody>
+                {upcomingRows.map((g) => {
+                  const margin = Number(g.predicted_margin);
+                  const spread = g.spread_line == null ? null : Number(g.spread_line);
+                  return (
+                    <tr key={`${g.away_team}-${g.home_team}`} className={trCls}>
+                      <td className="px-3 py-1.5 font-medium">
+                        {g.away_team} @ {g.home_team}
+                        {g.gameday ? <span className="ml-1.5 text-xs text-slate-400">{g.gameday}</span> : null}
+                      </td>
+                      <td className="px-3 py-1.5 text-right text-slate-500">{spread == null ? "—" : spread > 0 ? `+${spread}` : spread}</td>
+                      <td className="px-3 py-1.5 text-right font-semibold">
+                        {g.home_team} {margin >= 0 ? "+" : ""}
+                        {margin.toFixed(1)}
+                      </td>
+                      <td className="px-3 py-1.5 text-right">{pct(Number(g.home_win_prob))}</td>
+                      <td className="px-3 py-1.5 text-right text-slate-500">{g.market_home_fair == null ? "—" : pct(Number(g.market_home_fair))}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          {upcomingMeta.sigma != null && (
+            <p className="mt-2 text-xs text-slate-500">
+              Fitted residual σ ≈ {upcomingMeta.sigma.toFixed(1)} points on {upcomingMeta.n_train_games ?? "--"} training games — win probability comes
+              from a normal distribution around each predicted margin, same as every historical prediction on this page.
+            </p>
+          )}
+        </Card>
+      )}
+
       <div className="flex flex-wrap gap-3">
         <Kpi label="Pooled straight-up accuracy" value={pct(Number(pooled?.model_accuracy))} sub={`n=${pooled?.n ?? "--"}`} />
         <Kpi label="Market moneyline accuracy" value={pct(Number(pooled?.market_accuracy))} accent="#94a3b8" />

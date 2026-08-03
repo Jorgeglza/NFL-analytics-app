@@ -124,6 +124,24 @@ export interface PredictiveModelMeta {
 }
 export const getPredictiveModelMeta = () => fetchJson<PredictiveModelMeta>("predictive_model/meta.json");
 
+// Live upcoming-week predictions (P3) — pipeline/predictive_model/export_upcoming.py,
+// refreshed independently by .github/workflows/predictive-refresh.yml. Empty
+// ({cols:[],rows:[]}) whenever every configured season is fully played (offseason).
+export const getPredictiveModelUpcoming = async () =>
+  toRecords(await fetchJson<CompactFrame>("predictive_model/upcoming.json"));
+
+export interface PredictiveModelUpcomingMeta {
+  generated_at: string;
+  season: number | null;
+  week: number | null;
+  n_games: number;
+  n_train_games?: number;
+  sigma?: number;
+  model?: string;
+}
+export const getPredictiveModelUpcomingMeta = () =>
+  fetchJson<PredictiveModelUpcomingMeta>("predictive_model/upcoming_meta.json");
+
 export interface ContribParams {
   [gradeType: string]: {
     mode: "offense" | "defense" | "overall";

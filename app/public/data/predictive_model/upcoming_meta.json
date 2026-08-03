@@ -1,1 +1,1 @@
-{"generated_at":"2026-07-31T19:43:25.806463+00:00","season":null,"week":null,"n_games":0}
+{"generated_at":"2026-08-03T04:05:49.290704+00:00","season":2026,"week":1,"n_games":16,"n_train_games":2895,"sigma":13.1143,"model":"margin_regression_lin_reg"}

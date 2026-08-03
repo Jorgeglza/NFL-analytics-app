@@ -32,7 +32,7 @@ importantly) ATS accuracy?
 
 ## Isolation (per explicit user request to keep new data separate)
 
-Mirrors the existing Fantasy Pipeline pattern (`docs/fantasy-pipeline.md`):
+Fully isolated from the main pipeline:
 - `pipeline/predictive_model/` — its own package; only reads (never writes) the
   existing `data/nfl.sqlite` (`schedule`, `team_week`, `grades` tables) and only
   reuses `nfl_pipeline.config`'s `SEASONS`/`current_season` (read-only).

@@ -379,11 +379,22 @@ def _field_position_situational(seasons) -> pd.DataFrame:
 # Signed transforms (sign(x)*x**2, sign(x)*sqrt(|x|)) preserve direction —
 # unlike a plain square/sqrt, which would treat a strong negative value (bad
 # team) as identical to an equally strong positive one (good team).
+#
+# pd.to_numeric first: a source column can arrive as `object` dtype full of
+# real `None` (not `float("nan")`) when it was built from a merge against an
+# empty frame with no rows to infer a numeric dtype from -- e.g. a season
+# with no play-by-play published yet (build_upcoming_game_table on the
+# earliest week of a brand new season). np.sign() raises on an object-dtype
+# None array; coercing first makes both cases (real NaN or object-None)
+# behave identically -- NaN propagates through, imputed downstream like any
+# other missing feature.
 def _signed_square(s: pd.Series) -> pd.Series:
+    s = pd.to_numeric(s, errors="coerce")
     return np.sign(s) * s ** 2
 
 
 def _signed_sqrt(s: pd.Series) -> pd.Series:
+    s = pd.to_numeric(s, errors="coerce")
     return np.sign(s) * np.sqrt(np.abs(s))
 
 

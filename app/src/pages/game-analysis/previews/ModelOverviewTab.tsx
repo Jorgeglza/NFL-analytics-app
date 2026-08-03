@@ -16,6 +16,8 @@ import {
   type TeamWeekIndex,
   type EloIndex,
   type PredictiveIndex,
+  type PredictiveCoverage,
+  predictiveDisclaimer,
 } from "./engine";
 
 interface Rec {
@@ -50,7 +52,7 @@ export default function ModelOverviewTab({
   eloIdx: EloIndex;
   predIdx?: PredictiveIndex;
   predictiveUnavailable?: boolean;
-  predictiveCoverage?: { min: number; max: number } | null;
+  predictiveCoverage?: PredictiveCoverage | null;
 }) {
   const modelKeys = useMemo(() => (predictiveUnavailable ? MODEL_KEYS.filter(([k]) => k !== "predictive") : MODEL_KEYS), [predictiveUnavailable]);
   const [grouping, setGrouping] = useState<"season" | "week">("season");
@@ -368,7 +370,7 @@ export default function ModelOverviewTab({
       <p className="text-[11px] text-slate-400">
         {predictiveUnavailable
           ? "⚠ Predictive model: data unavailable this session — excluded from the model list and Average above."
-          : `⚠ Predictive model: historical only${predictiveCoverage ? ` (seasons ${predictiveCoverage.min}–${predictiveCoverage.max})` : ""}; no prediction yet for upcoming games — excluded automatically from those picks/averages.`}
+          : predictiveDisclaimer(predictiveCoverage ?? null)}
       </p>
     </div>
   );

@@ -23,7 +23,9 @@ import {
   type TeamWeekIndex,
   type EloIndex,
   type PredictiveIndex,
+  type PredictiveCoverage,
   type ProbBundle,
+  predictiveDisclaimer,
 } from "./engine";
 
 /** Compact disagreement strip: each model's home-win prob as a dot on a 0–100% track. */
@@ -85,7 +87,7 @@ export default function WeekPreviewTab({
   eloIdx: EloIndex;
   predIdx?: PredictiveIndex;
   predictiveUnavailable?: boolean;
-  predictiveCoverage?: { min: number; max: number } | null;
+  predictiveCoverage?: PredictiveCoverage | null;
   /** Jump to the Matchup tab for a specific game (season, week, game_id). */
   onOpenMatchup?: (season: string, week: string, game: string) => void;
 }) {
@@ -313,7 +315,7 @@ export default function WeekPreviewTab({
       <p className="text-[11px] text-slate-400">
         {predictiveUnavailable
           ? "⚠ Predictive model: data unavailable this session — excluded from the model list and Average above."
-          : `⚠ Predictive model: historical only${predictiveCoverage ? ` (seasons ${predictiveCoverage.min}–${predictiveCoverage.max})` : ""}; no prediction yet for upcoming games — excluded automatically from those picks/averages.`}
+          : predictiveDisclaimer(predictiveCoverage ?? null)}
       </p>
     </div>
   );

@@ -22,6 +22,7 @@ import {
   type TeamWeekIndex,
   type EloIndex,
   type PredictiveIndex,
+  type PredictiveCoverage,
 } from "./engine";
 
 interface Pick {
@@ -186,7 +187,7 @@ export default function ModelPickerTab({
   eloIdx: EloIndex;
   predIdx?: PredictiveIndex;
   predictiveUnavailable?: boolean;
-  predictiveCoverage?: { min: number; max: number } | null;
+  predictiveCoverage?: PredictiveCoverage | null;
 }) {
   const modelKeys = useMemo(() => (predictiveUnavailable ? MODEL_KEYS.filter(([k]) => k !== "predictive") : MODEL_KEYS), [predictiveUnavailable]);
   const records = useMemo<Rec[]>(() => {

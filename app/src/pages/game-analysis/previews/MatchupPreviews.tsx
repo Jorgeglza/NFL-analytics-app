@@ -3,9 +3,9 @@
 // trend features and grades for any game.
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useSearchParams } from "react-router-dom";
-import { getSchedule, getGrades, getTeamWeek, getTeamWeekRanks, getMeta, getPredictiveModelGames, getPredictiveModelMeta, type Row } from "../../../lib/data/loader";
+import { getSchedule, getGrades, getTeamWeek, getTeamWeekRanks, getMeta, getPredictiveModelGames, getPredictiveModelMeta, getPredictiveModelUpcoming, getPredictiveModelUpcomingMeta, type Row } from "../../../lib/data/loader";
 import { getTeamMetaMap, type TeamMeta } from "../../../lib/team/meta";
-import { buildHist, buildGradesIndex, buildTeamWeekIndex, buildScheduleEloIndex, buildPredictiveIndex, type PredictiveIndex } from "./engine";
+import { buildHist, buildGradesIndex, buildTeamWeekIndex, buildScheduleEloIndex, buildPredictiveIndex, type PredictiveIndex, type PredictiveCoverage } from "./engine";
 import { Loading, ErrorRetry } from "../../../components/Loading";
 import { useIsMobileViewport } from "../../../lib/useIsMobileViewport";
 import { TabBar } from "../../../components/TabBar";
@@ -55,7 +55,7 @@ export default function MatchupPreviews() {
   // "no prediction for this game" miss (that's handled silently inside probBundle).
   const [predIdx, setPredIdx] = useState<PredictiveIndex | null>(null);
   const [predictiveUnavailable, setPredictiveUnavailable] = useState(false);
-  const [predictiveCoverage, setPredictiveCoverage] = useState<{ min: number; max: number } | null>(null);
+  const [predictiveCoverage, setPredictiveCoverage] = useState<PredictiveCoverage | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [retryTick, setRetryTick] = useState(0);
   const isMobile = useIsMobileViewport();
@@ -122,11 +122,19 @@ export default function MatchupPreviews() {
         if (!cancelled) setLoadError(err instanceof Error ? err.message : "Failed to load");
       }
     })();
-    Promise.all([getPredictiveModelGames(), getPredictiveModelMeta()])
-      .then(([rows, m]) => {
+    Promise.all([getPredictiveModelGames(), getPredictiveModelMeta(), getPredictiveModelUpcoming(), getPredictiveModelUpcomingMeta()])
+      .then(([rows, m, upcomingRows, um]) => {
         if (cancelled) return;
-        setPredIdx(buildPredictiveIndex(rows));
-        setPredictiveCoverage(m.test_seasons.length ? { min: Math.min(...m.test_seasons), max: Math.max(...m.test_seasons) } : null);
+        setPredIdx(buildPredictiveIndex([...rows, ...upcomingRows]));
+        setPredictiveCoverage(
+          m.test_seasons.length
+            ? {
+                min: Math.min(...m.test_seasons),
+                max: Math.max(...m.test_seasons),
+                upcoming: um.season != null && um.week != null && um.n_games > 0 ? { season: um.season, week: um.week } : undefined,
+              }
+            : null,
+        );
       })
       .catch(() => {
         if (!cancelled) setPredictiveUnavailable(true);
