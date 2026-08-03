@@ -54,10 +54,21 @@ export interface EdgeParts {
   winL6D: number;
   tomL6D: number;
   edge: number;
-  pAway: number;
+  pAway: number | null;
 }
 
-/** Weighted composite of away-minus-home differentials -> p(away). */
+/** True when a team has no trend data at all yet (e.g. before its first game this season). */
+const noData = (f: TrendFeatures): boolean =>
+  f.grade == null && f.pmL6 == null && f.epaL6 == null && f.winL6 == null && f.tomL6 == null;
+
+/**
+ * Weighted composite of away-minus-home differentials -> p(away).
+ * Individual missing stats (e.g. grades not computed yet) fall back to a neutral
+ * 0 diff for that component so the model still works off however many games are
+ * available. But if a team has *no* trend data at all (start of season, before its
+ * first played game), the whole prediction is undefined -> pAway is null rather
+ * than the misleading coin-flip you'd get from every component defaulting to 0.
+ */
 export function edgeComposite(away: TrendFeatures, home: TrendFeatures): EdgeParts {
   const d = (a: number | null, h: number | null) => (a ?? 0) - (h ?? 0);
   const gradeD = EDGE_WEIGHTS.grade * d(away.grade, home.grade);
@@ -66,6 +77,6 @@ export function edgeComposite(away: TrendFeatures, home: TrendFeatures): EdgePar
   const winL6D = EDGE_WEIGHTS.winL6 * d(away.winL6, home.winL6);
   const tomL6D = EDGE_WEIGHTS.tomL6 * d(away.tomL6, home.tomL6);
   const edge = gradeD + pmL6D + epaL6D + winL6D + tomL6D;
-  const pAway = 1 / (1 + Math.exp(-EDGE_SCALE * edge));
+  const pAway = noData(away) || noData(home) ? null : 1 / (1 + Math.exp(-EDGE_SCALE * edge));
   return { gradeD, pmL6D, epaL6D, winL6D, tomL6D, edge, pAway };
 }

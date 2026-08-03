@@ -248,8 +248,8 @@ export default function MatchupTab({
     const fh = { ...twIdx.features(home, s, wkPlayed), grade: gH };
     const parts = edgeComposite(fa, fh);
     const pAway = parts.pAway;
-    const pHome = 1 - pAway;
-    return { fa, fh, gA, gH, parts, pAway, pHome, pick: pAway >= pHome ? away : home };
+    const pHome = pAway == null ? null : 1 - pAway;
+    return { fa, fh, gA, gH, parts, pAway, pHome, pick: pAway == null || pHome == null ? null : pAway >= pHome ? away : home };
   }, [selGame, gradesIdx, twIdx, away, home, s, wkPlayed]);
 
   const edgeBarOption = useMemo<EChartsOption | null>(() => {

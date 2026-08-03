@@ -107,10 +107,27 @@ describe("edgeComposite", () => {
         { grade: c.gradeHome, ...c.home },
       );
       close(r.edge, c.edge);
-      close(r.pAway, c.pAway);
-      close(r.pAway, 1 / (1 + Math.exp(-EDGE_SCALE * c.edge)));
+      close(r.pAway!, c.pAway);
+      close(r.pAway!, 1 / (1 + Math.exp(-EDGE_SCALE * c.edge)));
     });
   }
+
+  it("returns pAway=null when a team has no trend data at all (start of season)", () => {
+    const noData = { grade: null, pmL6: null, epaL6: null, winL6: null, tomL6: null };
+    const hasData = { grade: 55, pmL6: 3, epaL6: 0.1, winL6: 0.6, tomL6: 1 };
+    expect(edgeComposite(noData, hasData).pAway).toBeNull();
+    expect(edgeComposite(hasData, noData).pAway).toBeNull();
+    expect(edgeComposite(noData, noData).pAway).toBeNull();
+  });
+
+  it("still computes a prediction once teams have played, even short of a 6-game window", () => {
+    // e.g. week 2: both teams have exactly 1 played game so far this season.
+    const awayOneGame = { grade: null, pmL6: 7, epaL6: 0.2, winL6: 1, tomL6: 1 };
+    const homeOneGame = { grade: null, pmL6: -3, epaL6: -0.1, winL6: 0, tomL6: -1 };
+    const r = edgeComposite(awayOneGame, homeOneGame);
+    expect(r.pAway).not.toBeNull();
+    expect(r.pAway!).toBeGreaterThan(0.5);
+  });
 });
 
 describe("spread buckets (grid-aligned)", () => {

@@ -199,13 +199,16 @@ export function buildTeamWeekIndex(teamWeekBySeason: Map<number, Row[]>): TeamWe
     features: (team, season, wk) => {
       const rows = rowsFor(team, season).filter((r) => Number(r.week) <= wk);
       const col = (c: string) => rows.map((r) => Number(r[c])).filter(Number.isFinite);
-      // NaN feature means coerce to 0, matching the existing convention
+      // Null (not 0) when a team has no played games yet this season — edgeComposite
+      // treats an all-null feature set as "no trend data" and returns pAway=null
+      // instead of a misleading 50/50. With 1-5 games played, meanLastN naturally
+      // averages over whatever's available rather than requiring the full window.
       return {
         grade: null, // grade passed separately into edgeComposite
-        pmL6: meanLastN(col("points_margin"), 6) ?? 0,
-        epaL6: meanLastN(col("epa_diff"), 6) ?? 0,
-        winL6: meanLastN(col("win"), 6) ?? 0,
-        tomL6: meanLastN(col("turnover_margin"), 6) ?? 0,
+        pmL6: meanLastN(col("points_margin"), 6),
+        epaL6: meanLastN(col("epa_diff"), 6),
+        winL6: meanLastN(col("win"), 6),
+        tomL6: meanLastN(col("turnover_margin"), 6),
       };
     },
   };
@@ -312,7 +315,7 @@ export function probBundle(
   const fh = { ...twIdx.features(home, season, wkPlayed), grade: gHome };
   const edge = edgeComposite(fa, fh);
   const pAwayTrend = edge.pAway;
-  const pHomeTrend = 1 - pAwayTrend;
+  const pHomeTrend = pAwayTrend == null ? null : 1 - pAwayTrend;
 
   const { awayFair, homeFair } = fairProbs(
     game.away_moneyline == null ? null : Number(game.away_moneyline),
