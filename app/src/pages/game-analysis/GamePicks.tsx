@@ -4,13 +4,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import type { EChartsOption } from "echarts";
-import { getSchedule, type Row } from "../../lib/data/loader";
+import { getSchedule, getPredictiveModelUpcoming, type Row } from "../../lib/data/loader";
 import { Select } from "../../components/filters/Select";
 import { useECharts } from "../../components/charts/useECharts";
 import { rowChartH } from "../../components/charts/sizing";
 import { Loading, ErrorRetry } from "../../components/Loading";
 import { usePageTitle } from "../../lib/hooks/usePageTitle";
 import { WIN_TYPE_COLORS } from "../../lib/logic/winType";
+import { toGame, computeWeekPicks } from "../../lib/logic/spreadPicks";
 import { useSeasonWeek } from "../../context/SeasonWeekContext";
 import { InfoDot } from "../../components/InfoDot";
 
@@ -36,10 +37,34 @@ function loadManual(): string[] {
   }
 }
 
+/** One team's pick control for an unplayed game — a real toggle button (not a
+ * checkbox) so "this is the one I picked" reads at a glance, big enough to
+ * tap comfortably on mobile. Selection is mutually exclusive per row and
+ * clicking the selected side again clears it, both handled by the caller's
+ * `onClick` (`toggleManual`). */
+function PickButton({ selected, onClick, title }: { selected: boolean; onClick: () => void; title: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={selected}
+      title={title}
+      className={`min-h-11 w-full min-w-[72px] rounded-lg border-2 px-2 py-2 text-xs font-bold transition-colors sm:min-h-9 sm:py-1.5 ${
+        selected
+          ? "border-[#002f6c] bg-[#002f6c] text-white shadow-sm"
+          : "border-slate-300 bg-white text-slate-500 hover:border-[#002f6c]/50 hover:text-[#002f6c]"
+      }`}
+    >
+      {selected ? "✓ Picked" : "Pick"}
+    </button>
+  );
+}
+
 export default function GamePicks() {
   const [searchParams] = useSearchParams();
   const { season, week, setSeason, setWeek } = useSeasonWeek();
   const [schedule, setSchedule] = useState<Row[]>([]);
+  const [upcoming, setUpcoming] = useState<Row[]>([]);
   const [manual, setManual] = useState<string[]>(loadManual);
   const [spreadSort, setSpreadSort] = useState<"time" | "spread">("time");
   const deepLinkApplied = useRef(false);
@@ -57,6 +82,11 @@ export default function GamePicks() {
     getSchedule()
       .then(setSchedule)
       .catch((err) => setLoadError(err instanceof Error ? err.message : "Failed to load"));
+    // Best-effort — Elo Pick just stays disabled if this fails or is empty
+    // (e.g. offseason, or the selected week is outside the near-term window).
+    getPredictiveModelUpcoming()
+      .then(setUpcoming)
+      .catch(() => setUpcoming([]));
   }, [retryTick]);
 
   // Deep-linked (e.g. from Home's "this week" launchpad or another page) —
@@ -131,6 +161,58 @@ export default function GamePicks() {
       const key = `${gid}_${side}`;
       return cur.includes(key) ? cleared : [...cleared, key];
     });
+  };
+
+  const unplayedGames = useMemo(() => games.filter((g) => g.hs == null && g.as_ == null), [games]);
+
+  // Full REG-season history for the Spread Trend prefill — same population
+  // Spread Win %'s Weekly Picks panel uses, via the shared computeWeekPicks().
+  const regGames = useMemo(
+    () => schedule.filter((r) => r.game_type === "REG").map(toGame).filter((g): g is NonNullable<typeof g> => g != null),
+    [schedule],
+  );
+
+  // season|week|home|away -> upcoming row, for the Elo prefill.
+  const upcomingByGame = useMemo(() => {
+    const m = new Map<string, Row>();
+    for (const u of upcoming) m.set(`${u.season}|${u.week}|${u.home_team}|${u.away_team}`, u);
+    return m;
+  }, [upcoming]);
+
+  const eloAvailable = useMemo(
+    () => unplayedGames.some((g) => upcomingByGame.get(`${season}|${week}|${g.g.home_team}|${g.g.away_team}`)?.elo_p_home != null),
+    [unplayedGames, upcomingByGame, season, week],
+  );
+
+  // Replaces every unplayed game's pick for the current week with whatever
+  // `pickFor` returns (null = leave that game unset) — all four prefill
+  // buttons share this so "overwrite the whole week" behaves identically.
+  const applyToUnplayed = (pickFor: (g: (typeof unplayedGames)[number]) => "home" | "away" | null) => {
+    setManual((cur) => {
+      const unplayedIds = new Set(unplayedGames.map((g) => g.gid));
+      const kept = cur.filter((c) => !unplayedIds.has(c.slice(0, c.lastIndexOf("_"))));
+      const additions = unplayedGames
+        .map((g) => {
+          const side = pickFor(g);
+          return side ? `${g.gid}_${side}` : null;
+        })
+        .filter((x): x is string => x != null);
+      return [...kept, ...additions];
+    });
+  };
+
+  const applyAllFavorite = () => applyToUnplayed((g) => (g.spread == null || g.spread === 0 ? null : g.spread < 0 ? "home" : "away"));
+  const applyAllHome = () => applyToUnplayed(() => "home");
+  const applyElo = () =>
+    applyToUnplayed((g) => {
+      const p = upcomingByGame.get(`${season}|${week}|${g.g.home_team}|${g.g.away_team}`)?.elo_p_home;
+      return p == null ? null : Number(p) >= 0.5 ? "home" : "away";
+    });
+  const applySpreadTrend = () => {
+    const df = regGames.filter((g) => g.played && g.winType != null);
+    const picks = computeWeekPicks(regGames, Number(season), Number(week), 1.0, true, df, 10);
+    const bySide = new Map(picks?.rows.map((r) => [r.gameId, r.reco.endsWith("home") ? ("home" as const) : ("away" as const)]));
+    applyToUnplayed((g) => bySide.get(g.gid) ?? null);
   };
 
   const countsOption = useMemo<EChartsOption | null>(() => {
@@ -212,6 +294,7 @@ export default function GamePicks() {
 
   const weekIdx = weeks.indexOf(Number(week));
   const stepBtnCls = "grid h-11 w-11 sm:h-8 sm:w-8 place-items-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm transition-colors hover:text-slate-900 disabled:opacity-30 disabled:hover:text-slate-500";
+  const prefillBtnCls = "min-h-9 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 shadow-sm transition-colors hover:border-[#002f6c]/50 hover:text-[#002f6c]";
 
   return (
     <div className="space-y-6">
@@ -221,6 +304,30 @@ export default function GamePicks() {
           Game Picks
           <InfoDot text="Once you've made your picks, see how these win types trend across a season on Win Types." />
         </h1>
+        {unplayedGames.length > 0 && (
+          <div className="flex flex-col gap-1">
+            <span className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Prefill picks</span>
+            <div className="flex flex-wrap gap-1.5">
+              <button onClick={applyAllFavorite} className={prefillBtnCls} title="Pick every closing-spread favorite">
+                ⭐ All favorites
+              </button>
+              <button onClick={applyAllHome} className={prefillBtnCls} title="Pick every home team">
+                🏠 All home
+              </button>
+              <button onClick={applySpreadTrend} className={prefillBtnCls} title="Recommended favorite/underdog mix from historical spread-bucket win rates (see Win % by Win Type & Spread)">
+                📊 Spread trend
+              </button>
+              <button
+                onClick={applyElo}
+                disabled={!eloAvailable}
+                className={`${prefillBtnCls} disabled:cursor-not-allowed disabled:opacity-40`}
+                title={eloAvailable ? "Pick whichever side the Elo model favors" : "No Elo data for this week"}
+              >
+                📈 Elo pick
+              </button>
+            </div>
+          </div>
+        )}
         {pickRecord.any && (
           <div className="flex items-center gap-1.5 self-center rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold shadow-sm" title="Your manual picks vs. final results for this week">
             <span className="uppercase tracking-wider text-slate-400">Your picks</span>
@@ -248,7 +355,7 @@ export default function GamePicks() {
             {l}
           </span>
         ))}
-        <span className="ml-auto text-slate-400">Unplayed games show ✔ checkboxes — tick a team to record your pick (saved in this browser).</span>
+        <span className="ml-auto text-slate-400">Unplayed games show a Pick button per team — tap one to record your pick (saved in this browser), tap again to clear it.</span>
       </div>
 
       <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -269,17 +376,17 @@ export default function GamePicks() {
                   {winner === "away" && <span className="ml-1 text-xs font-black text-slate-700" title="Winner">✓</span>}
                 </td>
                 <td className="px-3 py-2 text-center">
-                  {as_ != null ? Math.round(as_) : (
-                    <label className="flex min-h-11 cursor-pointer select-none items-center justify-center gap-1 sm:min-h-0" title="Mark away team as manual winner">
-                      <input type="checkbox" checked={manual.includes(`${gid}_away`)} onChange={() => toggleManual(gid, "away")} /> ✔
-                    </label>
+                  {as_ != null ? (
+                    Math.round(as_)
+                  ) : (
+                    <PickButton selected={manual.includes(`${gid}_away`)} onClick={() => toggleManual(gid, "away")} title="Mark away team as your pick" />
                   )}
                 </td>
                 <td className="px-3 py-2 text-center">
-                  {hs != null ? Math.round(hs) : (
-                    <label className="flex min-h-11 cursor-pointer select-none items-center justify-center gap-1 sm:min-h-0" title="Mark home team as manual winner">
-                      <input type="checkbox" checked={manual.includes(`${gid}_home`)} onChange={() => toggleManual(gid, "home")} /> ✔
-                    </label>
+                  {hs != null ? (
+                    Math.round(hs)
+                  ) : (
+                    <PickButton selected={manual.includes(`${gid}_home`)} onClick={() => toggleManual(gid, "home")} title="Mark home team as your pick" />
                   )}
                 </td>
                 <td className={`px-3 py-2 ${winner === "home" ? "font-bold" : "font-medium"}`}>
