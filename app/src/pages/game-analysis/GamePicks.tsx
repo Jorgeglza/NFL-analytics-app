@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import type { EChartsOption } from "echarts";
 import { getSchedule, getPredictiveModelUpcoming, type Row } from "../../lib/data/loader";
+import { getTeamMetaMap, type TeamMeta } from "../../lib/team/meta";
 import { Select } from "../../components/filters/Select";
 import { useECharts } from "../../components/charts/useECharts";
 import { rowChartH } from "../../components/charts/sizing";
@@ -14,6 +15,7 @@ import { WIN_TYPE_COLORS } from "../../lib/logic/winType";
 import { toGame, computeWeekPicks } from "../../lib/logic/spreadPicks";
 import { useSeasonWeek } from "../../context/SeasonWeekContext";
 import { InfoDot } from "../../components/InfoDot";
+import { tableWrapCls, theadCls, ScrollHint } from "../../components/ui";
 
 const LABEL_FOR_NONE = "No result yet";
 const COLORS: Record<string, string> = {
@@ -60,11 +62,25 @@ function PickButton({ selected, onClick, title }: { selected: boolean; onClick: 
   );
 }
 
+/** Team abbreviation with its logo — falls back to the bare abbreviation
+ * (no layout shift) while team metadata is still loading or if a team has
+ * no logo on file. `bold` marks the actual/manual winner. */
+function TeamBadge({ abbr, meta, bold, isWinner }: { abbr: string; meta?: TeamMeta; bold: boolean; isWinner: boolean }) {
+  return (
+    <span className={`inline-flex items-center gap-1.5 ${bold ? "font-bold" : "font-medium"}`}>
+      {meta?.logo && <img src={meta.logo} alt="" className="h-5 w-5 shrink-0 object-contain" loading="lazy" decoding="async" />}
+      {abbr}
+      {isWinner && <span className="text-xs font-black text-slate-700" title="Winner">✓</span>}
+    </span>
+  );
+}
+
 export default function GamePicks() {
   const [searchParams] = useSearchParams();
   const { season, week, setSeason, setWeek } = useSeasonWeek();
   const [schedule, setSchedule] = useState<Row[]>([]);
   const [upcoming, setUpcoming] = useState<Row[]>([]);
+  const [teamMeta, setTeamMeta] = useState<Map<string, TeamMeta>>(new Map());
   const [manual, setManual] = useState<string[]>(loadManual);
   const [spreadSort, setSpreadSort] = useState<"time" | "spread">("time");
   const deepLinkApplied = useRef(false);
@@ -87,6 +103,10 @@ export default function GamePicks() {
     getPredictiveModelUpcoming()
       .then(setUpcoming)
       .catch(() => setUpcoming([]));
+    // Best-effort — logos just don't render if this fails.
+    getTeamMetaMap()
+      .then(setTeamMeta)
+      .catch(() => setTeamMeta(new Map()));
   }, [retryTick]);
 
   // Deep-linked (e.g. from Home's "this week" launchpad or another page) —
@@ -358,42 +378,44 @@ export default function GamePicks() {
         <span className="ml-auto text-slate-400">Unplayed games show a Pick button per team — tap one to record your pick (saved in this browser), tap again to clear it.</span>
       </div>
 
-      <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className={tableWrapCls}>
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+          <thead className={theadCls}>
             <tr>
-              {["Date", "Away", "A Score", "H Score", "Home", "Spread", "Win Type", "Zoom in"].map((h) => (
+              {["Date", "Away", "A Score", "H Score", "Home", "Spread", "Win Type", "Links"].map((h) => (
                 <th key={h} className="px-3 py-2">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {games.map(({ g, gid, hs, as_, spread, winner, winType }) => (
-              <tr key={gid} className="border-t border-slate-100" style={{ background: winType ? ROW_BG[winType] : "rgba(224,224,224,0.1)" }}>
-                <td className="px-3 py-2 text-slate-600">{String(g.gameday ?? "")}</td>
-                <td className={`px-3 py-2 ${winner === "away" ? "font-bold" : "font-medium"}`}>
-                  {String(g.away_team)}
-                  {winner === "away" && <span className="ml-1 text-xs font-black text-slate-700" title="Winner">✓</span>}
+              <tr
+                key={gid}
+                className="border-t border-slate-100 transition-[filter] duration-150 hover:brightness-95"
+                style={{ background: winType ? ROW_BG[winType] : "rgba(224,224,224,0.1)" }}
+              >
+                <td className="px-3 py-2 whitespace-nowrap text-slate-600">{String(g.gameday ?? "")}</td>
+                <td className="px-3 py-2">
+                  <TeamBadge abbr={String(g.away_team)} meta={teamMeta.get(String(g.away_team))} bold={winner === "away"} isWinner={winner === "away"} />
                 </td>
-                <td className="px-3 py-2 text-center">
+                <td className="px-3 py-2 text-center tabular-nums">
                   {as_ != null ? (
                     Math.round(as_)
                   ) : (
                     <PickButton selected={manual.includes(`${gid}_away`)} onClick={() => toggleManual(gid, "away")} title="Mark away team as your pick" />
                   )}
                 </td>
-                <td className="px-3 py-2 text-center">
+                <td className="px-3 py-2 text-center tabular-nums">
                   {hs != null ? (
                     Math.round(hs)
                   ) : (
                     <PickButton selected={manual.includes(`${gid}_home`)} onClick={() => toggleManual(gid, "home")} title="Mark home team as your pick" />
                   )}
                 </td>
-                <td className={`px-3 py-2 ${winner === "home" ? "font-bold" : "font-medium"}`}>
-                  {String(g.home_team)}
-                  {winner === "home" && <span className="ml-1 text-xs font-black text-slate-700" title="Winner">✓</span>}
+                <td className="px-3 py-2">
+                  <TeamBadge abbr={String(g.home_team)} meta={teamMeta.get(String(g.home_team))} bold={winner === "home"} isWinner={winner === "home"} />
                 </td>
-                <td className="px-3 py-2 text-center">{spread ?? "—"}</td>
+                <td className="px-3 py-2 text-center tabular-nums">{spread ?? "—"}</td>
                 <td className="px-3 py-2">
                   {winType ? (
                     <span className="rounded-full px-2 py-0.5 text-xs font-semibold text-white" style={{ background: COLORS[winType] }}>
@@ -425,6 +447,7 @@ export default function GamePicks() {
             ))}
           </tbody>
         </table>
+        <ScrollHint />
       </div>
 
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
