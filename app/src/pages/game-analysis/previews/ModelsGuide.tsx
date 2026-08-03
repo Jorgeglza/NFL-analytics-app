@@ -5,7 +5,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { getSchedule, getGrades, getTeamWeek, getMeta, getPredictiveModelGames, getPredictiveModelMeta, type Row } from "../../../lib/data/loader";
 import { Select } from "../../../components/filters/Select";
-import { Loading } from "../../../components/Loading";
+import { Loading, ErrorRetry } from "../../../components/Loading";
+import { useIsMobileViewport } from "../../../lib/useIsMobileViewport";
 import { Card, FilterGroup } from "../../../components/ui";
 import { MIN_N_BUCKET, MARKET_BUCKET_W, ATS_WINDOW, homeCoverFairProb, vigLeanProbHome, atsTrendProbHome } from "../../../lib/logic/probBlend";
 import { edgeComposite, EDGE_WEIGHTS, EDGE_SCALE } from "../../../lib/logic/edgeComposite";
@@ -87,24 +88,52 @@ export default function ModelsGuide() {
   const [predIdx, setPredIdx] = useState<PredictiveIndex | null>(null);
   const [predictiveUnavailable, setPredictiveUnavailable] = useState(false);
   const [predictiveCoverage, setPredictiveCoverage] = useState<{ min: number; max: number } | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [retryTick, setRetryTick] = useState(0);
+  const isMobile = useIsMobileViewport();
 
   useEffect(() => {
-    (async () => {
-      const [s, g, mt] = await Promise.all([getSchedule(), getGrades(), getMeta()]);
-      setSchedule(s);
-      setGrades(g);
+    let cancelled = false;
+    const loadSeasons = async (seasons: number[]) => {
       const tw = await Promise.all(
-        mt.seasons.map(async (yr) => [yr, (await getTeamWeek(yr)).filter((r) => r.game_type === "REG" || r.game_type == null)] as [number, Row[]]),
+        seasons.map(async (yr) => [yr, (await getTeamWeek(yr)).filter((r) => r.game_type === "REG" || r.game_type == null)] as [number, Row[]]),
       );
-      setTeamWeekBySeason(new Map(tw));
+      if (cancelled) return;
+      setTeamWeekBySeason((prev) => new Map([...(prev ?? []), ...tw]));
+    };
+
+    (async () => {
+      try {
+        setLoadError(null);
+        const [s, g, mt] = await Promise.all([getSchedule(), getGrades(), getMeta()]);
+        if (cancelled) return;
+        setSchedule(s);
+        setGrades(g);
+        // Same mobile-only "current season first, rest in the background"
+        // split as MatchupPreviews.tsx — desktop keeps the single eager
+        // Promise.all across every season, unchanged.
+        const prioritySeasons = isMobile ? [mt.current_season] : mt.seasons;
+        const deferredSeasons = isMobile ? mt.seasons.filter((yr) => yr !== mt.current_season) : [];
+        await loadSeasons(prioritySeasons);
+        if (deferredSeasons.length) loadSeasons(deferredSeasons).catch(() => {});
+      } catch (err) {
+        if (!cancelled) setLoadError(err instanceof Error ? err.message : "Failed to load");
+      }
     })();
     Promise.all([getPredictiveModelGames(), getPredictiveModelMeta()])
       .then(([rows, m]) => {
+        if (cancelled) return;
         setPredIdx(buildPredictiveIndex(rows));
         setPredictiveCoverage(m.test_seasons.length ? { min: Math.min(...m.test_seasons), max: Math.max(...m.test_seasons) } : null);
       })
-      .catch(() => setPredictiveUnavailable(true));
-  }, []);
+      .catch(() => {
+        if (!cancelled) setPredictiveUnavailable(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- isMobile is read once per attempt, not a live dependency
+  }, [retryTick]);
 
   const reg = useMemo(() => schedule.filter((r) => r.game_type === "REG"), [schedule]);
   const seasons = useMemo(() => [...new Set(reg.map((r) => Number(r.season)))].sort((a, b) => b - a), [reg]);
@@ -167,6 +196,7 @@ export default function ModelsGuide() {
     return { away, home, spread, fav, bucket, market, gA, gH, pMarketHome, homeCoverFair, pVigLeanHome, atsHome, atsAway, pAtsTrendHome, fa, fh, edge, mlA, mlH, fair, eloE, ppA, ppH, pythA, pythH, pAwayPyth, bundle };
   }, [game, hist, gradesIdx, twIdx, eloIdx, s, w, wkPlayed, predIdx]);
 
+  if (loadError) return <ErrorRetry onRetry={() => setRetryTick((t) => t + 1)} />;
   if (!schedule.length || !teamWeekBySeason || !ex) return <Loading label="Loading all seasons…" />;
 
   const { away, home } = ex;

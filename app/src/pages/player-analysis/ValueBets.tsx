@@ -11,6 +11,7 @@ import { getTeamMetaMap, type TeamMeta } from "../../lib/team/meta";
 import { Select } from "../../components/filters/Select";
 import { useECharts } from "../../components/charts/useECharts";
 import { PageSkeleton } from "../../components/Skeleton";
+import { ErrorRetry } from "../../components/Loading";
 import { stickyColCls, stickyColHeadCls, ScrollHint } from "../../components/ui";
 import { buildMismatchStatGroups, statLabel, PROP_MARKET_SECTIONS } from "./statPicker";
 import { useSeasonWeek } from "../../context/SeasonWeekContext";
@@ -89,15 +90,20 @@ export default function ValueBets() {
   // Per-cell value/avg/above-average status lives in a hover `title`, which
   // never fires on touch — tapping a cell surfaces the same text here.
   const [activeCellTip, setActiveCellTip] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [retryTick, setRetryTick] = useState(0);
 
   useEffect(() => {
-    Promise.all([getTeamMetaMap(), getSchedule(), getMeta()]).then(([m, s, mt]) => {
-      setMeta(m);
-      setSchedule(s);
-      const ss = [...mt.seasons].sort((a, b) => b - a);
-      setSeasons(ss);
-    });
-  }, []);
+    setLoadError(null);
+    Promise.all([getTeamMetaMap(), getSchedule(), getMeta()])
+      .then(([m, s, mt]) => {
+        setMeta(m);
+        setSchedule(s);
+        const ss = [...mt.seasons].sort((a, b) => b - a);
+        setSeasons(ss);
+      })
+      .catch((err) => setLoadError(err instanceof Error ? err.message : "Failed to load"));
+  }, [retryTick]);
 
   // Deep-linked season/week (e.g. from Matchup Bets) win over the shared
   // season/week context, applied once per mount.
@@ -116,11 +122,13 @@ export default function ValueBets() {
 
   useEffect(() => {
     if (!season) return;
-    Promise.all([getPlayerWeek(Number(season)), getTeamWeek(Number(season))]).then(([p, t]) => {
-      setPw(p);
-      setTw(t.filter((x) => x.game_type === "REG" || x.game_type == null));
-    });
-  }, [season]);
+    Promise.all([getPlayerWeek(Number(season)), getTeamWeek(Number(season))])
+      .then(([p, t]) => {
+        setPw(p);
+        setTw(t.filter((x) => x.game_type === "REG" || x.game_type == null));
+      })
+      .catch((err) => setLoadError(err instanceof Error ? err.message : "Failed to load"));
+  }, [season, retryTick]);
 
   const s = Number(season);
   const regSched = useMemo(() => schedule.filter((g) => Number(g.season) === s && g.game_type === "REG"), [schedule, s]);
@@ -438,6 +446,7 @@ export default function ValueBets() {
   const matchupHref = (gameId: string | null, player?: string) =>
     `/player_analysis/matchup_bets?season=${season}&week=${selWeek}${gameId ? `&game=${gameId}` : ""}&stat=${selStat}${player ? `&player=${encodeURIComponent(player)}` : ""}`;
 
+  if (loadError) return <ErrorRetry onRetry={() => setRetryTick((t) => t + 1)} />;
   if (!pw.length || !tw.length) return <PageSkeleton cards={3} blocks={2} />;
 
   const bestScore = (base: number) => (base > 0 ? "text-emerald-700" : base < 0 ? "text-red-700" : "text-slate-500");

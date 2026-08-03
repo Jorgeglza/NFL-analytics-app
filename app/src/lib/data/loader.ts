@@ -10,15 +10,53 @@ export type Row = Record<string, string | number | null>;
 
 const cache = new Map<string, Promise<unknown>>();
 
+const FETCH_TIMEOUT_MS = 15000;
+const MAX_RETRIES = 2;
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// A reachable server responding with a real HTTP error (404/500/…) won't
+// resolve itself on retry — only a stalled/dropped connection (timeout,
+// abort, or a fetch-level TypeError) is worth retrying.
+function isRetryable(err: unknown): boolean {
+  return !(err instanceof Error && err.message.startsWith("Failed to load"));
+}
+
+async function fetchOnce<T>(path: string): Promise<T> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    const r = await fetch(`${import.meta.env.BASE_URL}data/${path}`, { signal: controller.signal });
+    if (!r.ok) throw new Error(`Failed to load ${path}: ${r.status}`);
+    return (await r.json()) as T;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function fetchJson<T>(path: string): Promise<T> {
   if (!cache.has(path)) {
-    cache.set(
-      path,
-      fetch(`${import.meta.env.BASE_URL}data/${path}`).then((r) => {
-        if (!r.ok) throw new Error(`Failed to load ${path}: ${r.status}`);
-        return r.json();
-      }),
-    );
+    const attempt = (async () => {
+      let lastErr: unknown;
+      for (let i = 0; i <= MAX_RETRIES; i++) {
+        try {
+          return await fetchOnce<T>(path);
+        } catch (err) {
+          lastErr = err;
+          if (!isRetryable(err) || i === MAX_RETRIES) throw err;
+          await sleep(500 * 2 ** i);
+        }
+      }
+      throw lastErr;
+    })();
+    // Don't cache a failed request forever — a dropped connection that
+    // exhausts its retries should be retryable again on the next call (e.g.
+    // a user-triggered "Retry"), not permanently stuck for the rest of the
+    // SPA session the way an in-memory cache normally implies.
+    attempt.catch(() => cache.delete(path));
+    cache.set(path, attempt);
   }
   return cache.get(path) as Promise<T>;
 }

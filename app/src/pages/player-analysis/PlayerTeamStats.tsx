@@ -11,6 +11,7 @@ import { getPlayerWeek, getMeta, type Row } from "../../lib/data/loader";
 import { getTeamMetaMap, readableTextColor, type TeamMeta } from "../../lib/team/meta";
 import { Select } from "../../components/filters/Select";
 import { PageSkeleton } from "../../components/Skeleton";
+import { ErrorRetry } from "../../components/Loading";
 import { useECharts } from "../../components/charts/useECharts";
 import { LazyMount } from "../../components/LazyMount";
 import { RangeSlider } from "../../components/RangeSlider";
@@ -161,19 +162,28 @@ export default function PlayerTeamStats() {
   const [stat, setStat] = useState("passing_yards");
   const [weekLo, setWeekLo] = useState(1);
   const [weekHi, setWeekHi] = useState(18);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [retryTick, setRetryTick] = useState(0);
 
   useEffect(() => {
-    Promise.all([getTeamMetaMap(), getMeta()]).then(([m, mt]) => {
-      setMeta(m);
-      const ss = [...mt.seasons].sort((a, b) => b - a);
-      setSeasons(ss);
-      if (ss.length && !season) setSeason(String(ss[0]));
-    });
+    setLoadError(null);
+    Promise.all([getTeamMetaMap(), getMeta()])
+      .then(([m, mt]) => {
+        setMeta(m);
+        const ss = [...mt.seasons].sort((a, b) => b - a);
+        setSeasons(ss);
+        if (ss.length && !season) setSeason(String(ss[0]));
+      })
+      .catch((err) => setLoadError(err instanceof Error ? err.message : "Failed to load"));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [retryTick]);
   useEffect(() => {
-    if (season) getPlayerWeek(Number(season)).then(setRows);
-  }, [season]);
+    if (season) {
+      getPlayerWeek(Number(season))
+        .then(setRows)
+        .catch((err) => setLoadError(err instanceof Error ? err.message : "Failed to load"));
+    }
+  }, [season, retryTick]);
 
   const seasonTypes = useMemo(() => [...new Set(rows.map((r) => String(r.season_type)))].sort(), [rows]);
   const typed = useMemo(() => rows.filter((r) => !seasonType || String(r.season_type) === seasonType), [rows, seasonType]);
@@ -268,6 +278,7 @@ export default function PlayerTeamStats() {
     return { blocks, xMax, leaders };
   }, [typed, selStat, weekLo, weekHi, meta]);
 
+  if (loadError) return <ErrorRetry onRetry={() => setRetryTick((t) => t + 1)} />;
   if (!meta) return <PageSkeleton cards={1} blocks={3} />;
 
   // Delayed re-correction (Win Types' pattern): team cards are lazy-mounted,

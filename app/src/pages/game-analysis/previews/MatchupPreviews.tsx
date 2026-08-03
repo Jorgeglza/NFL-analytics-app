@@ -6,7 +6,8 @@ import { useLocation, useSearchParams } from "react-router-dom";
 import { getSchedule, getGrades, getTeamWeek, getTeamWeekRanks, getMeta, getPredictiveModelGames, getPredictiveModelMeta, type Row } from "../../../lib/data/loader";
 import { getTeamMetaMap, type TeamMeta } from "../../../lib/team/meta";
 import { buildHist, buildGradesIndex, buildTeamWeekIndex, buildScheduleEloIndex, buildPredictiveIndex, type PredictiveIndex } from "./engine";
-import { Loading } from "../../../components/Loading";
+import { Loading, ErrorRetry } from "../../../components/Loading";
+import { useIsMobileViewport } from "../../../lib/useIsMobileViewport";
 import { TabBar } from "../../../components/TabBar";
 import { usePageTitle } from "../../../lib/hooks/usePageTitle";
 import WeekPreviewTab from "./WeekPreviewTab";
@@ -55,6 +56,9 @@ export default function MatchupPreviews() {
   const [predIdx, setPredIdx] = useState<PredictiveIndex | null>(null);
   const [predictiveUnavailable, setPredictiveUnavailable] = useState(false);
   const [predictiveCoverage, setPredictiveCoverage] = useState<{ min: number; max: number } | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [retryTick, setRetryTick] = useState(0);
+  const isMobile = useIsMobileViewport();
 
   const openMatchup = (season: string, week: string, game: string) => {
     setMatchupSelection({ season, week, game });
@@ -66,30 +70,72 @@ export default function MatchupPreviews() {
   usePageTitle(tab === "Matchup" ? undefined : `Matchup Previews — ${tab}`);
 
   useEffect(() => {
-    (async () => {
-      const [s, g, m, mt] = await Promise.all([getSchedule(), getGrades(), getTeamMetaMap(), getMeta()]);
-      setSchedule(s);
-      setGrades(g);
-      setMeta(m);
+    let cancelled = false;
+    // Fetches team_week + team_week_ranks for the given seasons and merges
+    // them into the existing per-season maps (not a replace — this may run
+    // twice, once for the priority season(s) and once for the rest).
+    const loadSeasons = async (seasons: number[]) => {
       const [twEntries, rkEntries] = await Promise.all([
         Promise.all(
-          mt.seasons.map(async (season) => {
+          seasons.map(async (season) => {
             const tw = await getTeamWeek(season);
             return [season, tw.filter((r) => r.game_type === "REG" || r.game_type == null)] as [number, Row[]];
           }),
         ),
-        Promise.all(mt.seasons.map(async (season) => [season, await getTeamWeekRanks(season)] as [number, Row[]])),
+        Promise.all(seasons.map(async (season) => [season, await getTeamWeekRanks(season)] as [number, Row[]])),
       ]);
-      setTeamWeekBySeason(new Map(twEntries));
-      setRanksBySeason(new Map(rkEntries));
+      if (cancelled) return;
+      setTeamWeekBySeason((prev) => new Map([...(prev ?? []), ...twEntries]));
+      setRanksBySeason((prev) => new Map([...prev, ...rkEntries]));
+    };
+
+    (async () => {
+      try {
+        setLoadError(null);
+        const [s, g, m, mt] = await Promise.all([getSchedule(), getGrades(), getTeamMetaMap(), getMeta()]);
+        if (cancelled) return;
+        setSchedule(s);
+        setGrades(g);
+        setMeta(m);
+
+        // On mobile, fetch only the current season's team_week/ranks eagerly
+        // (~1.3 MB instead of ~14 MB across all seasons) so the page becomes
+        // usable quickly on a slow connection, then fill in the remaining
+        // seasons in the background — the Week Preview tab (the default
+        // landing tab) only needs the current season; older seasons resolve
+        // in place once loaded (buildTeamWeekIndex already treats a
+        // not-yet-loaded season as "no rows", the same as it would for any
+        // season with genuinely no data, so nothing crashes in the meantime).
+        // Desktop is untouched: `prioritySeasons` is every season, exactly
+        // the single eager Promise.all this page has always done.
+        const prioritySeasons = isMobile ? [mt.current_season] : mt.seasons;
+        const deferredSeasons = isMobile ? mt.seasons.filter((yr) => yr !== mt.current_season) : [];
+
+        await loadSeasons(prioritySeasons);
+        if (deferredSeasons.length) {
+          // Best-effort background fill — intentionally not awaited and not
+          // wired into loadError, so a dropped connection on an older season
+          // doesn't block or fail the page the user is already looking at.
+          loadSeasons(deferredSeasons).catch(() => {});
+        }
+      } catch (err) {
+        if (!cancelled) setLoadError(err instanceof Error ? err.message : "Failed to load");
+      }
     })();
     Promise.all([getPredictiveModelGames(), getPredictiveModelMeta()])
       .then(([rows, m]) => {
+        if (cancelled) return;
         setPredIdx(buildPredictiveIndex(rows));
         setPredictiveCoverage(m.test_seasons.length ? { min: Math.min(...m.test_seasons), max: Math.max(...m.test_seasons) } : null);
       })
-      .catch(() => setPredictiveUnavailable(true));
-  }, []);
+      .catch(() => {
+        if (!cancelled) setPredictiveUnavailable(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- isMobile is read once per attempt, not a live dependency
+  }, [retryTick]);
 
   const hist = useMemo(() => (schedule.length ? buildHist(schedule) : null), [schedule]);
   const gradesIdx = useMemo(() => (grades.length ? buildGradesIndex(grades) : null), [grades]);
@@ -117,7 +163,9 @@ export default function MatchupPreviews() {
       {/* Prominent section tabs — cards, not a lost pill bar */}
       <TabBar tabs={TABS} active={tab} onChange={setTab} gridClassName="sm:grid-cols-2 lg:grid-cols-4" />
 
-      {loading ? (
+      {loadError ? (
+        <ErrorRetry onRetry={() => setRetryTick((t) => t + 1)} />
+      ) : loading ? (
         <Loading label="Loading all seasons…" />
       ) : (
         <>

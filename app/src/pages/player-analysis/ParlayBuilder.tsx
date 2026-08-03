@@ -9,6 +9,7 @@ import { Select } from "../../components/filters/Select";
 import { useECharts } from "../../components/charts/useECharts";
 import { opponentLabel } from "../grading-model/shared";
 import { PageSkeleton } from "../../components/Skeleton";
+import { ErrorRetry } from "../../components/Loading";
 import { buildStatGroups, statLabel, americanOdds, headshotCrop, randomItem, randomPassRushRecStat, seasonTypeOptions, HIT_COLOR, MISS_COLOR, NEUTRAL_COLOR } from "./statPicker";
 
 const EXCLUDE = new Set([
@@ -286,14 +287,19 @@ export default function ParlayBuilder() {
   // already fired and reset would land on the first team alphabetically
   // instead of a new random one.
   const [resetGen, setResetGen] = useState(0);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [retryTick, setRetryTick] = useState(0);
 
   useEffect(() => {
-    getMeta().then((m) => {
-      const ss = [...m.seasons].sort((a, b) => b - a);
-      setSeasons(ss);
-      if (ss.length) setLegs([defaultLeg(ss[0])]);
-    });
-  }, []);
+    setLoadError(null);
+    getMeta()
+      .then((m) => {
+        const ss = [...m.seasons].sort((a, b) => b - a);
+        setSeasons(ss);
+        if (ss.length) setLegs([defaultLeg(ss[0])]);
+      })
+      .catch((err) => setLoadError(err instanceof Error ? err.message : "Failed to load"));
+  }, [retryTick]);
 
   const resetParlay = () => {
     setLegs([defaultLeg(seasons[0] ?? new Date().getFullYear())]);
@@ -305,6 +311,7 @@ export default function ParlayBuilder() {
   const expectedProb = probs.length ? probs.reduce((a, b) => a * b, 1) : null;
   const expectedOdds = expectedProb != null && expectedProb > 0 ? 1 / expectedProb : null;
 
+  if (loadError) return <ErrorRetry onRetry={() => setRetryTick((t) => t + 1)} />;
   if (!legs.length) return <PageSkeleton cards={2} blocks={2} />;
 
   return (

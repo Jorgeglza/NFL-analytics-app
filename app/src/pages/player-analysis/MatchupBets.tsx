@@ -17,6 +17,7 @@ import { useECharts } from "../../components/charts/useECharts";
 import { withMobile } from "../../components/charts/responsive";
 import { opponentLabel } from "../grading-model/shared";
 import { PageSkeleton } from "../../components/Skeleton";
+import { ErrorRetry } from "../../components/Loading";
 import { stickyColHeadCls, ScrollHint } from "../../components/ui";
 import { buildMismatchStatGroups, statLabel } from "./statPicker";
 import { defaultWeekNearToday } from "../game-analysis/previews/engine";
@@ -70,26 +71,32 @@ export default function MatchupBets() {
   // Opponent + "% of team total" lives in a hover `title` on each pivot cell,
   // which never fires on touch — tapping a cell surfaces the same text here.
   const [activeCellTip, setActiveCellTip] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [retryTick, setRetryTick] = useState(0);
 
   useEffect(() => {
-    Promise.all([getTeamMetaMap(), getSchedule(), getMeta()]).then(([m, s, mt]) => {
-      setMeta(m);
-      setSchedule(s);
-      const ss = [...mt.seasons].sort((a, b) => b - a);
-      setSeasons(ss);
-      if (ss.length && !season) setSeason(String(ss[0]));
-    });
-  }, []);
+    setLoadError(null);
+    Promise.all([getTeamMetaMap(), getSchedule(), getMeta()])
+      .then(([m, s, mt]) => {
+        setMeta(m);
+        setSchedule(s);
+        const ss = [...mt.seasons].sort((a, b) => b - a);
+        setSeasons(ss);
+        if (ss.length && !season) setSeason(String(ss[0]));
+      })
+      .catch((err) => setLoadError(err instanceof Error ? err.message : "Failed to load"));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [retryTick]);
   useEffect(() => {
     if (!season) return;
-    Promise.all([getPlayerWeek(Number(season)), getTeamWeek(Number(season)), getTeamWeekRanks(Number(season))]).then(
-      ([p, t, r]) => {
+    Promise.all([getPlayerWeek(Number(season)), getTeamWeek(Number(season)), getTeamWeekRanks(Number(season))])
+      .then(([p, t, r]) => {
         setPw(p);
         setTw(t.filter((x) => x.game_type === "REG" || x.game_type == null));
         setRanks(r);
-      },
-    );
-  }, [season]);
+      })
+      .catch((err) => setLoadError(err instanceof Error ? err.message : "Failed to load"));
+  }, [season, retryTick]);
 
   const s = Number(season);
   const regSched = useMemo(() => schedule.filter((g) => Number(g.season) === s && g.game_type === "REG"), [schedule, s]);
@@ -413,6 +420,7 @@ export default function MatchupBets() {
 
   const fmt = (v: number | null | undefined) => (v == null ? "" : Number.isInteger(v) ? String(v) : v.toFixed(1));
 
+  if (loadError) return <ErrorRetry onRetry={() => setRetryTick((t) => t + 1)} />;
   if (!pw.length || !meta) return <PageSkeleton cards={2} blocks={2} />;
 
   const bandColor = (band: string) =>

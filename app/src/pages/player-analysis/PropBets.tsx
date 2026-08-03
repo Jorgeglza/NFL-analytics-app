@@ -9,6 +9,7 @@ import { Select } from "../../components/filters/Select";
 import { useECharts } from "../../components/charts/useECharts";
 import { opponentLabel } from "../grading-model/shared";
 import { PageSkeleton } from "../../components/Skeleton";
+import { ErrorRetry } from "../../components/Loading";
 import { buildStatGroups, statLabel, americanOdds, headshotCrop, randomItem, randomPassRushRecStat, randomDefenseStat, seasonTypeOptions, HIT_COLOR, MISS_COLOR, NEUTRAL_COLOR } from "./statPicker";
 import { useSeasonWeek } from "../../context/SeasonWeekContext";
 import { stickyColHeadCls, ScrollHint } from "../../components/ui";
@@ -69,15 +70,23 @@ export default function PropBets() {
   // Opponent + "% of team total" lives in a hover `title` on each pivot cell,
   // which never fires on touch — tapping a cell surfaces the same text here.
   const [activeCellTip, setActiveCellTip] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [retryTick, setRetryTick] = useState(0);
 
   useEffect(() => {
-    getMeta().then((m) => {
-      const ss = [...m.seasons].sort((a, b) => b - a);
-      setSeasons(ss);
-      if (ss.length && !season) setSeason(String(ss[0]));
-    });
-    getTeamMetaMap().then(setTeamMeta);
-  }, []);
+    setLoadError(null);
+    getMeta()
+      .then((m) => {
+        const ss = [...m.seasons].sort((a, b) => b - a);
+        setSeasons(ss);
+        if (ss.length && !season) setSeason(String(ss[0]));
+      })
+      .catch((err) => setLoadError(err instanceof Error ? err.message : "Failed to load"));
+    getTeamMetaMap()
+      .then(setTeamMeta)
+      .catch((err) => setLoadError(err instanceof Error ? err.message : "Failed to load"));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [retryTick]);
 
   // Deep-linked season (e.g. from Matchup Bets) wins over the shared
   // season/week context, applied once per mount.
@@ -93,8 +102,12 @@ export default function PropBets() {
   }, [searchParams]);
 
   useEffect(() => {
-    if (season) getPlayerWeek(Number(season)).then(setRows);
-  }, [season]);
+    if (season) {
+      getPlayerWeek(Number(season))
+        .then(setRows)
+        .catch((err) => setLoadError(err instanceof Error ? err.message : "Failed to load"));
+    }
+  }, [season, retryTick]);
 
   const seasonTypes = useMemo(() => [...new Set(rows.map((r) => String(r.season_type)))].filter((s) => s !== "null").sort(), [rows]);
   const filteredType = useMemo(
@@ -271,6 +284,7 @@ export default function PropBets() {
   const fmt = (v: number | null | undefined) =>
     v == null ? "" : Number.isInteger(v) ? String(v) : v.toFixed(1);
 
+  if (loadError) return <ErrorRetry onRetry={() => setRetryTick((t) => t + 1)} />;
   if (!rows.length) return <PageSkeleton cards={2} blocks={2} />;
 
   return (
