@@ -1,4 +1,9 @@
-// Port of win_types_page_2.py — win-type distribution per season/week.
+// "Win Types" tab of Spread Analytics — port of win_types_page_2.py,
+// win-type distribution per season/week. Originally its own nav page
+// (game_analysis/win_types); folded in as this tab (2026-08-03) since it's
+// another statistical lens on the same favorite/underdog question as the
+// other Spread Analytics tabs — Spread Analytics moved up to #2 in Game
+// Analysis (see nav.ts) as part of the same change.
 // Session-4 UX rework (audit §3): comparative KPI trend chart on top with
 // all-time average reference lines; the per-group block (KPIs + stacked bar +
 // spread scatter) is now an on-demand drill-down for one selected group
@@ -11,15 +16,14 @@
 // Home Win % denominators (previously counted as a favorite loss).
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { EChartsOption } from "echarts";
-import { getSchedule, type Row } from "../../lib/data/loader";
-import { useECharts } from "../../components/charts/useECharts";
-import { Loading, ErrorRetry } from "../../components/Loading";
-import { Card, Segmented } from "../../components/ui";
-import { LazyMount } from "../../components/LazyMount";
-import { Glossary } from "../../components/Glossary";
-import { GLOSSARY_SECTIONS } from "../../lib/glossary";
-import { CATEGORY_COLORS, CATEGORY_CODES, type Category } from "../../lib/logic/winType";
-import { InfoDot } from "../../components/InfoDot";
+import { getSchedule, type Row } from "../../../lib/data/loader";
+import { useECharts } from "../../../components/charts/useECharts";
+import { Loading, ErrorRetry } from "../../../components/Loading";
+import { Card, Segmented } from "../../../components/ui";
+import { LazyMount } from "../../../components/LazyMount";
+import { Glossary } from "../../../components/Glossary";
+import { GLOSSARY_SECTIONS } from "../../../lib/glossary";
+import { CATEGORY_COLORS, CATEGORY_CODES, type Category } from "../../../lib/logic/winType";
 
 const CATEGORY_ORDER: Category[] = [
   "Favorite home",
@@ -415,7 +419,7 @@ function Block({ title, rows, xKey }: { title: string; rows: Row[]; xKey: "week"
   );
 }
 
-export default function WinTypes() {
+export default function WinTypesTab() {
   const [schedule, setSchedule] = useState<Row[]>([]);
   const [mode, setMode] = useState<"season" | "week">("season");
   const [glossaryOpen, setGlossaryOpen] = useState(false);
@@ -473,14 +477,9 @@ export default function WinTypes() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-4">
-        <h1 className="mr-auto flex items-center gap-2.5 text-2xl font-extrabold tracking-tight text-[#002f6c]">
-          <span className="h-6 w-1.5 rounded-full bg-gradient-to-b from-[#002f6c] to-[#164a9c]" />
-          Win Types
-          <InfoDot text="For a specific upcoming game, see what the model recommends on Matchup Previews." />
-        </h1>
         <button
           onClick={() => setGlossaryOpen((o) => !o)}
-          className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm transition-colors hover:text-slate-900"
+          className="mr-auto rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm transition-colors hover:text-slate-900"
         >
           {glossaryOpen ? "Hide glossary" : "What do these terms mean?"}
         </button>

@@ -37,7 +37,6 @@ const IMPLEMENTED: Record<string, LazyExoticComponent<ComponentType>> = {
   "/game_analysis/team_trends": lazy(() => import("./pages/game-analysis/TeamTrends")),
   "/game_analysis/season_outlook": lazy(() => import("./pages/game-analysis/SeasonOutlook")),
   "/game_analysis/game_picks": lazy(() => import("./pages/game-analysis/GamePicks")),
-  "/game_analysis/win_types": lazy(() => import("./pages/game-analysis/WinTypes")),
   "/game_analysis/spread_win_percentage": lazy(() => import("./pages/game-analysis/SpreadAnalytics")),
   "/game_analysis/team_comparison": lazy(() => import("./pages/game-analysis/TeamComparison")),
   "/game_analysis/scorecards_teams": lazy(() => import("./pages/game-analysis/Scorecards")),
@@ -83,11 +82,13 @@ export default function App() {
                 const Outlook = IMPLEMENTED["/game_analysis/season_outlook"];
                 return <Route path="/game_analysis/season_outlook/:tab" element={<Outlook />} />;
               })()}
-              {/* Spread Analytics' 2 tabs (Win Rate & Calibration / Weekly Breakdown) each get their own sub-URL. */}
+              {/* Spread Analytics' 3 tabs (Win Rate & Calibration / Weekly Breakdown / Win Types) each get their own sub-URL. */}
               {(() => {
                 const SpreadAnalytics = IMPLEMENTED["/game_analysis/spread_win_percentage"];
                 return <Route path="/game_analysis/spread_win_percentage/:tab" element={<SpreadAnalytics />} />;
               })()}
+              {/* Win Types is now the 3rd Spread Analytics tab — keep the old URL working for bookmarks/links. */}
+              <Route path="/game_analysis/win_types" element={<Navigate to="/game_analysis/spread_win_percentage/win_types" replace />} />
               {/* Not in the navbar — reached from Home's footer link */}
               {(() => {
                 const GlossaryPage = IMPLEMENTED["/glossary"];

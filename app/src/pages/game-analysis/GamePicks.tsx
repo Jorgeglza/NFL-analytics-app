@@ -322,7 +322,7 @@ export default function GamePicks() {
         <h1 className="mr-auto flex items-center gap-2.5 text-2xl font-extrabold tracking-tight text-[#002f6c]">
           <span className="h-6 w-1.5 rounded-full bg-gradient-to-b from-[#002f6c] to-[#164a9c]" />
           Game Picks
-          <InfoDot text="Once you've made your picks, see how these win types trend across a season on Win Types." />
+          <InfoDot text="Once you've made your picks, see how these win types trend across a season on Spread Analytics' Win Types tab." />
         </h1>
         {unplayedGames.length > 0 && (
           <div className="flex flex-col gap-1">

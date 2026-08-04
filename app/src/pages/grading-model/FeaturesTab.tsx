@@ -125,7 +125,7 @@ export default function FeaturesTab({ importance }: { importance: Row[] }) {
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <h3 className="text-sm font-semibold text-slate-800">Not sure what a stat means?</h3>
-            <p className="text-xs text-slate-500">Every column name here comes straight from the play-by-play data — search the app's glossary below (same one used on Win Types).</p>
+            <p className="text-xs text-slate-500">Every column name here comes straight from the play-by-play data — search the app's glossary below (same one used on Spread Analytics' Win Types tab).</p>
           </div>
           <button
             onClick={() => setGlossaryOpen((o) => !o)}

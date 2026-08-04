@@ -1,6 +1,7 @@
 // Standalone full-page glossary — reachable from Home's footer link (and
 // anywhere else that wants to point at the whole reference instead of the
-// embedded toggle panels on Win Types / Grading Model Features).
+// embedded toggle panels on Spread Analytics' Win Types tab / Grading Model
+// Features).
 import { Glossary } from "../components/Glossary";
 import { GLOSSARY_SECTIONS } from "../lib/glossary";
 
@@ -12,8 +13,8 @@ export default function GlossaryPage() {
         Glossary
       </h1>
       <p className="text-sm text-slate-500">
-        Win types, stat definitions, and betting/model terms used throughout the app — the same content as the toggle panels on Win Types and
-        the Grading Model's Features tab.
+        Win types, stat definitions, and betting/model terms used throughout the app — the same content as the toggle panels on Spread
+        Analytics' Win Types tab and the Grading Model's Features tab.
       </p>
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <Glossary sections={GLOSSARY_SECTIONS} />

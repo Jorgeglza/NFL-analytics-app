@@ -12,13 +12,13 @@ export interface NavGroup {
 }
 
 // Game Analysis order tells a story: make the pick (Game Picks) -> see how
-// that kind of result plays out generally (Win Types) -> see what the model
-// itself recommends (Matchup Previews) -> drill into a specific hard call
-// (Team Comparison) -> the full detail behind one team (Team Scorecard) ->
-// another statistical lens on the same question (Spread Analytics — Win
-// Rate & Calibration plus a per-week Weekly Breakdown, each its own tab/
-// sub-URL) -> the season-long payoff (Season Outlook — power rankings,
-// strength of schedule and playoff probability, each its own tab/sub-URL).
+// that kind of result plays out statistically (Spread Analytics — Win Rate
+// & Calibration, a per-week Weekly Breakdown, and Win Types, each its own
+// tab/sub-URL) -> see what the model itself recommends (Matchup Previews)
+// -> drill into a specific hard call (Team Comparison) -> the full detail
+// behind one team (Team Scorecard) -> the season-long payoff (Season
+// Outlook — power rankings, strength of schedule and playoff probability,
+// each its own tab/sub-URL).
 export const NAV_GROUPS: NavGroup[] = [
   {
     label: "Game Analysis",
@@ -30,9 +30,9 @@ export const NAV_GROUPS: NavGroup[] = [
         implemented: true,
       },
       {
-        label: "Win Types",
-        path: "/game_analysis/win_types",
-        description: "Win-type distribution across seasons and weeks with favorite/home KPIs",
+        label: "Spread Analytics",
+        path: "/game_analysis/spread_win_percentage",
+        description: "Favorite win rates by spread bucket, a per-week upset/rank breakdown, and win-type distribution across seasons and weeks",
         implemented: true,
       },
       {
@@ -51,12 +51,6 @@ export const NAV_GROUPS: NavGroup[] = [
         label: "Team Scorecard",
         path: "/game_analysis/scorecards_teams",
         description: "Team playstyle dashboard — pass/rush splits and stat sparklines",
-        implemented: true,
-      },
-      {
-        label: "Spread Analytics",
-        path: "/game_analysis/spread_win_percentage",
-        description: "Favorite win rates by spread bucket, and a per-week upset/rank breakdown",
         implemented: true,
       },
       {
