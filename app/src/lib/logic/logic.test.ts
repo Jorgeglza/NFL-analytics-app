@@ -131,7 +131,7 @@ describe("edgeComposite", () => {
 });
 
 describe("spread buckets (grid-aligned)", () => {
-  // mirrors the bucketOf helpers used by SpreadWinPct / previews engine
+  // mirrors the bucketOf helpers used by Spread Analytics / previews engine
   const bucket = (v: number, bs: number) => {
     const lo = Math.floor(v / bs + 1e-9) * bs;
     const frac = Math.abs(bs - Math.round(bs)) > 1e-9;

@@ -63,6 +63,73 @@ export function bucketOf(v: number, binSize: number, signed: boolean): { label: 
   return { label: `${fmt(lo)} to ${fmt(lo + binSize)}`, lo };
 }
 
+// bucket|side -> {n, wins} rate key, shared by historicFavRate/computeWeekPicks.
+const rateKey = (b: string, side: string) => `${b}|${side}`;
+
+/** Wilson-smoothed favorite win-rate lookup for (bucket, favSide), learned
+ * from all REG played non-tie/non-pick'em games *except* one target
+ * (season, week) — extracted from computeWeekPicks so other callers (the
+ * Weekly Breakdown tab's upset-candidate scoring) can get the identical
+ * historic rate without re-deriving it or duplicating the target week's
+ * history-exclusion rule. Falls back to the side-wide rate when a bucket has
+ * no history of its own. */
+export function historicFavRate(reg: Game[], excludeSeason: number, excludeWeek: number, binSize: number, signed: boolean) {
+  const histPlayed = reg.filter((g) => !(g.season === excludeSeason && g.week === excludeWeek) && g.played && g.winType != null);
+
+  const rateAgg = new Map<string, { n: number; wins: number }>();
+  const sideAgg = new Map<string, { n: number; wins: number }>();
+  for (const g of histPlayed) {
+    const b = bucketOf(g.spread, binSize, signed).label;
+    const side = g.favorite ?? "none";
+    const rk = rateKey(b, side);
+    if (!rateAgg.has(rk)) rateAgg.set(rk, { n: 0, wins: 0 });
+    const r = rateAgg.get(rk)!;
+    r.n++;
+    if (g.favWin) r.wins++;
+    if (!sideAgg.has(side)) sideAgg.set(side, { n: 0, wins: 0 });
+    const sr = sideAgg.get(side)!;
+    sr.n++;
+    if (g.favWin) sr.wins++;
+  }
+  return (b: string, side: string): number | null => {
+    const r = rateAgg.get(rateKey(b, side));
+    if (r && r.n > 0) return wilson(r.wins / r.n, r.n).center;
+    const sr = sideAgg.get(side);
+    if (sr && sr.n > 0) return wilson(sr.wins / sr.n, sr.n).center;
+    return null;
+  };
+}
+
+/** Rank = a game's position within its (season, week) when sorted by
+ * |spread| descending (rank 1 = biggest favorite of the week), aggregated
+ * across every REG played non-tie/non-pick'em game in `reg` to answer
+ * "which rank gets upset most historically." Bye weeks/odd slate sizes mean
+ * higher ranks have fewer samples — `n` is returned per rank so low-N ranks
+ * can be greyed out the same way the bucket table handles Min N. */
+export function computeRankStats(reg: Game[]): { rank: number; n: number; upsets: number; upsetRate: number }[] {
+  const byWeek = new Map<string, Game[]>();
+  for (const g of reg) {
+    if (!g.played || g.winType == null) continue;
+    const k = `${g.season}|${g.week}`;
+    if (!byWeek.has(k)) byWeek.set(k, []);
+    byWeek.get(k)!.push(g);
+  }
+  const agg = new Map<number, { n: number; upsets: number }>();
+  for (const games of byWeek.values()) {
+    const sorted = [...games].sort((a, b) => b.absSpread - a.absSpread);
+    sorted.forEach((g, i) => {
+      const rank = i + 1;
+      if (!agg.has(rank)) agg.set(rank, { n: 0, upsets: 0 });
+      const a = agg.get(rank)!;
+      a.n++;
+      if (!g.favWin) a.upsets++;
+    });
+  }
+  return [...agg.entries()]
+    .map(([rank, { n, upsets }]) => ({ rank, n, upsets, upsetRate: n ? upsets / n : 0 }))
+    .sort((a, b) => a.rank - b.rank);
+}
+
 /** Computes the recommended-pick mix for one target (season, week) — shared by
  * the single-week "Weekly Picks" table and the rolling backtest on Spread Win %,
  * so both stay numerically identical (same history-exclusion + Wilson-fallback
@@ -79,35 +146,7 @@ export function computeWeekPicks(
   const weekGames = reg.filter((g) => g.season === rs && g.week === rw);
   if (!weekGames.length) return null;
 
-  // history: all REG games with scores except the selected week, ties and
-  // pick'ems excluded — same population as `df`/the headline KPIs above, so
-  // Weekly Picks' implied rate always matches what the KPIs show for that bucket.
-  const histPlayed = reg.filter((g) => !(g.season === rs && g.week === rw) && g.played && g.winType != null);
-
-  // p̂ per (bucket, favSide) with Wilson center; side-wide fallback
-  const rateKey = (b: string, side: string) => `${b}|${side}`;
-  const rateAgg = new Map<string, { n: number; wins: number }>();
-  const sideAgg = new Map<string, { n: number; wins: number }>();
-  for (const g of histPlayed) {
-    const b = bucketOf(g.spread, binSize, signed).label;
-    const side = g.favorite ?? "none";
-    const rk = rateKey(b, side);
-    if (!rateAgg.has(rk)) rateAgg.set(rk, { n: 0, wins: 0 });
-    const r = rateAgg.get(rk)!;
-    r.n++;
-    if (g.favWin) r.wins++;
-    if (!sideAgg.has(side)) sideAgg.set(side, { n: 0, wins: 0 });
-    const sr = sideAgg.get(side)!;
-    sr.n++;
-    if (g.favWin) sr.wins++;
-  }
-  const pHatOf = (b: string, side: string): number | null => {
-    const r = rateAgg.get(rateKey(b, side));
-    if (r && r.n > 0) return wilson(r.wins / r.n, r.n).center;
-    const sr = sideAgg.get(side);
-    if (sr && sr.n > 0) return wilson(sr.wins / sr.n, sr.n).center;
-    return null;
-  };
+  const pHatOf = historicFavRate(reg, rs, rw, binSize, signed);
 
   // N from top filters per (bucket, side)
   const nTop = new Map<string, number>();

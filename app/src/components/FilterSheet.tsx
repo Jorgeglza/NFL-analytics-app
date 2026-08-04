@@ -1,5 +1,6 @@
-// Below `sm`, collapses a dense filter bar (the app's densest, SpreadWinPct's
-// ~10 controls, chews ~200px of vertical space before any content) into a
+// Below `sm`, collapses a dense filter bar (the app's densest, Spread
+// Analytics' Win Rate & Calibration tab's ~10 controls, chews ~200px of
+// vertical space before any content) into a
 // sticky "Filters" button that opens a bottom sheet. At `sm+`, renders
 // exactly like the old inline `FilterBar` strip — same children, no
 // behavior change for desktop.

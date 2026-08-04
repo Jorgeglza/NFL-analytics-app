@@ -20,7 +20,13 @@ const PAGE_TITLES: Record<string, string> = Object.fromEntries(
 
 function RouteTitle() {
   const { pathname } = useLocation();
-  const pageTitle = PAGE_TITLES[pathname] ?? (pathname.startsWith("/game_analysis/season_outlook/") ? PAGE_TITLES["/game_analysis/season_outlook"] : undefined);
+  const pageTitle =
+    PAGE_TITLES[pathname] ??
+    (pathname.startsWith("/game_analysis/season_outlook/")
+      ? PAGE_TITLES["/game_analysis/season_outlook"]
+      : pathname.startsWith("/game_analysis/spread_win_percentage/")
+        ? PAGE_TITLES["/game_analysis/spread_win_percentage"]
+        : undefined);
   usePageTitle(TITLE_OVERRIDES[pathname] ?? pageTitle ?? "NFL Analytics");
   return null;
 }
@@ -32,7 +38,7 @@ const IMPLEMENTED: Record<string, LazyExoticComponent<ComponentType>> = {
   "/game_analysis/season_outlook": lazy(() => import("./pages/game-analysis/SeasonOutlook")),
   "/game_analysis/game_picks": lazy(() => import("./pages/game-analysis/GamePicks")),
   "/game_analysis/win_types": lazy(() => import("./pages/game-analysis/WinTypes")),
-  "/game_analysis/spread_win_percentage": lazy(() => import("./pages/game-analysis/SpreadWinPct")),
+  "/game_analysis/spread_win_percentage": lazy(() => import("./pages/game-analysis/SpreadAnalytics")),
   "/game_analysis/team_comparison": lazy(() => import("./pages/game-analysis/TeamComparison")),
   "/game_analysis/scorecards_teams": lazy(() => import("./pages/game-analysis/Scorecards")),
   "/game_analysis/matchup_previews": lazy(() => import("./pages/game-analysis/previews/MatchupPreviews")),
@@ -76,6 +82,11 @@ export default function App() {
               {(() => {
                 const Outlook = IMPLEMENTED["/game_analysis/season_outlook"];
                 return <Route path="/game_analysis/season_outlook/:tab" element={<Outlook />} />;
+              })()}
+              {/* Spread Analytics' 2 tabs (Win Rate & Calibration / Weekly Breakdown) each get their own sub-URL. */}
+              {(() => {
+                const SpreadAnalytics = IMPLEMENTED["/game_analysis/spread_win_percentage"];
+                return <Route path="/game_analysis/spread_win_percentage/:tab" element={<SpreadAnalytics />} />;
               })()}
               {/* Not in the navbar — reached from Home's footer link */}
               {(() => {

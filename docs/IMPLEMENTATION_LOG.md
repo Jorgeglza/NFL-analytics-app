@@ -28,7 +28,7 @@ Status legend: ☐ not started · ◐ in progress · ✅ done · ⛔ blocked
 - ◐ Home (functional; final design in M4)
 - ✅ /game_analysis/game_picks — rewritten to match the old layout: win-type-tinted table rows, manual-winner checkboxes for unplayed games (localStorage `gamePicks.manualWinners`), counts bar with count/% labels + grey "No result yet" bucket, spread-by-win-type scatter with ×N collision markers. Week-18 2025 win-type counts verified vs the pipeline's Win Type column (9/3/3/1).
 - ✅ /game_analysis/win_types — Season/Week toggle, per-block KPIs + stacked win-type bar (count|% labels, dashed Home-Favorite line) + spread scatter with ×N collision markers. Numbers verified vs pandas replica of old logic: KPIs exact on 4 seasons + 3 weeks; category counts exact for 2024 (season & week 1). Old-page quirks preserved (played pick'em → Underdog; played ties → "(No Score)" buckets; tie games count in win-% denominators).
-- ✅ /game_analysis/spread_win_percentage — filters (multi season/week, win types, bin size, signed/abs, min-N, CI), 6 KPIs, calibration/stacked/heatmap/lift charts, bucket table, Weekly Picks panel. KPIs + bin aggregates + Wilson p̂ verified exact vs pandas replica. Grid-aligned buckets replace pd.cut edges (deviation: pandas silently dropped a game whose |spread| hit the exact top edge; we keep it). 2026-07-22: added a compact "Recommended vs Actual vs Historic" chart inside Weekly Picks (between the KPI row and the details table) — per-week pick logic factored into `computeWeekPicks()` (shared with the single-week table). Iterated same day: an initial version averaged Recommended/Actual across every graded week up to the selection (192 weeks by Week 18), which barely moved between weeks — replaced with per-selected-week Recommended (from `reco.chips`) vs that week's own graded Actual outcomes vs the long-run Historic baseline, so the chart now visibly reflects each week's own spreads. Also removed a redundant per-week count chart (chips already showed it) and labeled the chips "Recommended distribution." No pipeline/data changes; computed entirely client-side from `schedule.json`.
+- ✅ /game_analysis/spread_win_percentage (now **Spread Analytics**, 2 tabs) — Win Rate & Calibration tab: filters (multi season/week, win types, bin size, signed/abs, min-N, CI), 6 KPIs, calibration/stacked/heatmap/lift charts, bucket table, Weekly Picks panel. KPIs + bin aggregates + Wilson p̂ verified exact vs pandas replica. Grid-aligned buckets replace pd.cut edges (deviation: pandas silently dropped a game whose |spread| hit the exact top edge; we keep it). 2026-07-22: added a compact "Recommended vs Actual vs Historic" chart inside Weekly Picks (between the KPI row and the details table) — per-week pick logic factored into `computeWeekPicks()` (shared with the single-week table). Iterated same day: an initial version averaged Recommended/Actual across every graded week up to the selection (192 weeks by Week 18), which barely moved between weeks — replaced with per-selected-week Recommended (from `reco.chips`) vs that week's own graded Actual outcomes vs the long-run Historic baseline, so the chart now visibly reflects each week's own spreads. Also removed a redundant per-week count chart (chips already showed it) and labeled the chips "Recommended distribution." No pipeline/data changes; computed entirely client-side from `schedule.json`. 2026-08-03: renamed to Spread Analytics, moved to `spread-analytics/WinRateTab.tsx` (near-verbatim) with a new Weekly Breakdown tab alongside it — see that session's log entry.
 - ✅ /data/grading_model (Season, Teams, Weekly, Features tabs) — contributions via contrib_params.json (weekContributions in lib/logic/contributions.ts). Weekly tab KPIs/rank/Z/percentile and Teams-tab avg scaled contributions (DAL 2025) verified exact vs pandas replica; season averages match.
 - ✅ /game_analysis/team_comparison — 3-column layout, Prev/Total/Avg rows + squashed rank bars, substats, grades boxes, trend/matchup side charts. SF/CIN 2025 verified vs pandas (note: turnover_margin_rank is null in pipeline data → "--", faithful).
 - ✅ /game_analysis/scorecards_teams — playstyle donuts + sparkline cards. DAL 2025 verified.
@@ -533,6 +533,50 @@ Full work list, with per-item checkboxes and severities: **`docs/MOBILE_READINES
 - Plan: `C:\Users\Jorge\.claude\plans\need-to-plan-the-cheerful-papert.md`.
 
 ## Session notes (newest first)
+
+### 2026-08-03 (cont.) — Weekly Breakdown: "this week number across every season"
+- Follow-up user request on the same tab: a way to see how all historic occurrences of one week
+  number (e.g. "every Week 1") looked, independent of the season selector. Added `weekAcrossSeasons`
+  to `WeeklyBreakdownTab.tsx` — pools every REG game across all seasons matching the selected week
+  number (own per-season rank, same |spread|-desc rule as the single-week view), rendered as (a) a
+  dual-axis chart, avg |spread| per season (bar) vs that season's upset rate (line), and (b) a flat
+  spread+result table, newest season first, with the currently-selected season's rows tinted so it's
+  easy to spot in context. No new shared logic needed — reuses `Game`/`favWin`/`winType` already on
+  hand. Verified: Week 1 across 2015–2026 renders correctly (2026 rows show "—" results, unplayed;
+  2015–2025 show real ✓/✗ outcomes) with zero console errors; `tsc --noEmit`/62-test suite/build green.
+
+### 2026-08-03 — Spread Win Percentage renamed to Spread Analytics; new Weekly Breakdown tab
+- User request: rework the Spread Win Percentage page into a tabbed **Spread Analytics** page —
+  Tab 1 keeps the existing page verbatim (renamed **Win Rate & Calibration**), Tab 2 is new
+  (**Weekly Breakdown**): per-week "spread by game" bar chart (mockup provided, same shape as
+  Game Picks' `spreadOption`), plus "which rank gets upset most" and "which games in this week
+  look like upset candidates" — answerable today for 2026 Week 1 even though it hasn't kicked off
+  (spreads exist, results don't).
+- **Shell**: `SpreadAnalytics.tsx` (new) reuses Season Outlook's exact tabbed-route pattern
+  (`useParams<{tab}>` + slug↔label map + redirect-bare-path-to-default effect + per-tab sub-URL,
+  `/game_analysis/spread_win_percentage/:tab` added to `App.tsx` next to Season Outlook's own
+  block) — bare URL/nav entry unchanged, old bookmarks still resolve via the redirect.
+- **Tab 1**: `SpreadWinPct.tsx` moved to `spread-analytics/WinRateTab.tsx` near-verbatim (own
+  `<h1>` stripped, shell now owns it) — zero calculation changes.
+- **Tab 2** (`spread-analytics/WeeklyBreakdownTab.tsx`, new): "Upset" = favorite loses
+  straight-up (`favWin`/`winType`, the only outcome metric that exists anywhere in this app — no
+  ATS-cover metric, confirmed via AskUserQuestion the user doesn't want one added). Rank = a
+  game's position within its week sorted by `|spread|` descending (1 = biggest favorite),
+  aggregated across every REG season/week (`computeRankStats`, new in `spreadPicks.ts`) into an
+  "upset rate by rank" chart. Per-game historic favorite win % reuses the Weekly Picks p̂ calc —
+  extracted out of `computeWeekPicks` into a standalone `historicFavRate(reg, excludeSeason,
+  excludeWeek, binSize, signed)` so both stay numerically identical (`computeWeekPicks` now just
+  calls it). The spread-by-game bar chart colors by actual `WIN_TYPE_COLORS` outcome once a game
+  is played, or by a Low/Medium/High historic-upset-risk tier (`1 − p̂`) while still unplayed —
+  deliberately *not* Game Picks' local-pick-based coloring, since that page's colors come from
+  the user's own localStorage picks rather than any real signal. An "upset candidates" table
+  ranks the selected week's games by that same risk score, top-5 highlighted.
+- Verified live at 2026 Week 1 (all 16 games unplayed): KPIs/bar chart/candidates table all
+  populate correctly via risk coloring (previously this kind of week rendered as blank N/A on
+  Win Rate & Calibration's default-latest-season selection — the reported "can't see 2026 games"
+  symptom); re-verified at 2025 Week 18 (fully played) to confirm the actual-outcome branch and
+  real upset flags. `tsc --noEmit`/62-test suite/`npm run build` green throughout; zero console
+  errors in both branches.
 
 ### 2026-08-03 — Fixed: 2026 season rollover wasn't actually reliable (fetch_schedules cache bug)
 - User asked to review the Aug-1 season-rollover feature (`config.current_season()`, documented

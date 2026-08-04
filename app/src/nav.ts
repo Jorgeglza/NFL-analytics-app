@@ -15,9 +15,10 @@ export interface NavGroup {
 // that kind of result plays out generally (Win Types) -> see what the model
 // itself recommends (Matchup Previews) -> drill into a specific hard call
 // (Team Comparison) -> the full detail behind one team (Team Scorecard) ->
-// another statistical lens on the same question (Spread Win Percentage) ->
-// the season-long payoff (Season Outlook — power rankings, strength of
-// schedule and playoff probability, each its own tab/sub-URL).
+// another statistical lens on the same question (Spread Analytics — Win
+// Rate & Calibration plus a per-week Weekly Breakdown, each its own tab/
+// sub-URL) -> the season-long payoff (Season Outlook — power rankings,
+// strength of schedule and playoff probability, each its own tab/sub-URL).
 export const NAV_GROUPS: NavGroup[] = [
   {
     label: "Game Analysis",
@@ -53,9 +54,9 @@ export const NAV_GROUPS: NavGroup[] = [
         implemented: true,
       },
       {
-        label: "Spread Win Percentage",
+        label: "Spread Analytics",
         path: "/game_analysis/spread_win_percentage",
-        description: "Favorite win rates by spread bucket, calibration curves and weekly picks",
+        description: "Favorite win rates by spread bucket, and a per-week upset/rank breakdown",
         implemented: true,
       },
       {

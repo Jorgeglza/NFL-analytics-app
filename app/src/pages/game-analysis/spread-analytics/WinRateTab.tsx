@@ -1,4 +1,5 @@
-// Port of spread_win_percentage_page_6.py — favorite win rates by spread bucket,
+// "Win Rate & Calibration" tab of Spread Analytics — port of
+// spread_win_percentage_page_6.py: favorite win rates by spread bucket,
 // calibration / stacked / heatmap / lift charts, details table and Weekly Picks.
 // Quirks preserved: pick'em games (spread 0) have no Favorite.
 // Deviation from the old page (explicit user request, 2026-07-20, matching the
@@ -6,17 +7,17 @@
 // headline KPIs, verdict tiers, category charts/bucket table, and Weekly
 // Picks' historical rate all share the same population (`df`/`g.winType != null`).
 import { useEffect, useMemo, useState } from "react";
-import { getSchedule, type Row } from "../../lib/data/loader";
-import { Select } from "../../components/filters/Select";
-import { MultiSelect } from "../../components/filters/MultiSelect";
-import { useECharts } from "../../components/charts/useECharts";
-import { LazyMount } from "../../components/LazyMount";
+import { getSchedule, type Row } from "../../../lib/data/loader";
+import { Select } from "../../../components/filters/Select";
+import { MultiSelect } from "../../../components/filters/MultiSelect";
+import { useECharts } from "../../../components/charts/useECharts";
+import { LazyMount } from "../../../components/LazyMount";
 import type { EChartsOption } from "echarts";
-import { wilson } from "../../lib/logic/wilson";
-import { CATEGORY_CODES, WIN_TYPE_COLORS, type WinType } from "../../lib/logic/winType";
-import { WIN_TYPE_CATS, toGame, bucketOf, computeWeekPicks, type Game } from "../../lib/logic/spreadPicks";
-import { Loading, ErrorRetry } from "../../components/Loading";
-import { InfoDot } from "../../components/InfoDot";
+import { wilson } from "../../../lib/logic/wilson";
+import { CATEGORY_CODES, WIN_TYPE_COLORS, type WinType } from "../../../lib/logic/winType";
+import { WIN_TYPE_CATS, toGame, bucketOf, computeWeekPicks, type Game } from "../../../lib/logic/spreadPicks";
+import { Loading, ErrorRetry } from "../../../components/Loading";
+import { InfoDot } from "../../../components/InfoDot";
 
 const fmtPct0 = (x: number | null) => (x == null || Number.isNaN(x) ? "N/A" : `${x.toFixed(0)}%`);
 
@@ -76,7 +77,7 @@ function Box({ title, children }: { title?: string; children: React.ReactNode })
   );
 }
 
-export default function SpreadWinPct() {
+export default function WinRateTab() {
   const [schedule, setSchedule] = useState<Row[]>([]);
   const [seasonsSel, setSeasonsSel] = useState<string[]>([]);
   const [weeksSel, setWeeksSel] = useState<string[]>([]);
@@ -518,12 +519,6 @@ export default function SpreadWinPct() {
 
   return (
     <div className="space-y-4">
-      <h1 className="flex items-center gap-2.5 text-2xl font-extrabold tracking-tight text-[#002f6c]">
-        <span className="h-6 w-1.5 rounded-full bg-gradient-to-b from-[#002f6c] to-[#164a9c]" />
-        Win % by Win Type &amp; Spread
-        <InfoDot text="For the season's full outlook, see Season Outlook." />
-      </h1>
-
       {/* Controls */}
       <div className="flex flex-wrap items-end gap-4 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
         <MultiSelect label="Season" values={seasonsSel} options={allSeasons.map((s) => ({ value: String(s), label: String(s) }))} onChange={setSeasonsSel} />
