@@ -5,7 +5,10 @@
 // in time, unlike the page's other tables which sort newest-first), then the
 // full game-by-game detail (opponent, spread, score, result, win type, and
 // that game's rank within its own week — ties the modal back into the page's
-// rank/upset theme instead of being a disconnected stat).
+// rank/upset theme instead of being a disconnected stat). Includes the
+// current/unplayed season's game too (e.g. 2026 for Week 1) so the schedule
+// slot itself shows up even with nothing graded yet — `win`/`teamScore`/
+// `oppScore` are `null` and every derived column renders "—" for that row.
 import { Modal } from "../../../components/Modal";
 import { Kpi, theadCls, trCls } from "../../../components/ui";
 import { WIN_TYPE_COLORS, type WinType } from "../../../lib/logic/winType";
@@ -17,9 +20,9 @@ export interface TeamWeekGame {
   opponent: string;
   isHome: boolean;
   spread: number; // team's own perspective — negative = this team favored
-  teamScore: number;
-  oppScore: number;
-  win: boolean;
+  teamScore: number | null; // null = not yet played
+  oppScore: number | null;
+  win: boolean | null; // null = not yet played
   tie: boolean;
   winType: WinType | null;
 }
@@ -37,8 +40,8 @@ export default function TeamWeekModal({
   games: TeamWeekGame[];
   onClose: () => void;
 }) {
-  const wins = games.filter((g) => g.win).length;
-  const losses = games.filter((g) => !g.win && !g.tie).length;
+  const wins = games.filter((g) => g.win === true).length;
+  const losses = games.filter((g) => g.win === false && !g.tie).length;
   const ties = games.filter((g) => g.tie).length;
   const decisive = wins + losses;
   const winPct = decisive ? wins / decisive : null;
@@ -76,18 +79,20 @@ export default function TeamWeekModal({
           <h3 className="mb-2 text-sm font-semibold text-slate-700">Win timeline</h3>
           {sorted.length ? (
             <div className="flex flex-wrap gap-2">
-              {sorted.map((g) => (
-                <div
-                  key={g.season}
-                  title={`${g.season}: ${g.win ? "W" : g.tie ? "T" : "L"} ${g.teamScore}-${g.oppScore} ${g.isHome ? "vs" : "@"} ${g.opponent}`}
-                  className={`flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-xl text-white shadow-sm ${
-                    g.win ? "bg-[#3C9A5F]" : g.tie ? "bg-slate-400" : "bg-[#C8102E]"
-                  }`}
-                >
-                  <span className="text-sm font-bold leading-none">{g.win ? "W" : g.tie ? "T" : "L"}</span>
-                  <span className="mt-0.5 text-[10px] font-medium leading-none opacity-90">{g.season}</span>
-                </div>
-              ))}
+              {sorted.map((g) => {
+                const label = g.win == null ? "–" : g.tie ? "T" : g.win ? "W" : "L";
+                const bg = g.win == null ? "bg-slate-300" : g.tie ? "bg-slate-400" : g.win ? "bg-[#3C9A5F]" : "bg-[#C8102E]";
+                const tooltip =
+                  g.win == null
+                    ? `${g.season}: not played yet — ${g.isHome ? "vs" : "@"} ${g.opponent}`
+                    : `${g.season}: ${label} ${g.teamScore}-${g.oppScore} ${g.isHome ? "vs" : "@"} ${g.opponent}`;
+                return (
+                  <div key={g.season} title={tooltip} className={`flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-xl text-white shadow-sm ${bg}`}>
+                    <span className="text-sm font-bold leading-none">{label}</span>
+                    <span className="mt-0.5 text-[10px] font-medium leading-none opacity-90">{g.season}</span>
+                  </div>
+                );
+              })}
             </div>
           ) : (
             <div className="text-sm text-slate-400">No games found.</div>
@@ -111,12 +116,14 @@ export default function TeamWeekModal({
                   <td className="px-3 py-1.5">{g.rank}</td>
                   <td className="px-3 py-1.5">{g.isHome ? "vs" : "@"} {g.opponent}</td>
                   <td className="px-3 py-1.5">{g.spread > 0 ? `+${g.spread}` : g.spread}</td>
-                  <td className="px-3 py-1.5">{g.teamScore}-{g.oppScore}</td>
+                  <td className="px-3 py-1.5">{g.teamScore == null || g.oppScore == null ? <span className="text-slate-400">—</span> : `${g.teamScore}-${g.oppScore}`}</td>
                   <td className="px-3 py-1.5">
-                    {g.win ? (
-                      <span className="font-bold text-[#3C9A5F]">W</span>
+                    {g.win == null ? (
+                      <span className="text-slate-400">—</span>
                     ) : g.tie ? (
                       <span className="font-bold text-slate-500">T</span>
+                    ) : g.win ? (
+                      <span className="font-bold text-[#3C9A5F]">W</span>
                     ) : (
                       <span className="font-bold text-[#C8102E]">L</span>
                     )}

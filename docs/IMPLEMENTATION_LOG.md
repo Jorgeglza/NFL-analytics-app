@@ -534,6 +534,20 @@ Full work list, with per-item checkboxes and severities: **`docs/MOBILE_READINES
 
 ## Session notes (newest first)
 
+### 2026-08-03 (cont. x5) — Team detail popup: include the current/unplayed game too
+- Follow-up: the popup's game-by-game table only listed graded seasons, skipping the
+  current/unplayed one entirely (e.g. no 2026 row for Week 1). `teamGamesDetail`'s `g.played`
+  filter dropped — now includes every season's occurrence of that team in that week number,
+  with `teamScore`/`oppScore`/`win` going through as `null` for the ungraded one (rank/spread/
+  opponent still populate normally, since those are known pre-kickoff). `TeamWeekModal`'s
+  `TeamWeekGame` type updated to `number | null` / `boolean | null`; every derived cell (score,
+  result, win-type chip) renders "—" for a null game; win-timeline chip gets a neutral slate
+  "–" marker instead of W/L/T. Record/Win%/loss-count math tightened to check `g.win === false`
+  explicitly (an unplayed `null` was previously falling through into the loss bucket via
+  `!g.win`). Verified: KC's Week 1 popup now runs 2015–2026 (12 rows), with 2026 showing
+  `vs DEN, -3, —, —, —` while the graded 9-2 record is unaffected; zero console errors; `tsc
+  --noEmit`/62-test suite/build green.
+
 ### 2026-08-03 (cont. x4) — Team performance table: click a team for its Week N detail popup
 - New `spread-analytics/TeamWeekModal.tsx`, opened by clicking any row on the "Team performance"
   table (`WeeklyBreakdownTab.tsx`) — reuses the shared `Modal` component (same one Power

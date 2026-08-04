@@ -321,24 +321,28 @@ export default function WeeklyBreakdownTab() {
 
   // Popup detail for one clicked team's Week-N history — game-by-game
   // (opponent, spread, score, result, win type, and that game's rank within
-  // its own week, reusing `bySeasonForWeek`'s grouping). Only built once a
-  // team is actually clicked, same "don't compute what nobody asked for"
-  // rule as the collapsed full table above.
+  // its own week, reusing `bySeasonForWeek`'s grouping). Includes the
+  // current/unplayed season's game too (e.g. 2026 for Week 1) so the table
+  // reads as "every occurrence of this matchup slot," not just graded ones —
+  // score/result/win type render as "—" for it. Only built once a team is
+  // actually clicked, same "don't compute what nobody asked for" rule as the
+  // collapsed full table above.
   const teamGamesDetail = useMemo<TeamWeekGame[] | null>(() => {
     if (!selectedTeam) return null;
     const scoreByGameId = new Map(schedule.map((r) => [String(r.game_id), r]));
     return reg
-      .filter((g) => g.week === Number(week) && g.played && (eloTeamKey(g.homeTeam) === selectedTeam || eloTeamKey(g.awayTeam) === selectedTeam))
+      .filter((g) => g.week === Number(week) && (eloTeamKey(g.homeTeam) === selectedTeam || eloTeamKey(g.awayTeam) === selectedTeam))
       .map((g) => {
         const isHome = eloTeamKey(g.homeTeam) === selectedTeam;
         const opponent = isHome ? eloTeamKey(g.awayTeam) : eloTeamKey(g.homeTeam);
         const row = scoreByGameId.get(g.gameId);
-        const hs = row?.home_score == null ? 0 : Number(row.home_score);
-        const as_ = row?.away_score == null ? 0 : Number(row.away_score);
-        const teamScore = isHome ? hs : as_;
-        const oppScore = isHome ? as_ : hs;
-        const tie = g.winner == null; // played games only here, so null winner = tie
-        const win = !tie && ((isHome && g.winner === "home") || (!isHome && g.winner === "away"));
+        const hs = row?.home_score == null ? null : Number(row.home_score);
+        const as_ = row?.away_score == null ? null : Number(row.away_score);
+        const played = hs != null && as_ != null;
+        const teamScore = played ? (isHome ? hs : as_) : null;
+        const oppScore = played ? (isHome ? as_ : hs) : null;
+        const tie = played && g.winner == null;
+        const win = played ? !tie && ((isHome && g.winner === "home") || (!isHome && g.winner === "away")) : null;
         const spread = isHome ? g.spread : -g.spread;
         const seasonGames = bySeasonForWeek.get(g.season) ?? [];
         const rank = [...seasonGames].sort((a, b) => b.absSpread - a.absSpread).findIndex((x) => x.gameId === g.gameId) + 1;
