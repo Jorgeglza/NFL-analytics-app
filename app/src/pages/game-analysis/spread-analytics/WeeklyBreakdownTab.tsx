@@ -1,4 +1,4 @@
-// Weekly Breakdown tab — new analytics, not a port. Answers four things
+// Weekly Breakdown tab — new analytics, not a port. Answers five things
 // per week: (1) the "Spread by game" bar chart (same shape as Game Picks'
 // spreadOption, GamePicks.tsx:274, but colored by real outcome once played
 // or by historic upset risk while the week is still ahead — Game Picks'
@@ -6,12 +6,16 @@
 // (2) which rank (games ordered by |spread| within a week, 1 = biggest
 // favorite) gets upset most often across NFL history, (3) which games in
 // the selected week look like upset candidates given historic spread-bucket
-// win rates, and (4) how every *other* occurrence of this same week number
-// looked historically (e.g. "every Week 1") — spread and result side by
-// side across seasons, independent of the season selector above. "Upset" =
-// the favorite loses straight-up — same definition as Win Rate &
+// win rates, (4) how every *other* occurrence of this same week number
+// looked historically (e.g. "every Week 1") — a per-season summary chart up
+// front, with the full game-by-game list collapsed behind a toggle (its row
+// list is only built when expanded — nothing to show by default, so no
+// reason to pay for it), and (5) per-team history for this week number —
+// straight-up record, surfacing the best/worst performers. "Upset" (used
+// throughout, including the per-team best/worst call) = the favorite (or,
+// for (5), the team) loses straight-up — same definition as Win Rate &
 // Calibration's `favWin`/Win Type columns; there's no against-the-spread
-// cover metric anywhere in this app.
+// cover metric anywhere in this app, by design.
 import { useEffect, useMemo, useState } from "react";
 import type { EChartsOption } from "echarts";
 import { getSchedule, type Row } from "../../../lib/data/loader";
@@ -24,12 +28,14 @@ import { InfoDot } from "../../../components/InfoDot";
 import { Kpi, Segmented, tableWrapCls, theadCls, trCls, ScrollHint } from "../../../components/ui";
 import { WIN_TYPE_COLORS } from "../../../lib/logic/winType";
 import { toGame, bucketOf, historicFavRate, computeRankStats, type Game } from "../../../lib/logic/spreadPicks";
+import { eloTeamKey } from "../../../lib/logic/elo";
 import { useSeasonWeek } from "../../../context/SeasonWeekContext";
 
 const BIN_SIZE = 1.0;
 const SIGNED = true;
 const NO_FAV_COLOR = "#94a3b8"; // pick'em — slate-400
 const RISK_MIN_N = 10; // below this, a bucket's p̂ is too thin to trust for risk coloring
+const MIN_TEAM_GAMES = 3; // below this, a team's Week-N record is too thin for the best/worst callouts
 
 // Upset-risk tiers for unplayed games, keyed off 1 - p̂(favorite win). Same
 // green/orange/red family as WIN_TYPE_COLORS so "risk" reads on the same
@@ -47,6 +53,7 @@ export default function WeeklyBreakdownTab() {
   const { season, week, setSeason, setWeek } = useSeasonWeek();
   const [schedule, setSchedule] = useState<Row[]>([]);
   const [spreadSort, setSpreadSort] = useState<"time" | "spread">("spread");
+  const [showFullTable, setShowFullTable] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [retryTick, setRetryTick] = useState(0);
 
@@ -202,41 +209,110 @@ export default function WeeklyBreakdownTab() {
   // Independent of the season selector above — pools every REG game ever
   // played in the selected week *number*, regardless of season, so the user
   // can see how e.g. "Week 1" has looked historically without stepping
-  // through each season one at a time.
-  const weekAcrossSeasons = useMemo(() => {
-    const bySeason = new Map<number, Game[]>();
+  // through each season one at a time. Grouped once and reused by both the
+  // always-on summary chart (cheap — one row per season) and the full
+  // game-by-game table (gated below — it's the one place on this page
+  // that lists every game individually, ~15+ rows per season).
+  const bySeasonForWeek = useMemo(() => {
+    const m = new Map<number, Game[]>();
     for (const g of reg) {
       if (g.week !== Number(week)) continue;
-      if (!bySeason.has(g.season)) bySeason.set(g.season, []);
-      bySeason.get(g.season)!.push(g);
+      if (!m.has(g.season)) m.set(g.season, []);
+      m.get(g.season)!.push(g);
     }
+    return m;
+  }, [reg, week]);
+
+  const weekAcrossSeasonsSummary = useMemo(
+    () =>
+      [...bySeasonForWeek.entries()]
+        .map(([s, games]) => {
+          const gradedGames = games.filter((g) => g.played && g.winType != null);
+          const upsets = gradedGames.filter((g) => !g.favWin).length;
+          return {
+            season: s,
+            n: games.length,
+            avgAbsSpread: games.reduce((sum, g) => sum + g.absSpread, 0) / games.length,
+            graded: gradedGames.length,
+            upsets,
+            upsetRate: gradedGames.length ? upsets / gradedGames.length : null,
+          };
+        })
+        .sort((a, b) => a.season - b.season),
+    [bySeasonForWeek],
+  );
+
+  // Only built once the "Show full game-by-game history" toggle is opened —
+  // nothing below reads this while collapsed, so skip the flatten/sort/rank
+  // work (and the ~15+ rows/season of table markup it feeds) until asked for.
+  const weekAcrossSeasonsRows = useMemo(() => {
+    if (!showFullTable) return [];
     const rowsOut: { g: Game; rank: number }[] = [];
-    for (const games of bySeason.values()) {
+    for (const games of bySeasonForWeek.values()) {
       const sorted = [...games].sort((a, b) => b.absSpread - a.absSpread);
       sorted.forEach((g, i) => rowsOut.push({ g, rank: i + 1 }));
     }
     rowsOut.sort((a, b) => b.g.season - a.g.season || a.rank - b.rank);
+    return rowsOut;
+  }, [bySeasonForWeek, showFullTable]);
 
-    const seasonSummary = [...bySeason.entries()]
-      .map(([s, games]) => {
-        const gradedGames = games.filter((g) => g.played && g.winType != null);
-        const upsets = gradedGames.filter((g) => !g.favWin).length;
-        return {
-          season: s,
-          n: games.length,
-          avgAbsSpread: games.reduce((sum, g) => sum + g.absSpread, 0) / games.length,
-          graded: gradedGames.length,
-          upsets,
-          upsetRate: gradedGames.length ? upsets / gradedGames.length : null,
-        };
+  // ---------- Per-team history for this week number (straight-up only) ----------
+  // Answers "best/worst Week N performer" — straight-up record, same
+  // definition as every other rate on this page (favWin/winType; no
+  // against-the-spread metric). Aggregated directly from the raw schedule
+  // rows rather than `reg`/`toGame` since it needs final scores, not just
+  // the derived Game fields. Ties are excluded from the denominator,
+  // matching this app's ties-excluded convention everywhere else (see Win
+  // Rate & Calibration's header comment). Single pass over this week's rows
+  // — cheap regardless of toggle state, so always computed (no reason to
+  // gate this one). Team keys go through `eloTeamKey` (same franchise-
+  // relocation alias Elo already uses: SD->LAC, OAK->LV, STL->LA) so a
+  // relocated franchise's pre-move history joins its current abbreviation
+  // instead of showing up as two separate rows.
+  const teamStats = useMemo(() => {
+    type Acc = { team: string; games: number; wins: number; losses: number };
+    const acc = new Map<string, Acc>();
+    const ensure = (t: string): Acc => {
+      if (!acc.has(t)) acc.set(t, { team: t, games: 0, wins: 0, losses: 0 });
+      return acc.get(t)!;
+    };
+    for (const r of schedule) {
+      if (r.game_type !== "REG" || Number(r.week) !== Number(week)) continue;
+      const hs = r.home_score == null ? null : Number(r.home_score);
+      const as_ = r.away_score == null ? null : Number(r.away_score);
+      if (hs == null || as_ == null) continue; // unplayed — no record to count yet
+      const home = eloTeamKey(String(r.home_team));
+      const away = eloTeamKey(String(r.away_team));
+      const homeMargin = hs - as_;
+      const h = ensure(home);
+      const a = ensure(away);
+      h.games++;
+      a.games++;
+      if (homeMargin > 0) {
+        h.wins++;
+        a.losses++;
+      } else if (homeMargin < 0) {
+        a.wins++;
+        h.losses++;
+      } // ties: counted in `games` but not wins/losses, matching the ties-excluded convention
+    }
+    return [...acc.values()]
+      .map((t) => {
+        const decisive = t.wins + t.losses;
+        return { ...t, winPct: decisive ? t.wins / decisive : null };
       })
-      .sort((a, b) => a.season - b.season);
+      .sort((a, b) => (b.winPct ?? -1) - (a.winPct ?? -1) || b.games - a.games);
+  }, [schedule, week]);
 
-    return { rows: rowsOut, seasonSummary };
-  }, [reg, week]);
+  const teamHighlights = useMemo(() => {
+    const eligible = teamStats.filter((t) => t.games >= MIN_TEAM_GAMES);
+    const best = eligible.length ? [...eligible].sort((a, b) => (b.winPct ?? -1) - (a.winPct ?? -1))[0] : null;
+    const worst = eligible.length ? [...eligible].sort((a, b) => (a.winPct ?? 2) - (b.winPct ?? 2))[0] : null;
+    return { best, worst };
+  }, [teamStats]);
 
   const weekAcrossSeasonsOption = useMemo<EChartsOption | null>(() => {
-    const { seasonSummary } = weekAcrossSeasons;
+    const seasonSummary = weekAcrossSeasonsSummary;
     if (!seasonSummary.length) return null;
     return {
       grid: { left: 10, right: 40, top: 30, bottom: 10, containLabel: true },
@@ -269,7 +345,7 @@ export default function WeeklyBreakdownTab() {
         },
       ],
     } as EChartsOption;
-  }, [weekAcrossSeasons]);
+  }, [weekAcrossSeasonsSummary]);
 
   const spreadRef = useECharts(spreadOption);
   const rankRef = useECharts(rankOption);
@@ -415,46 +491,105 @@ export default function WeeklyBreakdownTab() {
         )}
       </div>
 
-      <div className={tableWrapCls}>
-        <div className="border-b border-slate-100 px-4 pb-2.5 pt-3.5">
-          <div className="text-sm font-semibold text-slate-800">Every Week {week}, every season — spread &amp; result</div>
-          <div className="mt-0.5 text-xs text-slate-500">Sorted by season (newest first), then rank (biggest favorite first) within that season's Week {week}.</div>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead className={theadCls}>
-              <tr>
-                {["Season", "Rank", "Game", "Spread", "Favorite", "Result"].map((h) => (
-                  <th key={h} className="px-3 py-2">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {weekAcrossSeasons.rows.map(({ g, rank }) => {
-                const favTeam = g.favorite === "home" ? g.homeTeam : g.favorite === "away" ? g.awayTeam : "—";
-                return (
-                  <tr key={g.gameId} className={`${trCls} ${g.season === Number(season) ? "bg-[#002f6c]/5" : ""}`}>
-                    <td className="px-3 py-1.5 font-medium">{g.season}</td>
-                    <td className="px-3 py-1.5">{rank}</td>
-                    <td className="px-3 py-1.5">{g.awayTeam} @ {g.homeTeam}</td>
-                    <td className="px-3 py-1.5">{g.spread}</td>
-                    <td className="px-3 py-1.5">{favTeam}</td>
-                    <td className="px-3 py-1.5">
-                      {!g.played || g.winType == null ? (
-                        <span className="text-slate-400">—</span>
-                      ) : g.favWin ? (
-                        <span className="font-bold text-[#3C9A5F]">✓ Favorite</span>
-                      ) : (
-                        <span className="font-bold text-[#C8102E]">✗ Upset</span>
-                      )}
-                    </td>
+      {/* Team performance — Week N historically (straight-up only) */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <h2 className="mb-3 text-sm font-semibold text-slate-700">
+          Team performance — Week {week} historically
+          <InfoDot text={`Every team's straight-up Week ${week} record across every REG season on file (games actually won/lost — same definition as every other rate on this page). Best/worst callouts require at least ${MIN_TEAM_GAMES} graded games.`} />
+        </h2>
+        {teamStats.length ? (
+          <>
+            <div className="mb-3 flex flex-wrap gap-3">
+              <Kpi
+                label={`Best Week ${week} performer`}
+                value={teamHighlights.best ? teamHighlights.best.team : "—"}
+                accent="#3C9A5F"
+                sub={teamHighlights.best ? `${(100 * (teamHighlights.best.winPct ?? 0)).toFixed(0)}% (${teamHighlights.best.wins}-${teamHighlights.best.losses})` : `Needs ${MIN_TEAM_GAMES}+ games`}
+              />
+              <Kpi
+                label={`Worst Week ${week} performer`}
+                value={teamHighlights.worst ? teamHighlights.worst.team : "—"}
+                accent="#C8102E"
+                sub={teamHighlights.worst ? `${(100 * (teamHighlights.worst.winPct ?? 0)).toFixed(0)}% (${teamHighlights.worst.wins}-${teamHighlights.worst.losses})` : `Needs ${MIN_TEAM_GAMES}+ games`}
+              />
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead className={theadCls}>
+                  <tr>
+                    {["Team", "Games", "Record", "Win %"].map((h) => (
+                      <th key={h} className="px-3 py-2">{h}</th>
+                    ))}
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          <ScrollHint />
-        </div>
+                </thead>
+                <tbody>
+                  {teamStats.map((t) => (
+                    <tr key={t.team} className={`${trCls} ${t.games < MIN_TEAM_GAMES ? "text-slate-400" : ""}`}>
+                      <td className="px-3 py-1.5 font-medium">{t.team}</td>
+                      <td className="px-3 py-1.5">{t.games}</td>
+                      <td className="px-3 py-1.5">{t.wins}-{t.losses}</td>
+                      <td className="px-3 py-1.5">{t.winPct == null ? "—" : `${(100 * t.winPct).toFixed(0)}%`}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        ) : (
+          <div className="grid h-[120px] place-items-center text-sm text-slate-400">No played games for Week {week} yet</div>
+        )}
+      </div>
+
+      {/* Full game-by-game history — collapsed by default; row list (and its
+          ~15+ rows/season of table markup) is only built once opened, see
+          weekAcrossSeasonsRows above. */}
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <button onClick={() => setShowFullTable((o) => !o)} className="flex w-full items-center justify-between px-4 py-3 text-left">
+          <span className="text-sm font-semibold text-slate-800">Every Week {week}, every season — full spread &amp; result table</span>
+          <span className="text-xs font-medium text-[#002f6c]">{showFullTable ? "Hide ▲" : "Show ▼"}</span>
+        </button>
+        {showFullTable && (
+          <div className="border-t border-slate-100">
+            <div className="px-4 pb-2.5 pt-3.5 text-xs text-slate-500">
+              Sorted by season (newest first), then rank (biggest favorite first) within that season's Week {week}.
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead className={theadCls}>
+                  <tr>
+                    {["Season", "Rank", "Game", "Spread", "Favorite", "Result"].map((h) => (
+                      <th key={h} className="px-3 py-2">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {weekAcrossSeasonsRows.map(({ g, rank }) => {
+                    const favTeam = g.favorite === "home" ? g.homeTeam : g.favorite === "away" ? g.awayTeam : "—";
+                    return (
+                      <tr key={g.gameId} className={`${trCls} ${g.season === Number(season) ? "bg-[#002f6c]/5" : ""}`}>
+                        <td className="px-3 py-1.5 font-medium">{g.season}</td>
+                        <td className="px-3 py-1.5">{rank}</td>
+                        <td className="px-3 py-1.5">{g.awayTeam} @ {g.homeTeam}</td>
+                        <td className="px-3 py-1.5">{g.spread}</td>
+                        <td className="px-3 py-1.5">{favTeam}</td>
+                        <td className="px-3 py-1.5">
+                          {!g.played || g.winType == null ? (
+                            <span className="text-slate-400">—</span>
+                          ) : g.favWin ? (
+                            <span className="font-bold text-[#3C9A5F]">✓ Favorite</span>
+                          ) : (
+                            <span className="font-bold text-[#C8102E]">✗ Upset</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              <ScrollHint />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

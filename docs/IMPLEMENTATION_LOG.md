@@ -534,6 +534,37 @@ Full work list, with per-item checkboxes and severities: **`docs/MOBILE_READINES
 
 ## Session notes (newest first)
 
+### 2026-08-03 (cont. x3) — Team performance table: join relocated franchises
+- User spotted LV and OAK (Raiders) as separate rows on the new per-team Week N table — same
+  franchise, different eras. Fixed by reusing `eloTeamKey()` (`lib/logic/elo.ts` — the alias Elo
+  already carries pre-relocation ratings through: `SD->LAC, OAK->LV, STL->LA`) to normalize
+  `home_team`/`away_team` before aggregating in `teamStats`, rather than adding a second parallel
+  mapping. No other team-aggregated-across-seasons view exists in this app yet (checked — every
+  other page is per-season or per-game, not summed across all-time by team), so this was the only
+  spot needing it. Verified: table now shows exactly 32 rows (was 35, with LV/OAK/LAC/SD/LA/STL
+  split), each with 11 games (2015–2025) instead of a partial split across the old/new abbreviation.
+  `tsc --noEmit`/62-test suite/build green; zero console errors.
+
+### 2026-08-03 (cont. x2) — Weekly Breakdown: collapsed full table + per-team Week N history
+- Two follow-ups on the same tab. (1) The "every season" full game-by-game table (added the
+  previous session) is now collapsed behind a "Show ▼" toggle (same pattern as Predictive
+  Model Overview's "Why this model?" disclosure) — its row-building `useMemo` is gated on the
+  open state (`showFullTable`) so the flatten/sort/rank work and the ~15+ rows/season of table
+  markup are only paid for once opened, not on every visit to the tab. The always-on per-season
+  summary chart got its own lighter `weekAcrossSeasonsSummary` memo so it isn't blocked by the
+  same gate. (2) In the table's old always-visible spot: a new "Team performance — Week N
+  historically" panel — straight-up win/loss record per team for the selected week number,
+  aggregated across every REG season, with Best/Worst Week-N-performer callouts (min 3 graded
+  games). First pass included an against-the-spread (ATS) variant (final score margin vs.
+  closing spread_line) per the user's literal "best/worst vs spread" phrasing — user then asked
+  to drop it: this page's whole convention is straight-up only (no ATS metric anywhere else in
+  the app, an explicit decision from the previous session), so ATS was removed rather than kept
+  as an option. `teamStats`/`teamHighlights` now straight-up only, aggregated directly from raw
+  `schedule` rows (needs final scores, which `Game` doesn't carry). Verified: Week 1 2026 —
+  KC/PHI best (82%, 9-2), IND worst (10%, 1-9); full table stays collapsed by default and
+  expands/lazily-builds correctly on click; zero console errors; `tsc --noEmit`/62-test
+  suite/build green.
+
 ### 2026-08-03 (cont.) — Weekly Breakdown: "this week number across every season"
 - Follow-up user request on the same tab: a way to see how all historic occurrences of one week
   number (e.g. "every Week 1") looked, independent of the season selector. Added `weekAcrossSeasons`
