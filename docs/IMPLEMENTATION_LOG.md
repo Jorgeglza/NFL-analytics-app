@@ -534,6 +534,24 @@ Full work list, with per-item checkboxes and severities: **`docs/MOBILE_READINES
 
 ## Session notes (newest first)
 
+### 2026-08-03 (cont. x4) — Team performance table: click a team for its Week N detail popup
+- New `spread-analytics/TeamWeekModal.tsx`, opened by clicking any row on the "Team performance"
+  table (`WeeklyBreakdownTab.tsx`) — reuses the shared `Modal` component (same one Power
+  Rankings' team-detail popup uses). Order: headline KPIs (Record, Win %, Avg spread from the
+  team's own side — negative = favored, Home/Away split) first, then a chronological win
+  timeline (oldest→newest color chips, W/L/T per season — deliberately the opposite sort
+  direction from the page's other newest-first tables, since a timeline reads forward), then
+  the full game-by-game table (Season, Rank-within-that-week, Opponent, Spread, Score, Result,
+  Win Type). Rank reuses `bySeasonForWeek`'s existing per-season grouping instead of
+  recomputing it. Detail rows (`teamGamesDetail`) are only built once a team is actually
+  clicked — same "don't compute what nobody asked for" rule as the collapsed full table.
+  `getTeamMetaMap()` added back to this tab (only for the modal's logo/color) after being
+  dropped in an earlier pass as unused. Verified: clicking KC on Week 1 opens the popup with
+  the correct 9-2 record, 11-season timeline, and a game-by-game table whose Spread/Win-Type
+  columns are internally consistent (e.g. 2023 `vs DET -4` "Underdog away" = KC favored by 4 at
+  home, DET upset them); Escape/backdrop/✕ close correctly; zero console errors; `tsc
+  --noEmit`/62-test suite/build green.
+
 ### 2026-08-03 (cont. x3) — Team performance table: join relocated franchises
 - User spotted LV and OAK (Raiders) as separate rows on the new per-team Week N table — same
   franchise, different eras. Fixed by reusing `eloTeamKey()` (`lib/logic/elo.ts` — the alias Elo

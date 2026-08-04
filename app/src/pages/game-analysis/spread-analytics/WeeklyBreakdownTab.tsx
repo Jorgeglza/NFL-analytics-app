@@ -19,6 +19,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { EChartsOption } from "echarts";
 import { getSchedule, type Row } from "../../../lib/data/loader";
+import { getTeamMetaMap, type TeamMeta } from "../../../lib/team/meta";
 import { Select } from "../../../components/filters/Select";
 import { useECharts } from "../../../components/charts/useECharts";
 import { rowChartH } from "../../../components/charts/sizing";
@@ -30,6 +31,7 @@ import { WIN_TYPE_COLORS } from "../../../lib/logic/winType";
 import { toGame, bucketOf, historicFavRate, computeRankStats, type Game } from "../../../lib/logic/spreadPicks";
 import { eloTeamKey } from "../../../lib/logic/elo";
 import { useSeasonWeek } from "../../../context/SeasonWeekContext";
+import TeamWeekModal, { type TeamWeekGame } from "./TeamWeekModal";
 
 const BIN_SIZE = 1.0;
 const SIGNED = true;
@@ -52,8 +54,10 @@ const stepBtnCls =
 export default function WeeklyBreakdownTab() {
   const { season, week, setSeason, setWeek } = useSeasonWeek();
   const [schedule, setSchedule] = useState<Row[]>([]);
+  const [teamMeta, setTeamMeta] = useState<Map<string, TeamMeta>>(new Map());
   const [spreadSort, setSpreadSort] = useState<"time" | "spread">("spread");
   const [showFullTable, setShowFullTable] = useState(false);
+  const [selectedTeam, setSelectedTeam] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [retryTick, setRetryTick] = useState(0);
 
@@ -62,6 +66,10 @@ export default function WeeklyBreakdownTab() {
     getSchedule()
       .then(setSchedule)
       .catch((err) => setLoadError(err instanceof Error ? err.message : "Failed to load"));
+    // Best-effort — logos/colors just don't render in the team popup if this fails.
+    getTeamMetaMap()
+      .then(setTeamMeta)
+      .catch(() => setTeamMeta(new Map()));
   }, [retryTick]);
 
   const reg = useMemo(
@@ -311,6 +319,33 @@ export default function WeeklyBreakdownTab() {
     return { best, worst };
   }, [teamStats]);
 
+  // Popup detail for one clicked team's Week-N history — game-by-game
+  // (opponent, spread, score, result, win type, and that game's rank within
+  // its own week, reusing `bySeasonForWeek`'s grouping). Only built once a
+  // team is actually clicked, same "don't compute what nobody asked for"
+  // rule as the collapsed full table above.
+  const teamGamesDetail = useMemo<TeamWeekGame[] | null>(() => {
+    if (!selectedTeam) return null;
+    const scoreByGameId = new Map(schedule.map((r) => [String(r.game_id), r]));
+    return reg
+      .filter((g) => g.week === Number(week) && g.played && (eloTeamKey(g.homeTeam) === selectedTeam || eloTeamKey(g.awayTeam) === selectedTeam))
+      .map((g) => {
+        const isHome = eloTeamKey(g.homeTeam) === selectedTeam;
+        const opponent = isHome ? eloTeamKey(g.awayTeam) : eloTeamKey(g.homeTeam);
+        const row = scoreByGameId.get(g.gameId);
+        const hs = row?.home_score == null ? 0 : Number(row.home_score);
+        const as_ = row?.away_score == null ? 0 : Number(row.away_score);
+        const teamScore = isHome ? hs : as_;
+        const oppScore = isHome ? as_ : hs;
+        const tie = g.winner == null; // played games only here, so null winner = tie
+        const win = !tie && ((isHome && g.winner === "home") || (!isHome && g.winner === "away"));
+        const spread = isHome ? g.spread : -g.spread;
+        const seasonGames = bySeasonForWeek.get(g.season) ?? [];
+        const rank = [...seasonGames].sort((a, b) => b.absSpread - a.absSpread).findIndex((x) => x.gameId === g.gameId) + 1;
+        return { season: g.season, rank, opponent, isHome, spread, teamScore, oppScore, win, tie, winType: g.winType };
+      });
+  }, [selectedTeam, reg, schedule, week, bySeasonForWeek]);
+
   const weekAcrossSeasonsOption = useMemo<EChartsOption | null>(() => {
     const seasonSummary = weekAcrossSeasonsSummary;
     if (!seasonSummary.length) return null;
@@ -524,7 +559,12 @@ export default function WeeklyBreakdownTab() {
                 </thead>
                 <tbody>
                   {teamStats.map((t) => (
-                    <tr key={t.team} className={`${trCls} ${t.games < MIN_TEAM_GAMES ? "text-slate-400" : ""}`}>
+                    <tr
+                      key={t.team}
+                      onClick={() => setSelectedTeam(t.team)}
+                      title={`See ${t.team}'s Week ${week} history`}
+                      className={`${trCls} cursor-pointer ${t.games < MIN_TEAM_GAMES ? "text-slate-400" : ""}`}
+                    >
                       <td className="px-3 py-1.5 font-medium">{t.team}</td>
                       <td className="px-3 py-1.5">{t.games}</td>
                       <td className="px-3 py-1.5">{t.wins}-{t.losses}</td>
@@ -591,6 +631,10 @@ export default function WeeklyBreakdownTab() {
           </div>
         )}
       </div>
+
+      {selectedTeam && teamGamesDetail && (
+        <TeamWeekModal team={selectedTeam} week={week} meta={teamMeta.get(selectedTeam)} games={teamGamesDetail} onClose={() => setSelectedTeam(null)} />
+      )}
     </div>
   );
 }
