@@ -631,15 +631,37 @@ export default function Scorecards() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
+  // A season can be selected (deep link, stale bookmark, or the schedule
+  // listing next season before the pipeline has produced stats for it) that
+  // has no team_week/ranks data yet. Rather than dead-ending on an error
+  // page, fall back a season at a time — bounded, so a genuine outage still
+  // surfaces the error instead of looping — so the page always opens.
+  const seasonFallbackTries = useRef(0);
+  useEffect(() => {
+    seasonFallbackTries.current = 0;
+  }, [retryTick]);
   useEffect(() => {
     if (!season) return;
+    let cancelled = false;
     Promise.all([getTeamWeek(Number(season)), getTeamWeekRanks(Number(season)), getSchedule()])
       .then(([tw, rk, sch]) => {
+        if (cancelled) return;
         setTeamWeek(tw.filter((r) => r.game_type === "REG" || r.game_type == null));
         setRanks(rk);
         setSchedule(sch);
       })
-      .catch((err) => setLoadError(err instanceof Error ? err.message : "Failed to load"));
+      .catch((err) => {
+        if (cancelled) return;
+        if (seasonFallbackTries.current < 3) {
+          seasonFallbackTries.current += 1;
+          setSeason(String(Number(season) - 1));
+          return;
+        }
+        setLoadError(err instanceof Error ? err.message : "Failed to load");
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [season, retryTick]);
 
   const teams = useMemo(() => [...new Set(teamWeek.map((r) => String(r.team)))].sort(), [teamWeek]);

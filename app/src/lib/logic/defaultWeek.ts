@@ -13,6 +13,13 @@ export interface CurrentWeek {
  * Latest season in the schedule, and its "current" week: the earliest
  * in-progress week while the season is live, else the last completed
  * regular-season week, else week 1.
+ *
+ * This deliberately reflects the schedule alone, not data availability — the
+ * schedule can (and does) list next season before the pipeline has any
+ * team_week/grades output for it, and the closest upcoming week is still the
+ * right "current week" to show (e.g. Home's banner). Pages that need actual
+ * stats fall back on their own when that week/season has no data yet (see
+ * TeamComparison/Scorecards' season-fallback effect).
  */
 export function currentWeek(schedule: Row[]): CurrentWeek | null {
   if (!schedule.length) return null;

@@ -111,21 +111,49 @@ export default function TeamComparison() {
     setTeam2(String(g.home_team));
   }, [schedule, season, week]);
 
+  // The shared season/week defaults to the closest upcoming week (e.g. next
+  // season's Week 1, once the schedule is out) even before the pipeline has
+  // produced that season's team_week/ranks — this page needs real stats, so
+  // when that fetch 404s, fall back a season at a time (current season - 1,
+  // i.e. "last week there's data for") instead of dead-ending on an error
+  // page. Bounded so a genuine outage still surfaces the error instead of
+  // looping. Forcing week to "0" (guaranteed absent from any season's weeks)
+  // makes the weeks-fixing effect below jump to that fallback season's latest
+  // available week rather than keeping whatever week number was selected.
+  const seasonFallbackTries = useRef(0);
+  useEffect(() => {
+    seasonFallbackTries.current = 0;
+  }, [retryTick]);
   useEffect(() => {
     if (!season) return;
+    let cancelled = false;
     Promise.all([getTeamWeek(Number(season)), getTeamWeekRanks(Number(season))])
       .then(([tw, rk]) => {
+        if (cancelled) return;
         setTeamWeek(tw.filter((r) => r.game_type === "REG" || r.game_type == null));
         setRanks(rk);
       })
-      .catch((err) => setLoadError(err instanceof Error ? err.message : "Failed to load"));
+      .catch((err) => {
+        if (cancelled) return;
+        if (seasonFallbackTries.current < 3) {
+          seasonFallbackTries.current += 1;
+          setSeason(String(Number(season) - 1));
+          setWeek("0");
+          return;
+        }
+        setLoadError(err instanceof Error ? err.message : "Failed to load");
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [season, retryTick]);
 
   const weeks = useMemo(() => [...new Set(teamWeek.map((r) => Number(r.week)))].sort((a, b) => a - b), [teamWeek]);
 
-  // This page's team_week data can lag schedule.json by a week; fall back to
-  // the latest week this season's data actually has rather than showing an
-  // invalid selection (without overwriting the shared season/week context).
+  // This page's team_week data can lag schedule.json by a week (or a season
+  // fallback above just forced week to "0"); fall back to the latest week
+  // this season's data actually has rather than showing an invalid selection
+  // (without overwriting the shared season/week context otherwise).
   useEffect(() => {
     if (weeks.length && !weeks.includes(Number(week))) setWeek(String(weeks[weeks.length - 1]));
   }, [weeks, week, setWeek]);
