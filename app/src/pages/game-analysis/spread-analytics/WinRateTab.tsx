@@ -16,6 +16,7 @@ import type { EChartsOption } from "echarts";
 import { wilson } from "../../../lib/logic/wilson";
 import { CATEGORY_CODES, WIN_TYPE_COLORS, type WinType } from "../../../lib/logic/winType";
 import { WIN_TYPE_CATS, toGame, bucketOf, computeWeekPicks, type Game } from "../../../lib/logic/spreadPicks";
+import { currentWeek } from "../../../lib/logic/defaultWeek";
 import { Loading, ErrorRetry } from "../../../components/Loading";
 import { InfoDot } from "../../../components/InfoDot";
 
@@ -105,9 +106,17 @@ export default function WinRateTab() {
           const latest = seasons[seasons.length - 1];
           setSeasonsSel([String(latest)]);
           setWeeksSel(weeks.map(String));
-          setRecoSeason(String(latest));
-          const wks = reg.filter((r) => Number(r.season) === latest).map((r) => Number(r.week));
-          setRecoWeek(String(Math.max(...wks)));
+          // Weekly Picks defaults to the same "current week" rule as Home/Game
+          // Picks (earliest unplayed week, not the season's last week) — the
+          // last week often has no spread posted yet, which left this panel
+          // empty by default (audit: 2026-08-04).
+          const cw = currentWeek(rows);
+          setRecoSeason(String(cw ? cw.season : latest));
+          if (cw) setRecoWeek(String(cw.week));
+          else {
+            const wks = reg.filter((r) => Number(r.season) === latest).map((r) => Number(r.week));
+            setRecoWeek(String(Math.max(...wks)));
+          }
         }
       })
       .catch((err) => setLoadError(err instanceof Error ? err.message : "Failed to load"));
