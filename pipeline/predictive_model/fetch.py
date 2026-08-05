@@ -55,6 +55,26 @@ def fetch_pbp(years=None, refresh=False) -> pd.DataFrame:
     return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=PBP_COLS)
 
 
+def _load_bulk_with_fallback(loader, years, label) -> pd.DataFrame:
+    """Call loader(years) (a bulk nflreadpy call taking the whole year list at
+    once, e.g. load_injuries/load_snap_counts). If it raises, assume the
+    newest season isn't published yet (mirrors fetch_pbp's per-year handling
+    above) and retry without it -- but only ever drop the newest year, so a
+    real failure on an older, should-exist season still raises instead of
+    being silently swallowed."""
+    years = sorted(years)
+    while years:
+        try:
+            return loader(years).to_pandas()
+        except Exception as e:
+            if len(years) == 1:
+                raise
+            dropped = years[-1]
+            print(f"WARNING: no {label} for newest season {dropped} yet, skipping ({e})")
+            years = years[:-1]
+    return pd.DataFrame()
+
+
 def fetch_injuries(years=None, refresh=False) -> pd.DataFrame:
     import nflreadpy as nr
 
@@ -62,7 +82,7 @@ def fetch_injuries(years=None, refresh=False) -> pd.DataFrame:
     path = _cache_path("injuries")
     if path.exists() and not refresh:
         return pd.read_parquet(path)
-    df = nr.load_injuries(years).to_pandas()
+    df = _load_bulk_with_fallback(nr.load_injuries, years, "injuries")
     df.to_parquet(path, index=False)
     return df
 
@@ -74,7 +94,7 @@ def fetch_snap_counts(years=None, refresh=False) -> pd.DataFrame:
     path = _cache_path("snap_counts")
     if path.exists() and not refresh:
         return pd.read_parquet(path)
-    df = nr.load_snap_counts(years).to_pandas()
+    df = _load_bulk_with_fallback(nr.load_snap_counts, years, "snap counts")
     df.to_parquet(path, index=False)
     return df
 
