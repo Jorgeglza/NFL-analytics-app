@@ -21,6 +21,7 @@ import { ErrorRetry } from "../../components/Loading";
 import { stickyColHeadCls, ScrollHint } from "../../components/ui";
 import { buildMismatchStatGroups, statLabel } from "./statPicker";
 import { defaultWeekNearToday } from "../game-analysis/previews/engine";
+import { useSeasonFallback } from "../../lib/hooks/useSeasonFallback";
 
 const CATEGORY_ORDER = ["Passing", "Rushing", "Receiving", "Other"] as const;
 const PASSING_EXTRA = new Set(["completions", "attempts", "interceptions", "pacr", "dakota", "sack_fumbles", "sack_fumbles_lost", "sack_yards_lost", "sacks_suffered"]);
@@ -87,16 +88,18 @@ export default function MatchupBets() {
       .catch((err) => setLoadError(err instanceof Error ? err.message : "Failed to load"));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [retryTick]);
-  useEffect(() => {
-    if (!season) return;
-    Promise.all([getPlayerWeek(Number(season)), getTeamWeek(Number(season)), getTeamWeekRanks(Number(season))])
-      .then(([p, t, r]) => {
+  useSeasonFallback(
+    season,
+    setSeason,
+    retryTick,
+    (s) =>
+      Promise.all([getPlayerWeek(s), getTeamWeek(s), getTeamWeekRanks(s)]).then(([p, t, r]) => {
         setPw(p);
         setTw(t.filter((x) => x.game_type === "REG" || x.game_type == null));
         setRanks(r);
-      })
-      .catch((err) => setLoadError(err instanceof Error ? err.message : "Failed to load"));
-  }, [season, retryTick]);
+      }),
+    { setWeek, onExhausted: (err) => setLoadError(err instanceof Error ? err.message : "Failed to load") },
+  );
 
   const s = Number(season);
   const regSched = useMemo(() => schedule.filter((g) => Number(g.season) === s && g.game_type === "REG"), [schedule, s]);

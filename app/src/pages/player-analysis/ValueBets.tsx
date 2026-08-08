@@ -15,6 +15,7 @@ import { ErrorRetry } from "../../components/Loading";
 import { stickyColCls, stickyColHeadCls, ScrollHint } from "../../components/ui";
 import { buildMismatchStatGroups, statLabel, PROP_MARKET_SECTIONS } from "./statPicker";
 import { useSeasonWeek } from "../../context/SeasonWeekContext";
+import { useSeasonFallback } from "../../lib/hooks/useSeasonFallback";
 
 const PRIORITY = [
   "passing_yards", "rushing_yards", "receiving_yards", "passing_tds", "rushing_tds", "receiving_tds",
@@ -120,15 +121,17 @@ export default function ValueBets() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
-  useEffect(() => {
-    if (!season) return;
-    Promise.all([getPlayerWeek(Number(season)), getTeamWeek(Number(season))])
-      .then(([p, t]) => {
+  useSeasonFallback(
+    season,
+    setSeason,
+    retryTick,
+    (s) =>
+      Promise.all([getPlayerWeek(s), getTeamWeek(s)]).then(([p, t]) => {
         setPw(p);
         setTw(t.filter((x) => x.game_type === "REG" || x.game_type == null));
-      })
-      .catch((err) => setLoadError(err instanceof Error ? err.message : "Failed to load"));
-  }, [season, retryTick]);
+      }),
+    { setWeek, onExhausted: (err) => setLoadError(err instanceof Error ? err.message : "Failed to load") },
+  );
 
   const s = Number(season);
   const regSched = useMemo(() => schedule.filter((g) => Number(g.season) === s && g.game_type === "REG"), [schedule, s]);

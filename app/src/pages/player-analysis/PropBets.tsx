@@ -12,6 +12,7 @@ import { PageSkeleton } from "../../components/Skeleton";
 import { ErrorRetry } from "../../components/Loading";
 import { buildStatGroups, statLabel, americanOdds, headshotCrop, randomItem, randomPassRushRecStat, randomDefenseStat, seasonTypeOptions, HIT_COLOR, MISS_COLOR, NEUTRAL_COLOR } from "./statPicker";
 import { useSeasonWeek } from "../../context/SeasonWeekContext";
+import { useSeasonFallback } from "../../lib/hooks/useSeasonFallback";
 import { stickyColHeadCls, ScrollHint } from "../../components/ui";
 
 const EXCLUDE = new Set([
@@ -101,13 +102,9 @@ export default function PropBets() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
-  useEffect(() => {
-    if (season) {
-      getPlayerWeek(Number(season))
-        .then(setRows)
-        .catch((err) => setLoadError(err instanceof Error ? err.message : "Failed to load"));
-    }
-  }, [season, retryTick]);
+  useSeasonFallback(season, setSeason, retryTick, (s) => getPlayerWeek(s).then(setRows), {
+    onExhausted: (err) => setLoadError(err instanceof Error ? err.message : "Failed to load"),
+  });
 
   const seasonTypes = useMemo(() => [...new Set(rows.map((r) => String(r.season_type)))].filter((s) => s !== "null").sort(), [rows]);
   const filteredType = useMemo(
