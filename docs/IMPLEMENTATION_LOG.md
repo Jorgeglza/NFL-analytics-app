@@ -534,6 +534,25 @@ Full work list, with per-item checkboxes and severities: **`docs/MOBILE_READINES
 
 ## Session notes (newest first)
 
+### 2026-08-07 (cont.) — Win Rate & Calibration: population filter defaulted to an empty season
+
+- **Bug:** unlike Game Picks (schedule-only, shows the current/projection week fine) and
+  Weekly Breakdown/Weekly Picks (already fixed by 6b15b5a to target `currentWeek()`), the
+  Win Rate & Calibration tab's top population filter (`seasonsSel`, feeding the
+  calibration/lift/outcome-mix charts and headline KPIs) defaulted to the schedule's
+  *latest* season regardless of whether it had any played games — at the start of a new
+  season (2026, 0 games played) every chart/KPI on the tab rendered "N/A"/"0 bins meet Min
+  N" by default, even though the separate Weekly Picks panel below it (a different
+  season/week pair, already `currentWeek()`-driven) worked fine.
+- Fix in `WinRateTab.tsx`: default `seasonsSel` to the latest season with at least one
+  played REG game (`home_score != null`), falling back to the schedule's latest season only
+  if none has been played yet at all. Weekly Picks' own season/week (already correct) is
+  untouched.
+- Verified in the browser pane: top filters now default to 2025 (271 games, all charts/KPIs
+  populated) while Weekly Picks still projects Week 1, 2026 with real historical bucket `N`
+  counts (previously `N=0` everywhere since the excluded-population season had no history).
+  `tsc -b`/`vite build`/62-test suite green. Not committed/pushed.
+
 ### 2026-08-07 — Season fallback: Prop Bets / Value Bets / Player Team Stats / Matchup Bets
 
 - **Bug:** the shared season/week (`SeasonWeekContext`, seeded from `currentWeek()` in

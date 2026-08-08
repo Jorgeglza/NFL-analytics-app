@@ -103,7 +103,14 @@ export default function WinRateTab() {
         const seasons = [...new Set(reg.map((r) => Number(r.season)))].sort((a, b) => a - b);
         const weeks = [...new Set(reg.map((r) => Number(r.week)))].sort((a, b) => a - b);
         if (seasons.length) {
-          const latest = seasons[seasons.length - 1];
+          // The population filter (calibration/lift/bucket charts) needs played
+          // games — defaulting to the schedule's latest season left this blank
+          // (all N/A) at the start of a new season, before any games are played.
+          // Default to the latest season with at least one played REG game
+          // instead, falling back to the schedule's latest season if none has
+          // been played yet (e.g. brand-new data with only a future schedule).
+          const playedSeasons = [...new Set(reg.filter((r) => r.home_score != null).map((r) => Number(r.season)))];
+          const latest = playedSeasons.length ? Math.max(...playedSeasons) : seasons[seasons.length - 1];
           setSeasonsSel([String(latest)]);
           setWeeksSel(weeks.map(String));
           // Weekly Picks defaults to the same "current week" rule as Home/Game
