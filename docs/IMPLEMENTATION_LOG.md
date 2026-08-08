@@ -534,6 +534,27 @@ Full work list, with per-item checkboxes and severities: **`docs/MOBILE_READINES
 
 ## Session notes (newest first)
 
+### 2026-08-07 — Season fallback: Prop Bets / Value Bets / Player Team Stats / Matchup Bets
+
+- **Bug:** the shared season/week (`SeasonWeekContext`, seeded from `currentWeek()` in
+  `lib/logic/defaultWeek.ts`) reads only `schedule.json`, which already lists season 2026 —
+  but the pipeline hasn't produced 2026 `player_week`/`team_week` extracts yet. Pages that
+  fetched stats for the shared `season` with no fallback (Prop Bets, Value Bets, Player Team
+  Stats, Matchup Bets — all in `pages/player-analysis/`) 404'd straight to `ErrorRetry`
+  instead of falling back to last season's data, unlike Team Comparison/Scorecards which
+  already handled this.
+- Extracted the "decrement season and retry, bounded at 3 tries, reset on `retryTick`,
+  optionally force `week` to `"0"` so a page's weeks-fixing effect re-snaps" pattern —
+  previously duplicated verbatim in `TeamComparison.tsx` and `Scorecards.tsx` — into a new
+  shared hook `lib/hooks/useSeasonFallback.ts`. Applied it to all four broken pages, and
+  refactored `TeamComparison.tsx`/`Scorecards.tsx` to use it too, so the logic now lives in
+  one place instead of six.
+- Verified in the browser pane with no query params (so each page seeds off the shared
+  season/week context, currently 2026 wk1 with no data): Prop Bets, Value Bets, Player Team
+  Stats, Matchup Bets (via a Value Bets zoom-in link), Team Comparison, and Scorecards all
+  fall back to season 2025 and render normally, zero console errors. `tsc -b`, `vite build`,
+  and the 62-test Vitest suite all green. Not committed/pushed.
+
 ### 2026-08-03 (cont. x5) — Team detail popup: include the current/unplayed game too
 - Follow-up: the popup's game-by-game table only listed graded seasons, skipping the
   current/unplayed one entirely (e.g. no 2026 row for Week 1). `teamGamesDetail`'s `g.played`

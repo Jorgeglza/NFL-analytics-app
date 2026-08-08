@@ -17,6 +17,7 @@ import { LazyMount } from "../../components/LazyMount";
 import { RangeSlider } from "../../components/RangeSlider";
 import { buildStatGroups, statLabel, seasonTypeOptions } from "./statPicker";
 import { useSeasonWeek } from "../../context/SeasonWeekContext";
+import { useSeasonFallback } from "../../lib/hooks/useSeasonFallback";
 
 const EXCLUDE = new Set([
   "season", "week", "team", "opponent_team", "gameday", "game_id",
@@ -177,13 +178,9 @@ export default function PlayerTeamStats() {
       .catch((err) => setLoadError(err instanceof Error ? err.message : "Failed to load"));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [retryTick]);
-  useEffect(() => {
-    if (season) {
-      getPlayerWeek(Number(season))
-        .then(setRows)
-        .catch((err) => setLoadError(err instanceof Error ? err.message : "Failed to load"));
-    }
-  }, [season, retryTick]);
+  useSeasonFallback(season, setSeason, retryTick, (s) => getPlayerWeek(s).then(setRows), {
+    onExhausted: (err) => setLoadError(err instanceof Error ? err.message : "Failed to load"),
+  });
 
   const seasonTypes = useMemo(() => [...new Set(rows.map((r) => String(r.season_type)))].sort(), [rows]);
   const typed = useMemo(() => rows.filter((r) => !seasonType || String(r.season_type) === seasonType), [rows, seasonType]);
