@@ -5,6 +5,7 @@ import { FilterGroup, tableWrapCls, theadCls, trCls, ScrollHint } from "../../co
 import { type MetricKey } from "../game-analysis/previews/engine";
 import { type GameBacktestRow, summarizeByTeam, type BacktestSummary } from "../../lib/logic/backtest";
 import { pct, money, roiPct, profitColor } from "./shared";
+import TeamDetailModal from "./TeamDetailModal";
 
 type SortKey = "team" | "roi" | "profit" | "accuracy" | "n";
 
@@ -20,8 +21,11 @@ export default function ByTeamTab({
   onPrimaryChange: (k: MetricKey) => void;
 }) {
   const byTeam = useMemo(() => summarizeByTeam(rows, primary), [rows, primary]);
+  const modelRows = useMemo(() => rows.filter((r) => r.key === primary), [rows, primary]);
   const [sortKey, setSortKey] = useState<SortKey>("roi");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [activeTeam, setActiveTeam] = useState<string | null>(null);
+  const label = modelKeys.find(([k]) => k === primary)?.[1] ?? primary;
 
   const sorted = useMemo(() => {
     const val = (s: BacktestSummary, team: string): number | string => {
@@ -89,8 +93,13 @@ export default function ByTeamTab({
             </thead>
             <tbody>
               {sorted.map(({ team, summary }) => (
-                <tr key={team} className={trCls}>
-                  <td className="px-3 py-2 font-bold">{team}</td>
+                <tr
+                  key={team}
+                  className={`cursor-pointer ${trCls}`}
+                  onClick={() => setActiveTeam(team)}
+                  title={`See ${team}'s KPIs, profit over time, and favorite/underdog split`}
+                >
+                  <td className="px-3 py-2 font-bold text-[#002f6c] underline decoration-dotted underline-offset-2">{team}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{summary.nGraded.toLocaleString()}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{pct(summary.accuracy)}</td>
                   <td className="px-3 py-2 text-right font-semibold tabular-nums" style={{ color: profitColor(summary.totalProfit) }}>
@@ -113,6 +122,8 @@ export default function ByTeamTab({
           <ScrollHint />
         </div>
       </LazyMount>
+
+      {activeTeam && <TeamDetailModal team={activeTeam} keyMetric={primary} label={label} rows={modelRows} onClose={() => setActiveTeam(null)} />}
     </div>
   );
 }
