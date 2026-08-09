@@ -9,6 +9,7 @@
 // for the payout/ROI formulas.
 import type { Row } from "../data/loader";
 import { payout } from "./moneyline";
+import { eloTeamKey } from "./elo";
 import {
   MODEL_KEYS,
   type MetricKey,
@@ -156,19 +157,50 @@ export function summarizeBySeason(rows: GameBacktestRow[], key: MetricKey): { se
   return seasons.map((season) => ({ season, summary: summarize(modelRows.filter((r) => r.season === season)) }));
 }
 
-/** The team actually bet on (home or away side, whichever the model picked) — null if no pick. */
+/** Same season breakdown as `summarizeBySeason`, plus the favorite/underdog split within each
+ * season — how many picks that season had this side as the market's pre-game spread favorite,
+ * and how the model did in each case. */
+export function summarizeBySeasonWithFavorite(
+  rows: GameBacktestRow[],
+  key: MetricKey,
+): { season: number; summary: BacktestSummary; favorite: BacktestSummary; underdog: BacktestSummary }[] {
+  const modelRows = rows.filter((r) => r.key === key);
+  const seasons = Array.from(new Set(modelRows.map((r) => r.season))).sort((a, b) => a - b);
+  return seasons.map((season) => {
+    const seasonRows = modelRows.filter((r) => r.season === season);
+    return {
+      season,
+      summary: summarize(seasonRows),
+      favorite: summarize(seasonRows.filter((r) => r.isMarketFavorite === true)),
+      underdog: summarize(seasonRows.filter((r) => r.isMarketFavorite === false)),
+    };
+  });
+}
+
+/** The team actually bet on (home or away side, whichever the model picked) — null if no pick.
+ * Raw schedule code, e.g. a pre-2016 Rams pick returns "STL" — use `canonicalPickedTeamOf` to
+ * merge relocated franchises onto their current code. */
 export function pickedTeamOf(r: GameBacktestRow): string | null {
   if (r.pick === "away") return r.away;
   if (r.pick === "home") return r.home;
   return null;
 }
 
-/** Credits the picked team (home or away, whichever the model actually bet on)
- * — not both teams in the game, only the one side that was wagered on. */
+/** Same as `pickedTeamOf`, but merges relocated franchises onto their current team code (the
+ * same `TEAM_ALIAS` map Elo carries ratings across: STL→LA, SD→LAC, OAK→LV) so a team's history
+ * rolls up as one continuous team instead of splitting at the relocation. */
+export function canonicalPickedTeamOf(r: GameBacktestRow): string | null {
+  const t = pickedTeamOf(r);
+  return t == null ? null : eloTeamKey(t);
+}
+
+/** Credits the picked team (home or away, whichever the model actually bet on), with relocated
+ * franchises merged onto their current code (STL→LA, SD→LAC, OAK→LV) — not both teams in the
+ * game, only the one side that was wagered on. */
 export function summarizeByTeam(rows: GameBacktestRow[], key: MetricKey): { team: string; summary: BacktestSummary }[] {
   const modelRows = rows.filter((r) => r.key === key && r.pick != null);
-  const teams = Array.from(new Set(modelRows.map(pickedTeamOf))).filter((t): t is string => t != null).sort();
-  return teams.map((team) => ({ team, summary: summarize(modelRows.filter((r) => pickedTeamOf(r) === team)) }));
+  const teams = Array.from(new Set(modelRows.map(canonicalPickedTeamOf))).filter((t): t is string => t != null).sort();
+  return teams.map((team) => ({ team, summary: summarize(modelRows.filter((r) => canonicalPickedTeamOf(r) === team)) }));
 }
 
 export interface FavoriteSplit {
