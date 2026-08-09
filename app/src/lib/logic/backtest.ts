@@ -156,13 +156,37 @@ export function summarizeBySeason(rows: GameBacktestRow[], key: MetricKey): { se
   return seasons.map((season) => ({ season, summary: summarize(modelRows.filter((r) => r.season === season)) }));
 }
 
+/** The team actually bet on (home or away side, whichever the model picked) — null if no pick. */
+export function pickedTeamOf(r: GameBacktestRow): string | null {
+  if (r.pick === "away") return r.away;
+  if (r.pick === "home") return r.home;
+  return null;
+}
+
 /** Credits the picked team (home or away, whichever the model actually bet on)
  * — not both teams in the game, only the one side that was wagered on. */
 export function summarizeByTeam(rows: GameBacktestRow[], key: MetricKey): { team: string; summary: BacktestSummary }[] {
   const modelRows = rows.filter((r) => r.key === key && r.pick != null);
-  const teamOf = (r: GameBacktestRow) => (r.pick === "away" ? r.away : r.home);
-  const teams = Array.from(new Set(modelRows.map(teamOf))).sort();
-  return teams.map((team) => ({ team, summary: summarize(modelRows.filter((r) => teamOf(r) === team)) }));
+  const teams = Array.from(new Set(modelRows.map(pickedTeamOf))).filter((t): t is string => t != null).sort();
+  return teams.map((team) => ({ team, summary: summarize(modelRows.filter((r) => pickedTeamOf(r) === team)) }));
+}
+
+export interface FavoriteSplit {
+  favorite: BacktestSummary;
+  underdog: BacktestSummary;
+  /** No spread on record for the game, so favorite/underdog status is unknown. */
+  unknown: BacktestSummary;
+}
+
+/** Splits a team's (or any) bets by whether the picked side was the market's
+ * pre-game spread favorite — answers "does this model do better backing this
+ * team as a favorite or as an underdog," and how often each comes up. */
+export function summarizeByFavoriteStatus(rows: GameBacktestRow[]): FavoriteSplit {
+  return {
+    favorite: summarize(rows.filter((r) => r.isMarketFavorite === true)),
+    underdog: summarize(rows.filter((r) => r.isMarketFavorite === false)),
+    unknown: summarize(rows.filter((r) => r.isMarketFavorite == null)),
+  };
 }
 
 export interface CumulativePoint {
