@@ -108,6 +108,8 @@ const ANALYTICS: GlossaryEntry[] = [
   { term: "Blend / Consensus", desc: "A combined probability averaging multiple models (market history, grades, moneyline, Elo, Pythagorean) rather than trusting any single one." },
   { term: "Grade", desc: "This app's 0–100 team-strength score from a Random Forest model trained weekly on that season's results — see the Grading Model page." },
   { term: "Rank / Percentile", desc: "Where a team or stat sits among all 32 teams that week — #1 is best, #32 is worst." },
+  { term: "ROI (Return on Investment)", desc: "Total betting profit divided by total amount wagered — 0% is break-even, negative loses money. See the Model Backtest page." },
+  { term: "Unit Stake / Flat Betting", desc: "Betting the same fixed amount on every pick, rather than a percentage of a growing/shrinking bankroll — isolates pick quality from bankroll management." },
 ];
 
 export const GLOSSARY_SECTIONS: GlossarySection[] = [

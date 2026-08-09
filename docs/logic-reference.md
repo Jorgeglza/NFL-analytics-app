@@ -99,7 +99,26 @@ W_TOM_L6=0.12`.
 - Weekly picks (spread page): Wilson-regularized p̂ per (bin, fav side) from history excluding the
   target week; picks sorted by p̂ then N; favorites assigned to match expected favorite share.
 
-## 6. Player pages
+## 6. Model Backtest (new, not a port — `app/src/lib/logic/backtest.ts` / `moneyline.ts`)
+Answers "is a model profitable betting straight-up against real moneyline odds," not just "how
+accurate is it." One row per (completed REG game × sub-model), built by calling `probBundle()`
+once per game and fanning out to every `MODEL_KEYS` entry (no re-implementation of the probability
+math — reused as-is from §5's engine).
+- Pick: `pickWinner(bundle[key])` — `pAway >= pHome ? "away" : "home"`, null-safe (ties go home);
+  factored out of the inline duplicates in `WeekPreviewTab.tsx`/`MatchupTab.tsx`.
+- Stake: flat `$100` per bet ("1 unit"), not a compounding bankroll — isolates pick quality from
+  bankroll sizing (`DEFAULT_STAKE` in `backtest.ts`).
+- Payout (`moneyline.ts:payout(ml, stake, won)`): American odds on the side actually picked (not
+  necessarily the favorite) — `ml > 0 ⇒ (ml/100)·stake`; `ml < 0 ⇒ (100/|ml|)·stake`; loss ⇒
+  `-stake`; missing/invalid odds ⇒ `null` (excluded from profit/ROI, still counts toward accuracy).
+- ROI = `totalProfit / (nGraded · stake)`. 0% = break-even; negative loses money to the vig — betting
+  the market's own vig-free favorite (`ml` sub-model) straight-up is expected to land at/below 0%
+  over a large sample by construction, not a bug.
+- Calibration reuses the same fixed-width-bin/`(lo, hi]` reliability-diagram convention as
+  `pages/predictive-model/shared.ts`'s `reliabilityBuckets()`, generalized from `home_win_prob` to
+  any sub-model's bundle probability.
+
+## 7. Player pages
 - Hit rate: `count(value ≥ line)/count(non-null) ·100`. Parlay: `P=∏pᵢ`, odds `=1/P`.
 - % of team: `player_week_value / team_week_total ·100`.
 - Mismatch score: `def_allowed_rank − off_rank` (positive = offensive edge);

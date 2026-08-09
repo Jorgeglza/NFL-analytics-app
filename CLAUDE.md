@@ -4,7 +4,7 @@ Rebuild of the Python Dash app at `..\NFL app` (read-only reference — NEVER mo
 Goal: identical data, calculations, and model results; modern responsive UI.
 
 ## Architecture (decided — do not re-litigate)
-- **Pipeline: Python** (`pipeline/`). Ports the old app's pandas/scikit-learn logic verbatim so results match exactly. Run manually now; weekly via GitHub Actions later.
+- **Pipeline: Python** (`pipeline/`). Ports the old app's pandas/scikit-learn logic verbatim so results match exactly. `pipeline/nfl_pipeline/` is the main parity pipeline; `pipeline/predictive_model/` is the separate predictive-model research/export package. Runs weekly via GitHub Actions (`.github/workflows/weekly-refresh.yml`, `predictive-refresh.yml`), plus manual runs via the commands below; `deploy.yml` builds/deploys the frontend.
 - **Storage:** `data/nfl.sqlite` (committed, migration-friendly) + per-page JSON extracts in `app/public/data/` (what the frontend actually loads). Frontend never fetches external data or runs models.
 - **Frontend:** Vite + React + TypeScript SPA in `app/`. Tailwind + shadcn-style components, ECharts for charts, TanStack Table for pivots, react-router.
 - Old settings/upload Dash pages are intentionally dropped — the pipeline replaces them.

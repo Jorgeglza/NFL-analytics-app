@@ -7,7 +7,14 @@ Ideas scoped but deliberately not built yet, with enough design detail to pick b
 Scoped during the Power Rankings / Team Trends / Season Outlook planning pass (session after M5).
 Split into two halves with very different data readiness:
 
-### Model Backtest — buildable today, not built yet
+### Model Backtest — ✅ built (2026-08-09)
+
+Built as its own page, `/data/model_backtest` (`app/src/pages/model-backtest/`) — see
+`docs/page-mapping.md`'s "New pages" table and `docs/logic-reference.md` §7 for the formulas.
+Went beyond the original straight-up/ATS-accuracy scoping below to answer the actual ask: real
+dollar profit/ROI betting straight-up against moneyline payout odds, by model/season/team, on top
+of `pickWinner()` (factored into `engine.ts` as planned) and a new `lib/logic/backtest.ts` +
+`moneyline.ts`'s `payout()`. Original scoping notes, kept for the record:
 
 Game-level backtest of the prediction engine, needs no new data:
 
@@ -45,5 +52,4 @@ and can be revisited — but it is not on any roadmap.
 
 ### Decision for a future session
 
-Build the Model Backtest half (fully unblocked, no new data) as its own page whenever there's room for it.
-Value Bets Backtest is not being pursued (see above).
+Model Backtest is built (see above). Value Bets Backtest is not being pursued (see above).

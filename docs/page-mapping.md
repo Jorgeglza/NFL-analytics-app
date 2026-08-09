@@ -22,11 +22,12 @@
 
 | Page | New route | New component | Notes |
 |---|---|---|---|
-| Power Rankings | /game_analysis/power_rankings | pages/game-analysis/PowerRankings | Composite of Elo + season-to-date grade + Pythagorean win% |
-| Team Trends | /game_analysis/team_trends | pages/game-analysis/TeamTrends | Hidden from nav — reachable only via Power Rankings' "Compare" link |
+| Power Rankings | /game_analysis/season_outlook/power_rankings | pages/game-analysis/SeasonOutlook (PowerRankingsTab) | Composite of Elo + season-to-date grade + Pythagorean win%. Folded into Season Outlook as a tab; old `/game_analysis/power_rankings` URL redirects here |
+| Team Trends | /game_analysis/team_trends | pages/game-analysis/TeamTrends | Hidden from nav — reachable only via the Power Rankings tab's "Compare" link |
 | Season Outlook | /game_analysis/season_outlook | pages/game-analysis/SeasonOutlook | Strength of Schedule + Playoff Probability (Monte Carlo) tabs |
 | Models Guide | /game_analysis/models_guide | pages/game-analysis/previews/ModelsGuide | Hidden from nav — reachable only from Matchup Previews' header link |
 | Glossary | /glossary | pages/GlossaryPage | Hidden from nav — reachable only from Home's footer link |
+| Model Backtest | /data/model_backtest | pages/model-backtest/ModelBacktest | Straight-up moneyline profitability backtest across every prediction sub-model, by model/season/team; new, not a Dash port — see docs/FUTURE_DEVELOPMENT.md |
 
 ## Dash concept → React equivalent
 - callbacks → React state + derived memos; cascading dropdowns → dependent selects
@@ -37,6 +38,6 @@
 ## Deliberate deviations (keep updated)
 1. Timezone: browser-local instead of hardcoded America/Monterrey (default-week selection).
 2. game_id parsing validated; malformed ids surface as "—" instead of wrong labels.
-3. Model Overview matrix precomputed in pipeline (`model_overview.json`) instead of at app startup.
+3. Model Overview matrix computes client-side in the browser (~2s) instead of the originally planned precomputed `model_overview.json` pipeline export.
 4. Settings/upload pages removed; season range lives in `pipeline/nfl_pipeline/config.py`.
 5. Home countdown (hardcoded 2025-08-22) dropped.

@@ -10,6 +10,7 @@ import {
   MODEL_COLORS,
   type MetricKey,
   probBundle,
+  pickWinner,
   favoriteSide,
   resultWinner,
   winTypeCode,
@@ -116,7 +117,7 @@ export default function WeekPreviewTab({
       const bundle = probBundle(g, s, w, hist, gradesIdx, twIdx, eloIdx, predIdx);
       const [pL, pR] = bundle[primary];
       const conf = pL != null && pR != null ? Math.max(pL, pR) : -1;
-      const leadSide = pL != null && pR != null ? (pL >= pR ? "away" : "home") : null;
+      const leadSide = pickWinner(bundle[primary]);
       return { g, bundle, conf, leadSide, disagree: disagreementOf(bundle) };
     });
     if (sortMode === "confidence") rows.sort((a, b) => b.conf - a.conf || kickoffMs(a.g) - kickoffMs(b.g));
