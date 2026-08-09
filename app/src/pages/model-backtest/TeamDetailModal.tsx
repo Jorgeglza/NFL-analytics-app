@@ -10,9 +10,9 @@ import { useECharts } from "../../components/charts/useECharts";
 import { MODEL_COLORS, type MetricKey } from "../game-analysis/previews/engine";
 import {
   type GameBacktestRow,
-  pickedTeamOf,
+  canonicalPickedTeamOf,
   summarize,
-  summarizeBySeason,
+  summarizeBySeasonWithFavorite,
   summarizeByFavoriteStatus,
   cumulativeProfitSeries,
 } from "../../lib/logic/backtest";
@@ -32,10 +32,12 @@ export default function TeamDetailModal({
   rows: GameBacktestRow[];
   onClose: () => void;
 }) {
-  const teamRows = useMemo(() => rows.filter((r) => pickedTeamOf(r) === team), [rows, team]);
+  // Relocated franchises (STL->LA, SD->LAC, OAK->LV) are merged onto their current code — `team`
+  // here is always the canonical/current code, matching By Team's list.
+  const teamRows = useMemo(() => rows.filter((r) => canonicalPickedTeamOf(r) === team), [rows, team]);
   const summary = useMemo(() => summarize(teamRows), [teamRows]);
   const favSplit = useMemo(() => summarizeByFavoriteStatus(teamRows), [teamRows]);
-  const bySeason = useMemo(() => summarizeBySeason(teamRows, keyMetric), [teamRows, keyMetric]);
+  const bySeason = useMemo(() => summarizeBySeasonWithFavorite(teamRows, keyMetric), [teamRows, keyMetric]);
   const series = useMemo(() => cumulativeProfitSeries(teamRows, keyMetric), [teamRows, keyMetric]);
 
   const favN = favSplit.favorite.n;
@@ -104,15 +106,22 @@ export default function TeamDetailModal({
           <table className="w-full border-collapse text-xs">
             <thead className={theadCls}>
               <tr>
-                <th className="px-3 py-2 text-left">Season</th>
-                <th className="px-3 py-2 text-right">Picks</th>
-                <th className="px-3 py-2 text-right">Accuracy</th>
-                <th className="px-3 py-2 text-right">Profit</th>
-                <th className="px-3 py-2 text-right">ROI</th>
+                <th rowSpan={2} className="px-3 py-2 text-left align-bottom">Season</th>
+                <th rowSpan={2} className="px-3 py-2 text-right align-bottom">Picks</th>
+                <th rowSpan={2} className="px-3 py-2 text-right align-bottom">Accuracy</th>
+                <th rowSpan={2} className="px-3 py-2 text-right align-bottom">Profit</th>
+                <th rowSpan={2} className="px-3 py-2 text-right align-bottom">ROI</th>
+                <th colSpan={2} className="border-l border-slate-200 px-3 py-1 text-center normal-case tracking-normal text-slate-500">
+                  As favorite
+                </th>
+              </tr>
+              <tr>
+                <th className="border-l border-slate-200 px-3 py-1.5 text-right">Times</th>
+                <th className="px-3 py-1.5 text-right">Win %</th>
               </tr>
             </thead>
             <tbody>
-              {[...bySeason].reverse().map(({ season, summary: s }) => (
+              {[...bySeason].reverse().map(({ season, summary: s, favorite: f }) => (
                 <tr key={season} className={trCls}>
                   <td className="px-3 py-2 font-bold">{season}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{s.n.toLocaleString()}</td>
@@ -123,11 +132,13 @@ export default function TeamDetailModal({
                   <td className="px-3 py-2 text-right font-semibold tabular-nums" style={{ color: profitColor(s.roi) }}>
                     {roiPct(s.roi)}
                   </td>
+                  <td className="border-l border-slate-100 px-3 py-2 text-right tabular-nums text-slate-500">{f.n || "--"}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{pct(f.accuracy)}</td>
                 </tr>
               ))}
               {!bySeason.length && (
                 <tr>
-                  <td colSpan={5} className="px-3 py-6 text-center text-slate-400">
+                  <td colSpan={7} className="px-3 py-6 text-center text-slate-400">
                     No picks on this team yet.
                   </td>
                 </tr>
