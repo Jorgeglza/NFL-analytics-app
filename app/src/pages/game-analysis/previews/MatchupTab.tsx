@@ -23,6 +23,7 @@ import {
   defaultWeekNearToday,
   kickoffMs,
   probBundle,
+  pickWinner,
   MODEL_KEYS,
   MODEL_COLORS,
   type HistAgg,
@@ -439,7 +440,8 @@ export default function MatchupTab({
             {modelKeys.map(([k, lbl]) => {
               const [pA, pH] = bundle[k];
               const hasP = pA != null && pH != null;
-              const pickT = hasP ? (pA! >= pH! ? away : home) : null;
+              const side = pickWinner(bundle[k]);
+              const pickT = side === "away" ? away : side === "home" ? home : null;
               const conf = hasP ? Math.max(pA!, pH!) : null;
               const isCons = k === "consensus";
               return (

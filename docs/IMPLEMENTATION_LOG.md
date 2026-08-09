@@ -78,6 +78,31 @@ Full work list, with per-item checkboxes and severities: **`docs/MOBILE_READINES
 - Verified as already correct, do not churn: viewport meta; **Tailwind v4 wraps `hover:` in `@media (hover: hover)` by default** (checked in `node_modules/tailwindcss/dist/lib.mjs`, v4.3.2) so hover states do not stick on touch; `Navbar.tsx` mobile menu; `useECharts` ResizeObserver; 17 of 19 tables already wrapped in `overflow-x-auto`.
 - ✅ **Phase 8 data loading reliability & payload (2026-08-02)** — a post-close-out follow-up (users reported mobile data "sometimes won't load"), full per-item writeup in `docs/MOBILE_READINESS.md`'s Phase 8 section. Root-caused three independent issues: (1) `player_week/2025.json` was 13.7 MB (~7x every other season) because a silent `nfl_data_py`→`nflreadpy` fallback for 2025 only pulled in every position plus 91 extra stat columns — fixed at the `export_json.py` export layer only (no `fetch.py`/model/parity impact), confirmed via `git status` that only `player_week/2025.json` changed after a full re-export; (2) `loader.ts`'s `fetchJson` had no timeout/retry and cached failures forever — added a 15s `AbortController` timeout, 2x retry-with-backoff on network/timeout failures only, cache eviction on final failure, and a new `ErrorRetry` UI component instead of an infinite spinner; (3) `MatchupPreviews.tsx`/`ModelsGuide.tsx` eagerly fetched every season's `team_week`/`team_week_ranks` (~14 MB/~9 MB) regardless of device — now gated by a new `useIsMobileViewport()` hook (mirrors the `sm`/640px breakpoint): mobile fetches only `meta.current_season` eagerly and the rest in the background, desktop reproduces the original single eager fetch with zero code-path change (verified via `read_network_requests` at both 375px and 1280px). **Also found and fixed live during verification**: `meta.json`'s `seasons` list included the current (unpublished, post-August-rollover) season even though no data files existed for it — a pre-existing bug, invisible before this session's reliability work made failures visible instead of an infinite hang, now fixed by deriving `meta.seasons` from the seasons that actually got exported. Documented both fixes in `docs/known-issues.md` #17-18. Verified: `tsc --noEmit`/`npm run build`/60-test suite green; pipeline `--stage export`/`--stage parity`/`--stage validate` green; browser-pane checks at 375px and 1280px on Matchup Previews, Models Guide, and Prop Bets Players confirmed zero console errors and correct fetch-pattern split. **Follow-up P8.4 (same day)**: wired the same `loadError`/`retryTick`/`ErrorRetry` pattern into the 5 player-analysis pages (`PropBets`, `ValueBets`, `MatchupBets`, `ParlayBuilder`, `PlayerTeamStats`), which had only gotten the invisible half of P8.2 (bounded failure, no visible recovery). Verified live with a real failure simulation — patched `fetch` to reject `player_week` requests, confirmed `ErrorRetry` renders after retries exhaust, then confirmed clicking Retry genuinely re-fetches and recovers (not just a pattern-matching inspection). **Follow-up P8.5 (same day)**: same gap existed on the two "Data" pages (`GradingModel.tsx`, `PredictiveModel.tsx`) — no multi-season payload problem there, but the same missing `ErrorRetry`. Wired identically (`PredictiveModel.tsx` got two independent error states since its Explanation-tab `game_features.json` fetch already had its own deferred loading state from P7.3). Live failure-path re-test wasn't possible for these two given a tooling limitation (both files were already cached in-tab, and a full reload needed to force a fresh request also wipes a monkey-patched `fetch` before React's effect fires) — documented as such rather than faked; confidence rests on the pattern being identical to P8.4's already-live-tested one. **Follow-up P8.6 (same day)**: a full route sweep found the identical gap in the remaining 7 routes with data fetches — `TeamTrends`, `SeasonOutlook`, `GamePicks`, `WinTypes`, `SpreadWinPct`, `TeamComparison`, `Scorecards` (none have the multi-season payload problem; `Home.tsx` already degrades gracefully and didn't need it; `GlossaryPage` has no fetch). Wired identically across all 7. Live failure-path re-tested successfully on `TeamTrends.tsx` (block → switch season to force a fresh fetch → `ErrorRetry` renders → unblock → Retry recovers). This test also caught a pure tooling artifact worth remembering: a transient dev-server HMR reconnect left the browser-automation tool's cached element ref stale, so a coordinate-based Retry click silently no-opped until a direct `element.click()` via `javascript_tool` confirmed the retry mechanism itself was correct all along — not a code bug. This closes out `ErrorRetry` coverage across every route in the app that fetches data.
 
+### M7 — Model Backtest page ✅ (2026-08-09)
+- ✅ `/data/model_backtest` (Overview/By Model/By Season/By Team/Calibration/Methodology tabs) —
+  the half of `docs/FUTURE_DEVELOPMENT.md`'s Model Backtest scoping that was buildable straight
+  from existing data, extended with the actual ask: real dollar profit/ROI betting straight-up
+  against `schedule.json`'s moneyline odds, not just accuracy. `pickWinner()` factored into
+  `engine.ts` (was duplicated inline in `WeekPreviewTab.tsx`/`MatchupTab.tsx`, both now call it);
+  new `lib/logic/backtest.ts` (`buildGameBacktestRows` — calls `probBundle()` once per game, fans
+  out to every `MODEL_KEYS` entry; `summarize`/`summarizeByModel`/`summarizeBySeason`/
+  `summarizeByTeam`/`cumulativeProfitSeries`/`calibrationBuckets`) plus `moneyline.ts`'s new
+  `payout()`. Flat $100 unit stake (confirmed with user over a compounding bankroll — isolates
+  pick quality from bankroll sizing). No pipeline/data changes — everything computed client-side,
+  same as `ModelOverviewTab`/`ModelPickerTab` already do at this scale.
+- Verified: `tsc -b --noEmit` and the 62-test Vitest suite green; hand-checked `payout()` against
+  known American-odds payouts (`payout(-150,100,true)===66.67`, `payout(130,100,true)===130`,
+  any loss `===-100`); per-season `predictive` accuracy in the new page reconciles closely with
+  `predictive_model/season_summary.json`'s `model_accuracy` (within ~0.3pp/season — small enough
+  to be a couple of rounding-edge games, not a filter bug); `ml` sub-model's aggregate ROI landed
+  at −2.9% (betting the vig-free favorite straight-up loses to the vig over a large sample, as
+  expected — not a sign/stake bug). Browser-pane check across all 6 tabs at 1280×800: zero
+  console errors, numbers render and cross-check between tabs (By Season totals sum to By Model's
+  season-pooled figures). Screenshot capture is still broken in this environment (same standing
+  tooling limitation noted throughout M6) — verified via `get_page_text`/DOM queries instead.
+- Docs updated: `docs/FUTURE_DEVELOPMENT.md` (Model Backtest marked built), `docs/page-mapping.md`
+  (new page row), `docs/logic-reference.md` §6 (payout/ROI formulas + unit-stake convention).
+
 ### F1 — Fantasy Draft page — ⛔ scrapped (2026-08-03)
 - Was scoped as a fully independent pipeline scraping consensus rankings from CBS/ESPN/TheScore.
   Per explicit user direction (2026-08-03: "for the fantasy draft page, drop all plans") this is
@@ -533,6 +558,15 @@ Full work list, with per-item checkboxes and severities: **`docs/MOBILE_READINES
 - Plan: `C:\Users\Jorge\.claude\plans\need-to-plan-the-cheerful-papert.md`.
 
 ## Session notes (newest first)
+
+### 2026-08-09 — Model Backtest page (M7)
+Built `/data/model_backtest` per the user's request: is any prediction model profitable betting
+straight-up against real moneyline payout odds, by model/season/team, with trends. See the M7
+roadmap entry above for the full detail. Also did a doc-freshness pass first (unrelated,
+same session): fixed `CLAUDE.md` (weekly GitHub Actions automation is live, not "later"; added
+`pipeline/predictive_model/` as a second pipeline package) and `docs/page-mapping.md` (Power
+Rankings is a Season Outlook tab now, not a standalone page; Model Overview computes client-side,
+no `model_overview.json` export).
 
 ### 2026-08-07 (cont.) — Win Rate & Calibration: population filter defaulted to an empty season
 

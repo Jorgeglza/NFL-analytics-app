@@ -19,3 +19,14 @@ export function fairProbs(awayMl: number | null, homeMl: number | null): FairPro
   const total = pa + ph;
   return { awayFair: pa / total, homeFair: ph / total, overround: total - 1 };
 }
+
+/** Profit on a flat `stake`-unit moneyline bet at American odds `ml`: `-stake` on a
+ * loss, and on a win, standard American-odds payout — positive ml pays `ml/100*stake`,
+ * negative ml pays `100/|ml|*stake` (the odds actually taken, vig included; the
+ * inverse of `impliedProb`). Returns `null` for missing/invalid odds so callers can
+ * tell "no bet" apart from a real $0 result. */
+export function payout(ml: number | null, stake: number, won: boolean): number | null {
+  if (ml == null || !Number.isFinite(ml) || ml === 0) return null;
+  if (!won) return -stake;
+  return ml > 0 ? (ml / 100) * stake : (100 / -ml) * stake;
+}

@@ -105,6 +105,12 @@ export const NAV_GROUPS: NavGroup[] = [
         description: "Margin-regression model explored against the market — performance, feature importance and calibration",
         implemented: true,
       },
+      {
+        label: "Model Backtest",
+        path: "/data/model_backtest",
+        description: "Straight-up moneyline profitability of every prediction model — by model, season and team",
+        implemented: true,
+      },
     ],
   },
 ];

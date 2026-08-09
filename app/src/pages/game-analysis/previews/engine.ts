@@ -40,6 +40,16 @@ export const MODEL_COLORS: Record<MetricKey, string> = {
 export const favoriteSide = (spread: number | null): "home" | "away" | null =>
   spread == null || Number.isNaN(spread) ? null : spread < 0 ? "home" : spread > 0 ? "away" : null;
 
+/** Straight-up pick from an (away, home) probability pair — null-safe, ties go to
+ * home (pAway >= pHome). Factored out of the identical inline comparisons in
+ * WeekPreviewTab/MatchupTab/ModelOverviewTab/ModelPickerTab so every consumer
+ * (including the Model Backtest page) shares one implementation. */
+export function pickWinner(pAwayHome: readonly [number | null, number | null]): "away" | "home" | null {
+  const [pA, pH] = pAwayHome;
+  if (pA == null || pH == null) return null;
+  return pA >= pH ? "away" : "home";
+}
+
 export const resultWinner = (g: Row): "home" | "away" | null => {
   if (g.home_score == null || g.away_score == null) return null;
   const hs = Number(g.home_score);
