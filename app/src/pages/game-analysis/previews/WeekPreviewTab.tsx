@@ -72,13 +72,18 @@ function DotPopover({ pH, label, color, away, home, actual }: { pH: number; labe
   );
 }
 
+/** How long a tap-opened dot popover stays up before auto-dismissing, on
+ * top of closing early via an outside click/tap or Escape. */
+const DOT_TAP_AUTOCLOSE_MS = 2500;
+
 /** Compact disagreement strip: each model's home-win prob as a dot on a 0–100% track.
- * Dots reveal the detail popover on hover (desktop) or tap (mobile — click
- * pins it open, since touch has no hover) without triggering the card's own
- * onClick navigation. */
+ * Hover (desktop) reveals the detail popover instantly and hides it on
+ * mouse-out. Click/tap (mobile, which has no hover) pins it open briefly —
+ * it auto-dismisses after a few seconds, or immediately on an outside click
+ * or Escape — without triggering the card's own onClick navigation. */
 function ModelDotStrip({ bundle, away, home, actual }: { bundle: ProbBundle; away: string; home: string; actual: "home" | "away" | null }) {
   type Key = MetricKey | "consensus";
-  const [openKey, setOpenKey] = useState<Key | null>(null); // pinned open by click/tap
+  const [openKey, setOpenKey] = useState<Key | null>(null); // tap-opened, auto-dismisses
   const [hoverKey, setHoverKey] = useState<Key | null>(null); // shown transiently by hover/focus
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -90,10 +95,12 @@ function ModelDotStrip({ bundle, away, home, actual }: { bundle: ProbBundle; awa
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpenKey(null);
     };
+    const autoClose = window.setTimeout(() => setOpenKey(null), DOT_TAP_AUTOCLOSE_MS);
     document.addEventListener("click", onOutside);
     document.addEventListener("touchstart", onOutside);
     window.addEventListener("keydown", onKey);
     return () => {
+      window.clearTimeout(autoClose);
       document.removeEventListener("click", onOutside);
       document.removeEventListener("touchstart", onOutside);
       window.removeEventListener("keydown", onKey);
