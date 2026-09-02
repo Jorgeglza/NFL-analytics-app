@@ -37,6 +37,23 @@ export const MODEL_COLORS: Record<MetricKey, string> = {
   predictive: "#6B7280",
 };
 
+function hexToRgb(hex: string): [number, number, number] {
+  const s = hex.replace("#", "");
+  return [parseInt(s.slice(0, 2), 16), parseInt(s.slice(2, 4), 16), parseInt(s.slice(4, 6), 16)];
+}
+/** Mix a model color toward black — the selected state of a model picker pill. */
+export function darkenColor(hex: string, amount = 0.32): string {
+  const [r, g, b] = hexToRgb(hex);
+  const mix = (c: number) => Math.round(c * (1 - amount));
+  return `rgb(${mix(r)}, ${mix(g)}, ${mix(b)})`;
+}
+/** Mix a model color toward white — the unselected/inactive state of a model picker pill. */
+export function lightenColor(hex: string, amount = 0.82): string {
+  const [r, g, b] = hexToRgb(hex);
+  const mix = (c: number) => Math.round(c + (255 - c) * amount);
+  return `rgb(${mix(r)}, ${mix(g)}, ${mix(b)})`;
+}
+
 export const favoriteSide = (spread: number | null): "home" | "away" | null =>
   spread == null || Number.isNaN(spread) ? null : spread < 0 ? "home" : spread > 0 ? "away" : null;
 

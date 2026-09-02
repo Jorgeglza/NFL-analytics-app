@@ -1,5 +1,5 @@
 // Port of week_preview_tab.py — game cards for a week with 4 probability metrics.
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Row } from "../../../lib/data/loader";
 import type { TeamMeta } from "../../../lib/team/meta";
 import { Select } from "../../../components/filters/Select";
@@ -8,6 +8,8 @@ import { TeamLogoLink } from "../../../components/team/TeamLogoLink";
 import {
   MODEL_KEYS,
   MODEL_COLORS,
+  darkenColor,
+  lightenColor,
   type MetricKey,
   probBundle,
   pickWinner,
@@ -29,30 +31,123 @@ import {
   predictiveDisclaimer,
 } from "./engine";
 
-/** Compact disagreement strip: each model's home-win prob as a dot on a 0–100% track. */
-function ModelDotStrip({ bundle, away, home }: { bundle: ProbBundle; away: string; home: string }) {
+/** Anchored detail popover for one model's dot — tap/click target, since a
+ * bare `title` attribute never fires on touch. Mirrors InfoDot.tsx's
+ * open/outside-click/Escape pattern. */
+function DotPopover({ pH, label, color, away, home, actual }: { pH: number; label: string; color: string; away: string; home: string; actual: "home" | "away" | null }) {
+  const pctAway = Math.round(100 * (1 - pH));
+  const pctHome = Math.round(100 * pH);
+  const side = pickWinner([1 - pH, pH]);
+  const pick = side === "home" ? home : away;
+  const correct = actual != null ? side === actual : null;
+  // Keep the popover on-card/on-screen: dots near either end of the track
+  // would push a centered popover off the edge, so anchor to that edge instead.
+  const align = pH < 0.15 ? "left" : pH > 0.85 ? "right" : "center";
   return (
-    <div className="relative mt-2 h-5 rounded-full bg-slate-100" title="Each dot = one model's home-win probability. Spread-out dots = the models disagree.">
+    <span
+      role="tooltip"
+      className="absolute bottom-full z-20 mb-1.5 w-40 max-w-[70vw] rounded-xl border border-slate-200 bg-white p-2.5 text-left text-[11px] font-normal normal-case leading-snug text-slate-600 shadow-lg"
+      style={
+        align === "center"
+          ? { left: "50%", transform: "translateX(-50%)" }
+          : align === "left"
+            ? { left: 0 }
+            : { right: 0 }
+      }
+    >
+      <div className="mb-1 flex items-center gap-1.5 font-semibold text-slate-800">
+        <span className="inline-block h-2 w-2 rounded-full" style={{ background: color }} />
+        {label}
+      </div>
+      <div className="tabular-nums">{away} {pctAway}% | {home} {pctHome}%</div>
+      <div className="mt-1 flex items-center gap-1.5">
+        <span className="font-semibold text-slate-800">Pick: {pick}</span>
+        {correct != null && (
+          <span className={`rounded px-1 py-0.5 text-[10px] font-bold ${correct ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}>
+            {correct ? "✓ Correct" : "✗ Incorrect"}
+          </span>
+        )}
+      </div>
+    </span>
+  );
+}
+
+/** Compact disagreement strip: each model's home-win prob as a dot on a 0–100% track.
+ * Dots reveal the detail popover on hover (desktop) or tap (mobile — click
+ * pins it open, since touch has no hover) without triggering the card's own
+ * onClick navigation. */
+function ModelDotStrip({ bundle, away, home, actual }: { bundle: ProbBundle; away: string; home: string; actual: "home" | "away" | null }) {
+  type Key = MetricKey | "consensus";
+  const [openKey, setOpenKey] = useState<Key | null>(null); // pinned open by click/tap
+  const [hoverKey, setHoverKey] = useState<Key | null>(null); // shown transiently by hover/focus
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!openKey) return;
+    const onOutside = (e: MouseEvent | TouchEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpenKey(null);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpenKey(null);
+    };
+    document.addEventListener("click", onOutside);
+    document.addEventListener("touchstart", onOutside);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("click", onOutside);
+      document.removeEventListener("touchstart", onOutside);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [openKey]);
+
+  const dotHandlers = (k: Key) => ({
+    onMouseEnter: () => setHoverKey(k),
+    onMouseLeave: () => setHoverKey((v) => (v === k ? null : v)),
+    onFocus: () => setHoverKey(k),
+    onBlur: () => setHoverKey((v) => (v === k ? null : v)),
+    onClick: (e: React.MouseEvent) => {
+      e.stopPropagation();
+      setOpenKey((v) => (v === k ? null : k));
+    },
+  });
+
+  return (
+    <div ref={rootRef} className="relative mt-2 h-5 rounded-full bg-slate-100" title="Each dot = one model's home-win probability. Hover or tap a dot for details. Spread-out dots = the models disagree.">
       <div className="absolute inset-y-0 left-1/2 w-px bg-slate-300" />
       <span className="absolute -top-0.5 left-1/2 -translate-x-1/2 text-[8px] text-slate-400">50%</span>
       {MODEL_KEYS.filter(([k]) => k !== "consensus").map(([k, lbl]) => {
         const pH = bundle[k][1];
         if (pH == null) return null;
+        const visible = openKey === k || hoverKey === k;
         return (
-          <span
+          <button
             key={k}
-            className="absolute top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white shadow-sm"
-            style={{ left: `${100 * pH}%`, background: MODEL_COLORS[k] }}
-            title={`${lbl}: ${away} ${Math.round(100 * (1 - pH))}% | ${home} ${Math.round(100 * pH)}%`}
-          />
+            type="button"
+            aria-label={`${lbl} details`}
+            aria-expanded={visible}
+            {...dotHandlers(k)}
+            className="absolute top-1/2 flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center"
+            style={{ left: `${100 * pH}%` }}
+          >
+            <span className="h-2.5 w-2.5 rounded-full border border-white shadow-sm" style={{ background: MODEL_COLORS[k] }} />
+            {visible && <DotPopover pH={pH} label={lbl} color={MODEL_COLORS[k]} away={away} home={home} actual={actual} />}
+          </button>
         );
       })}
       {bundle.consensus[1] != null && (
-        <span
-          className="absolute top-1/2 h-3.5 w-1 -translate-x-1/2 -translate-y-1/2 rounded-sm"
-          style={{ left: `${100 * bundle.consensus[1]}%`, background: MODEL_COLORS.consensus }}
-          title={`Average: ${away} ${Math.round(100 * (1 - bundle.consensus[1]))}% | ${home} ${Math.round(100 * bundle.consensus[1])}%`}
-        />
+        <button
+          type="button"
+          aria-label="Average details"
+          aria-expanded={openKey === "consensus" || hoverKey === "consensus"}
+          {...dotHandlers("consensus")}
+          className="absolute top-1/2 flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center"
+          style={{ left: `${100 * bundle.consensus[1]}%` }}
+        >
+          <span className="h-3.5 w-1 rounded-sm" style={{ background: MODEL_COLORS.consensus }} />
+          {(openKey === "consensus" || hoverKey === "consensus") && (
+            <DotPopover pH={bundle.consensus[1]} label="Average" color={MODEL_COLORS.consensus} away={away} home={home} actual={actual} />
+          )}
+        </button>
       )}
       <span className="absolute -bottom-3.5 left-0 text-[8px] text-slate-400">← {away}</span>
       <span className="absolute -bottom-3.5 right-0 text-[8px] text-slate-400">{home} →</span>
@@ -171,11 +266,24 @@ export default function WeekPreviewTab({
         </FilterGroup>
         <FilterGroup label="Model — which pick counts">
           <div className="flex flex-wrap gap-2">
-            {modelKeys.map(([k, lbl]) => (
-              <button key={k} onClick={() => setPrimary(k)} className={`rounded-full px-3 py-1.5 text-sm ${primary === k ? "bg-[#002f6c] text-white shadow-sm" : "bg-slate-100 text-slate-600 hover:text-slate-900"}`}>
-                {lbl}
-              </button>
-            ))}
+            {modelKeys.map(([k, lbl]) => {
+              const selected = primary === k;
+              return (
+                <button
+                  key={k}
+                  onClick={() => setPrimary(k)}
+                  className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${selected ? "shadow-sm" : ""}`}
+                  style={
+                    selected
+                      ? { background: darkenColor(MODEL_COLORS[k]), color: "#fff" }
+                      : { background: lightenColor(MODEL_COLORS[k]), color: darkenColor(MODEL_COLORS[k], 0.15) }
+                  }
+                  title={`${lbl} — this pill's color matches its dot on each card's strip below`}
+                >
+                  {lbl}
+                </button>
+              );
+            })}
           </div>
         </FilterGroup>
         <FilterGroup label="Display — card order">
@@ -306,7 +414,7 @@ export default function WeekPreviewTab({
                 )}
               </div>
               <div className="pb-3">
-                <ModelDotStrip bundle={bundle} away={away} home={home} />
+                <ModelDotStrip bundle={bundle} away={away} home={home} actual={actual} />
               </div>
             </div>
           );
