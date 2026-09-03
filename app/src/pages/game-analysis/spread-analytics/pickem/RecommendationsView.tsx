@@ -15,8 +15,11 @@ import {
 import { currentWeek } from "../../../../lib/logic/defaultWeek";
 import { toGame, bucketOf, historicFavRate, type Game } from "../../../../lib/logic/spreadPicks";
 import { WIN_TYPE_COLORS } from "../../../../lib/logic/winType";
+import { getTeamMetaMap, type TeamMeta } from "../../../../lib/team/meta";
 import { Card, Kpi, RangeInput } from "../../../../components/ui";
 import { Select } from "../../../../components/filters/Select";
+import { TeamLogoLink } from "../../../../components/team/TeamLogoLink";
+import { FloatingTooltip } from "../../../../components/FloatingTooltip";
 import { Loading, ErrorRetry, Empty } from "../../../../components/Loading";
 
 const POOL_COLOR = "#9a9d92";
@@ -30,30 +33,113 @@ const CHECKLIST_REMINDERS = [
   "Situational spots — a letdown/lookahead game, a new play-caller, a backup QB's specific matchup fit.",
 ];
 
+interface SpreadPoint {
+  gameId: string;
+  awayTeam: string;
+  homeTeam: string;
+  spread: number;
+  absSpread: number;
+  favorite: "home" | "away" | null;
+}
+
 /** Small, subtle strip: one tick per this-week game at its |spread|, plus the
  * current threshold marker — a quick read on whether the slate runs tight or
- * wide before picking where to set the threshold. */
-function SpreadStrip({ spreads, threshold }: { spreads: number[]; threshold: number }) {
-  if (!spreads.length) return null;
-  const max = Math.max(threshold, ...spreads, 1);
+ * wide before picking where to set the threshold. Hovering a tick (or a
+ * cluster of ties at the same spread) shows the game(s) at that point. */
+function SpreadStrip({ games, threshold }: { games: SpreadPoint[]; threshold: number }) {
+  const [hover, setHover] = useState<{ key: string; x: number; y: number } | null>(null);
+  const groups = useMemo(() => {
+    const m = new Map<string, SpreadPoint[]>();
+    for (const g of games) {
+      const key = g.absSpread.toFixed(1);
+      if (!m.has(key)) m.set(key, []);
+      m.get(key)!.push(g);
+    }
+    return [...m.entries()]
+      .map(([key, pts]) => ({ key, absSpread: pts[0].absSpread, pts }))
+      .sort((a, b) => a.absSpread - b.absSpread);
+  }, [games]);
+
+  if (!games.length) return null;
+  const max = Math.max(threshold, ...games.map((g) => g.absSpread), 1);
   const W = 160;
-  const H = 18;
-  const x = (v: number) => 4 + (Math.min(v, max) / max) * (W - 8);
-  const min = Math.min(...spreads);
-  const maxSpread = Math.max(...spreads);
+  const H = 22;
+  const x = (v: number) => 5 + (Math.min(v, max) / max) * (W - 10);
+  const min = Math.min(...games.map((g) => g.absSpread));
+  const maxSpread = Math.max(...games.map((g) => g.absSpread));
+  const hoveredGroup = hover ? groups.find((g) => g.key === hover.key) : null;
+
   return (
     <div className="flex flex-col gap-1">
       <span className="text-[11px] font-medium uppercase tracking-wider text-slate-400">This week&apos;s spreads</span>
       <svg width={W} height={H} className="overflow-visible">
-        <line x1={4} y1={H / 2} x2={W - 4} y2={H / 2} stroke="#e2e8f0" strokeWidth={1} />
-        {spreads.map((s, i) => (
-          <circle key={i} cx={x(s)} cy={H / 2} r={2.5} fill={POOL_COLOR} opacity={0.75} />
+        <line x1={5} y1={H / 2} x2={W - 5} y2={H / 2} stroke="#e2e8f0" strokeWidth={1} />
+        {groups.map((g) => (
+          <circle
+            key={g.key}
+            cx={x(g.absSpread)}
+            cy={H / 2}
+            r={g.pts.length > 1 ? 5 : 4}
+            fill={POOL_COLOR}
+            opacity={hover?.key === g.key ? 1 : 0.75}
+            style={{ cursor: "pointer", transition: "opacity 0.12s ease" }}
+            onMouseEnter={(e) => {
+              const r = e.currentTarget.getBoundingClientRect();
+              setHover({ key: g.key, x: r.left + r.width / 2, y: r.top });
+            }}
+            onMouseLeave={() => setHover((h) => (h?.key === g.key ? null : h))}
+          />
         ))}
         <line x1={x(threshold)} y1={2} x2={x(threshold)} y2={H - 2} stroke="#002f6c" strokeWidth={1.5} />
       </svg>
+      {hover && hoveredGroup && (
+        <FloatingTooltip x={hover.x} y={hover.y}>
+          {hoveredGroup.pts.map((g) => (
+            <div key={g.gameId} className="whitespace-nowrap py-0.5 first:pt-0 last:pb-0">
+              <span className="font-semibold text-slate-700">
+                {g.awayTeam} @ {g.homeTeam}
+              </span>{" "}
+              <span className="text-slate-400">
+                &middot; {g.spread > 0 ? "+" : ""}
+                {g.spread} &middot;{" "}
+                {g.favorite ? (
+                  <span style={{ color: g.favorite === "home" ? WIN_TYPE_COLORS["Favorite home"] : WIN_TYPE_COLORS["Favorite away"] }}>
+                    {g.favorite === "home" ? g.homeTeam : g.awayTeam} favored
+                  </span>
+                ) : (
+                  "Pick'em"
+                )}
+              </span>
+            </div>
+          ))}
+        </FloatingTooltip>
+      )}
       <span className="text-[10px] text-slate-400">
         {min.toFixed(1)}–{maxSpread.toFixed(1)} pts &middot; line marks the {threshold}pt threshold
       </span>
+    </div>
+  );
+}
+
+/** Away @ home logo pair for a game card header — links each logo to Team
+ * Comparison for that matchup, same pattern as Matchup Previews' cards. */
+function TeamPair({ away, home, season, week, meta }: { away: string; home: string; season: string; week: string; meta: Map<string, TeamMeta> }) {
+  const awayLogo = meta.get(away)?.logo;
+  const homeLogo = meta.get(home)?.logo;
+  const to = `/game_analysis/team_comparison?team1=${away}&team2=${home}&season=${season}&week=${week}`;
+  return (
+    <div className="flex shrink-0 items-center gap-1.5">
+      {awayLogo ? (
+        <TeamLogoLink to={to} logo={awayLogo} alt={away} imgClassName="h-8 w-8 object-contain" title={`Compare ${away} vs ${home}`} />
+      ) : (
+        <span className="text-xs font-bold text-slate-400">{away}</span>
+      )}
+      <span className="text-[10px] text-slate-300">@</span>
+      {homeLogo ? (
+        <TeamLogoLink to={to} logo={homeLogo} alt={home} imgClassName="h-8 w-8 object-contain" title={`Compare ${away} vs ${home}`} />
+      ) : (
+        <span className="text-xs font-bold text-slate-400">{home}</span>
+      )}
     </div>
   );
 }
@@ -68,6 +154,7 @@ export default function RecommendationsView() {
   const [schedule, setSchedule] = useState<Row[]>([]);
   const [upcoming, setUpcoming] = useState<Row[]>([]);
   const [upcomingMeta, setUpcomingMeta] = useState<{ season: number | null; week: number | null; n_games: number } | null>(null);
+  const [teamMeta, setTeamMeta] = useState<Map<string, TeamMeta>>(new Map());
   const [loadError, setLoadError] = useState<string | null>(null);
   const [retryTick, setRetryTick] = useState(0);
 
@@ -85,6 +172,7 @@ export default function RecommendationsView() {
         setUpcomingMeta(meta);
       })
       .catch((err) => setLoadError(err instanceof Error ? err.message : "Failed to load"));
+    getTeamMetaMap().then(setTeamMeta);
   }, [retryTick]);
 
   const reg = useMemo(() => schedule.filter((r) => r.game_type === "REG"), [schedule]);
@@ -170,7 +258,17 @@ export default function RecommendationsView() {
             options={weeksForSeason.map((w) => ({ value: String(w), label: `Week ${w}` }))}
           />
           <RangeInput label={`Auto-pick favorite when spread > ${threshold} pts`} value={threshold} onChange={setThreshold} min={3} max={10} step={0.5} />
-          <SpreadStrip spreads={weekGames.map((g) => g.absSpread)} threshold={threshold} />
+          <SpreadStrip
+            games={weekGames.map((g) => ({
+              gameId: g.gameId,
+              awayTeam: g.awayTeam,
+              homeTeam: g.homeTeam,
+              spread: g.spread,
+              absSpread: g.absSpread,
+              favorite: g.favorite,
+            }))}
+            threshold={threshold}
+          />
         </div>
       </Card>
 
@@ -197,16 +295,19 @@ export default function RecommendationsView() {
                 return (
                   <Card key={g.gameId} accent={favColor}>
                     <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <div className="text-xs font-medium uppercase tracking-wider text-slate-400">
-                          {g.awayTeam} @ {g.homeTeam} &middot; spread {g.spread > 0 ? "+" : ""}
-                          {g.spread}
-                        </div>
-                        <div className="mt-0.5 text-lg font-bold text-slate-900">
-                          Pick <span style={{ color: favColor }}>{favTeam}</span>
-                          <span className="ml-2 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white" style={{ background: favColor }}>
-                            Favorite &middot; |spread| {g.absSpread.toFixed(1)}
-                          </span>
+                      <div className="flex items-center gap-3">
+                        <TeamPair away={g.awayTeam} home={g.homeTeam} season={season} week={week} meta={teamMeta} />
+                        <div>
+                          <div className="text-xs font-medium uppercase tracking-wider text-slate-400">
+                            {g.awayTeam} @ {g.homeTeam} &middot; spread {g.spread > 0 ? "+" : ""}
+                            {g.spread}
+                          </div>
+                          <div className="mt-0.5 text-lg font-bold text-slate-900">
+                            Pick <span style={{ color: favColor }}>{favTeam}</span>
+                            <span className="ml-2 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white" style={{ background: favColor }}>
+                              Favorite &middot; |spread| {g.absSpread.toFixed(1)}
+                            </span>
+                          </div>
                         </div>
                       </div>
                       <div className="text-right text-xs text-slate-500">
@@ -236,12 +337,15 @@ export default function RecommendationsView() {
                 <Card key={g.gameId} accent={POOL_COLOR}>
                   <div className="space-y-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div>
-                        <div className="text-xs font-medium uppercase tracking-wider text-slate-400">
-                          {g.awayTeam} @ {g.homeTeam} &middot; spread {g.spread > 0 ? "+" : ""}
-                          {g.spread}
+                      <div className="flex items-center gap-3">
+                        <TeamPair away={g.awayTeam} home={g.homeTeam} season={season} week={week} meta={teamMeta} />
+                        <div>
+                          <div className="text-xs font-medium uppercase tracking-wider text-slate-400">
+                            {g.awayTeam} @ {g.homeTeam} &middot; spread {g.spread > 0 ? "+" : ""}
+                            {g.spread}
+                          </div>
+                          <div className="mt-0.5 text-lg font-bold text-slate-900">Coin flip</div>
                         </div>
-                        <div className="mt-0.5 text-lg font-bold text-slate-900">Coin flip</div>
                       </div>
                       <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold text-white" style={{ background: POOL_COLOR }}>
                         |spread| {g.absSpread.toFixed(1)} &le; {threshold}

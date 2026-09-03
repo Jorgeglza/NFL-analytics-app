@@ -14,11 +14,15 @@ import { WIN_TYPE_COLORS } from "../../../../lib/logic/winType";
 import { joinGamesAndFeatures, edgeFactorsForZone, zoneModelAccuracy, zoneGameCount, coinFlipBand, type Zone } from "../../../../lib/logic/edgeFactors";
 import { POOL_WEEKLY_2025, POOL_REFERENCE_SEASON, UPSET_CALL_RATES_2025, poolWeekReference } from "../../../../lib/data/pickemPoolReference";
 import { Card, Kpi } from "../../../../components/ui";
+import { FloatingTooltip } from "../../../../components/FloatingTooltip";
 import { Loading, ErrorRetry } from "../../../../components/Loading";
 
 const NAVY = "#002f6c";
 const POOL_COLOR = "#9a9d92";
 const WINNER_COLOR = "#b3821a";
+const MODEL_COLOR = "#2a78d6";
+const MARKET_COLOR = "#eb6834";
+const ELO_COLOR = "#1baf7a";
 const pct = (v: number) => `${(v * 100).toFixed(1)}%`;
 
 function BarRow({ label, sub, value, max, color }: { label: string; sub?: string; value: number; max: number; color: string }) {
@@ -59,6 +63,143 @@ function DivergingRow({ label, sub, value, band, n }: { label: string; sub?: str
       <div className="text-right text-xs font-semibold text-slate-800">
         {pct(value)} <span className="text-slate-400">n={n}</span>
       </div>
+    </div>
+  );
+}
+
+interface FieldWeek {
+  week: number;
+  humanBest: number;
+  humanAvg: number;
+  humanMin: number;
+  model: number | null;
+  market: number | null;
+  elo: number | null;
+}
+
+/** Weekly score vs. the field — the shaded band spans the pool's worst-to-
+ * best score each week (static 2025 reference), the dashed line is the pool
+ * average, and the three solid lines are how the model/market/Elo would have
+ * scored those same weeks, computed live from this app's own predictive-model
+ * export. Hover a week for the exact tally. */
+function WeeklyFieldChart({ weeks }: { weeks: FieldWeek[] }) {
+  const [hover, setHover] = useState<{ i: number; x: number; y: number } | null>(null);
+  const n = weeks.length;
+  const W = 720;
+  const H = 220;
+  const M = { top: 12, right: 12, bottom: 22, left: 26 };
+  const plotW = W - M.left - M.right;
+  const plotH = H - M.top - M.bottom;
+  const xFor = (i: number) => M.left + (plotW * i) / (n - 1);
+  const maxVal = Math.max(1, ...weeks.map((w) => Math.max(w.humanBest, w.model ?? 0, w.market ?? 0, w.elo ?? 0))) + 1;
+  const yFor = (v: number) => M.top + plotH * (1 - v / maxVal);
+
+  const bandPath = useMemo(() => {
+    if (!n) return "";
+    let d = `M ${xFor(0)} ${yFor(weeks[0].humanBest)}`;
+    weeks.forEach((w, i) => (d += ` L ${xFor(i)} ${yFor(w.humanBest)}`));
+    for (let i = n - 1; i >= 0; i--) d += ` L ${xFor(i)} ${yFor(weeks[i].humanMin)}`;
+    return `${d} Z`;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weeks]);
+
+  const linePath = (key: "humanAvg" | "model" | "market" | "elo") => {
+    let d = "";
+    let started = false;
+    weeks.forEach((w, i) => {
+      const v = w[key];
+      if (v == null) {
+        started = false;
+        return;
+      }
+      d += `${started ? "L" : "M"} ${xFor(i)} ${yFor(v)} `;
+      started = true;
+    });
+    return d.trim();
+  };
+
+  const yTicks = useMemo(() => {
+    const step = Math.max(1, Math.round(maxVal / 4));
+    const ticks: number[] = [];
+    for (let v = 0; v <= maxVal; v += step) ticks.push(v);
+    return ticks;
+  }, [maxVal]);
+
+  const colW = n > 1 ? plotW / (n - 1) : plotW;
+  const hovered = hover != null ? weeks[hover.i] : null;
+
+  return (
+    <div>
+      <div className="mb-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500">
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: POOL_COLOR, opacity: 0.25 }} /> Human range (min–max)
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block h-0.5 w-3" style={{ background: POOL_COLOR }} /> Human average
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block h-0.5 w-3" style={{ background: MODEL_COLOR }} /> Model
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block h-0.5 w-3" style={{ background: MARKET_COLOR }} /> Market
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block h-0.5 w-3" style={{ background: ELO_COLOR }} /> Elo
+        </span>
+      </div>
+      <div className="overflow-x-auto">
+        <svg viewBox={`0 0 ${W} ${H}`} className="block h-auto w-full" style={{ minWidth: 480 }}>
+          {yTicks.map((v) => (
+            <g key={v}>
+              <line x1={M.left} x2={W - M.right} y1={yFor(v)} y2={yFor(v)} stroke="#e2e8f0" strokeWidth={1} />
+              <text x={M.left - 6} y={yFor(v) + 3} textAnchor="end" fontSize={9} fill="#94a3b8">
+                {v}
+              </text>
+            </g>
+          ))}
+          {weeks.map((w, i) => (i % 2 === 0 || i === n - 1) && (
+            <text key={w.week} x={xFor(i)} y={H - 6} textAnchor="middle" fontSize={9} fill="#94a3b8">
+              {w.week}
+            </text>
+          ))}
+
+          <path d={bandPath} fill={POOL_COLOR} fillOpacity={0.15} stroke="none" />
+          <path d={linePath("humanAvg")} fill="none" stroke={POOL_COLOR} strokeWidth={1.5} strokeDasharray="4,3" />
+          <path d={linePath("model")} fill="none" stroke={MODEL_COLOR} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+          <path d={linePath("market")} fill="none" stroke={MARKET_COLOR} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+          <path d={linePath("elo")} fill="none" stroke={ELO_COLOR} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+
+          {hover != null && <line x1={xFor(hover.i)} x2={xFor(hover.i)} y1={M.top} y2={H - M.bottom} stroke="#94a3b8" strokeWidth={1} strokeDasharray="2,3" />}
+
+          {weeks.map((_, i) => (
+            <rect
+              key={i}
+              x={Math.max(M.left, xFor(i) - colW / 2)}
+              y={M.top}
+              width={colW}
+              height={plotH}
+              fill="transparent"
+              style={{ cursor: "pointer" }}
+              onMouseEnter={(e) => {
+                const r = e.currentTarget.getBoundingClientRect();
+                setHover({ i, x: r.left + r.width / 2, y: r.top });
+              }}
+              onMouseLeave={() => setHover((h) => (h?.i === i ? null : h))}
+            />
+          ))}
+        </svg>
+      </div>
+      {hover && hovered && (
+        <FloatingTooltip x={hover.x} y={hover.y}>
+          <div className="mb-0.5 font-semibold text-slate-700">Week {hovered.week}</div>
+          <div className="text-slate-500">
+            Human best/avg/min: {hovered.humanBest} / {hovered.humanAvg.toFixed(1)} / {hovered.humanMin}
+          </div>
+          {hovered.model != null && <div style={{ color: MODEL_COLOR }}>Model: {hovered.model}</div>}
+          {hovered.market != null && <div style={{ color: MARKET_COLOR }}>Market: {hovered.market}</div>}
+          {hovered.elo != null && <div style={{ color: ELO_COLOR }}>Elo: {hovered.elo}</div>}
+        </FloatingTooltip>
+      )}
     </div>
   );
 }
@@ -117,6 +258,33 @@ export default function StoryView() {
     };
   }, [games]);
 
+  // Live weekly model/market/Elo score, for the same reference-season weeks
+  // the static pool band covers — straight-up correct-pick count per week
+  // (prob > 50% predicts home; ties the pool's own "correct picks" metric).
+  const fieldWeeks = useMemo<FieldWeek[]>(() => {
+    const rows = pmGames.filter((r) => Number(r.season) === POOL_REFERENCE_SEASON && r.home_win != null);
+    const byWeek = new Map<number, Row[]>();
+    for (const r of rows) {
+      const w = Number(r.week);
+      if (!byWeek.has(w)) byWeek.set(w, []);
+      byWeek.get(w)!.push(r);
+    }
+    const correctCount = (rs: Row[], probKey: string) =>
+      rs.filter((r) => r[probKey] != null && Number(r[probKey]) > 0.5 === (Number(r.home_win) === 1)).length;
+    return POOL_WEEKLY_2025.map((w) => {
+      const wr = byWeek.get(w.week) ?? [];
+      return {
+        week: w.week,
+        humanBest: w.humanBest,
+        humanAvg: w.humanAvg,
+        humanMin: w.humanMin,
+        model: wr.length ? correctCount(wr, "home_win_prob") : null,
+        market: wr.length ? correctCount(wr, "market_home_fair") : null,
+        elo: wr.length ? correctCount(wr, "elo_p_home") : null,
+      };
+    });
+  }, [pmGames]);
+
   const joined = useMemo(() => joinGamesAndFeatures(pmGames, pmFeatures), [pmGames, pmFeatures]);
   const zones: Zone[] = ["0-3", "4-5"];
   const zoneData = useMemo(
@@ -160,6 +328,13 @@ export default function StoryView() {
       </Card>
 
       <Card
+        title="Weekly score vs. the field"
+        subtitle={`The shaded band spans the ${POOL_REFERENCE_SEASON} pool's worst-to-best score each week (static reference); the dashed line is the pool average. The model/market/Elo lines are computed live from this app's own data for those same weeks. Hover a week for the exact tally.`}
+      >
+        <WeeklyFieldChart weeks={fieldWeeks} />
+      </Card>
+
+      <Card
         title={`Pool reference — ${POOL_REFERENCE_SEASON} season`}
         subtitle="A static snapshot from a private 98-entrant pick'em pool the user tracks — not derived from this app's data, and not updated automatically. For a current-season week not yet played, the number shown is last year's winning score for that same week, as a rough target."
       >
@@ -197,9 +372,9 @@ export default function StoryView() {
         <div className="space-y-2.5">
           <BarRow label="Weekly winner(s)" value={UPSET_CALL_RATES_2025.winner} max={UPSET_CALL_RATES_2025.winner} color={WINNER_COLOR} />
           <BarRow label="Pool average" value={UPSET_CALL_RATES_2025.pool} max={UPSET_CALL_RATES_2025.winner} color={POOL_COLOR} />
-          <BarRow label="Model" value={UPSET_CALL_RATES_2025.model} max={UPSET_CALL_RATES_2025.winner} color="#2a78d6" />
-          <BarRow label="Market" value={UPSET_CALL_RATES_2025.market} max={UPSET_CALL_RATES_2025.winner} color="#eb6834" />
-          <BarRow label="Elo" value={UPSET_CALL_RATES_2025.elo} max={UPSET_CALL_RATES_2025.winner} color="#1baf7a" />
+          <BarRow label="Model" value={UPSET_CALL_RATES_2025.model} max={UPSET_CALL_RATES_2025.winner} color={MODEL_COLOR} />
+          <BarRow label="Market" value={UPSET_CALL_RATES_2025.market} max={UPSET_CALL_RATES_2025.winner} color={MARKET_COLOR} />
+          <BarRow label="Elo" value={UPSET_CALL_RATES_2025.elo} max={UPSET_CALL_RATES_2025.winner} color={ELO_COLOR} />
         </div>
       </Card>
 

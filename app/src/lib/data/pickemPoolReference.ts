@@ -6,36 +6,38 @@
 // for the Pick'em Recommendations Story view. Do not treat as live data, and
 // do not extend past the 2025 season without a fresh pool export to back it.
 //
-// human_best/human_avg = the pool's top and average correct-pick count that
-// week (out of `games` scored games). Source: the artifact's per-week table.
+// human_best/human_avg/human_min = the pool's top, average, and worst
+// correct-pick count that week (out of `games` scored games). Source: the
+// artifact's per-week table.
 export interface PoolWeek {
   week: number;
   games: number;
   humanBest: number;
   humanAvg: number;
+  humanMin: number;
 }
 
 export const POOL_REFERENCE_SEASON = 2025;
 
 export const POOL_WEEKLY_2025: PoolWeek[] = [
-  { week: 1, games: 16, humanBest: 15, humanAvg: 11.3 },
-  { week: 2, games: 16, humanBest: 15, humanAvg: 11.6 },
-  { week: 3, games: 16, humanBest: 14, humanAvg: 10.4 },
-  { week: 4, games: 16, humanBest: 12, humanAvg: 9.5 },
-  { week: 5, games: 14, humanBest: 9, humanAvg: 5.7 },
-  { week: 6, games: 15, humanBest: 12, humanAvg: 9.1 },
-  { week: 7, games: 15, humanBest: 14, humanAvg: 10.5 },
-  { week: 8, games: 13, humanBest: 11, humanAvg: 8.3 },
-  { week: 9, games: 14, humanBest: 11, humanAvg: 8.2 },
-  { week: 10, games: 14, humanBest: 11, humanAvg: 8.6 },
-  { week: 11, games: 15, humanBest: 14, humanAvg: 10.4 },
-  { week: 12, games: 14, humanBest: 13, humanAvg: 10.1 },
-  { week: 13, games: 16, humanBest: 13, humanAvg: 9.2 },
-  { week: 14, games: 14, humanBest: 10, humanAvg: 7.3 },
-  { week: 15, games: 16, humanBest: 13, humanAvg: 9.3 },
-  { week: 16, games: 16, humanBest: 14, humanAvg: 10.1 },
-  { week: 17, games: 16, humanBest: 12, humanAvg: 8.3 },
-  { week: 18, games: 16, humanBest: 13, humanAvg: 9.2 },
+  { week: 1, games: 16, humanBest: 15, humanAvg: 11.3, humanMin: 8 },
+  { week: 2, games: 16, humanBest: 15, humanAvg: 11.6, humanMin: 9 },
+  { week: 3, games: 16, humanBest: 14, humanAvg: 10.4, humanMin: 6 },
+  { week: 4, games: 16, humanBest: 12, humanAvg: 9.5, humanMin: 0 },
+  { week: 5, games: 14, humanBest: 9, humanAvg: 5.7, humanMin: 3 },
+  { week: 6, games: 15, humanBest: 12, humanAvg: 9.1, humanMin: 5 },
+  { week: 7, games: 15, humanBest: 14, humanAvg: 10.5, humanMin: 0 },
+  { week: 8, games: 13, humanBest: 11, humanAvg: 8.3, humanMin: 4 },
+  { week: 9, games: 14, humanBest: 11, humanAvg: 8.2, humanMin: 0 },
+  { week: 10, games: 14, humanBest: 11, humanAvg: 8.6, humanMin: 3 },
+  { week: 11, games: 15, humanBest: 14, humanAvg: 10.4, humanMin: 6 },
+  { week: 12, games: 14, humanBest: 13, humanAvg: 10.1, humanMin: 7 },
+  { week: 13, games: 16, humanBest: 13, humanAvg: 9.2, humanMin: 0 },
+  { week: 14, games: 14, humanBest: 10, humanAvg: 7.3, humanMin: 0 },
+  { week: 15, games: 16, humanBest: 13, humanAvg: 9.3, humanMin: 0 },
+  { week: 16, games: 16, humanBest: 14, humanAvg: 10.1, humanMin: 0 },
+  { week: 17, games: 16, humanBest: 12, humanAvg: 8.3, humanMin: 0 },
+  { week: 18, games: 16, humanBest: 13, humanAvg: 9.2, humanMin: 0 },
 ];
 
 /** Looks up the 2025 reference row for a given week (season not required —

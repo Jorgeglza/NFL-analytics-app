@@ -559,6 +559,31 @@ Full work list, with per-item checkboxes and severities: **`docs/MOBILE_READINES
 
 ## Session notes (newest first)
 
+### 2026-09-02 (cont.) — Pick'em Recommendations: weekly field chart, hover tooltips, team logos
+User feedback on the new tab (three changes):
+- **Weekly field chart restored, near the top of the Story tab**: new `WeeklyFieldChart` in
+  `StoryView.tsx` — the artifact's "weekly score vs. the field" band+line chart (min–max shaded band,
+  dashed average) using the static 2025 pool reference (added `humanMin` per week to
+  `pickemPoolReference.ts`), plus **live** model/market/Elo weekly correct-pick-count lines computed
+  from `predictive_model/games.json` for the same 2025 weeks (straight-up: prob > 50% predicts home,
+  compared to `home_win`). Hover a week for the exact tally.
+- **Spread strip hover** (`RecommendationsView.tsx`): dots enlarged (3.5/4.5 → 4/5px), grouped by
+  exact |spread| so tied games share one point, and hovering now shows a tooltip with every game at
+  that spread (teams, spread, favored side).
+- **Team logos on game cards**: both card types (`RecommendationsView.tsx`) now show an away/home
+  logo pair via the existing `TeamLogoLink`/`getTeamMetaMap()` (same pattern as Matchup Previews'
+  cards), linking to Team Comparison for that matchup.
+- **Bug found + fixed while wiring hover**: both new hover tooltips were getting clipped by their
+  parent `Card`'s `overflow-hidden` (a `position:absolute` child can't escape it). Fixed with a new
+  shared `components/FloatingTooltip.tsx` — `createPortal`s to `document.body` and positions via
+  `getBoundingClientRect()` on the hovered element, so it always renders above any ancestor's
+  overflow/z-index. Used by both the spread strip and the weekly field chart; worth reusing for any
+  future hover-chart tooltip in a `Card`.
+- Verified in the browser pane: both tooltips render fully (not clipped) with correct grouped/joined
+  content, logos load in the real dist build's fonts/CDN (blocked only by this sandbox's lack of
+  internet egress to the ESPN logo CDN — same as every other page using `TeamLogoLink`). `npm run
+  build` green, no new type errors.
+
 ### 2026-09-02 — Pick'em Recommendations tab (Spread Analytics)
 New 2nd tab on Spread Analytics (right after Win Types): `spread-analytics/PickemRecommendationsTab.tsx`,
 a `Segmented` toggle between two sub-views, both client-side only, no pipeline changes.
