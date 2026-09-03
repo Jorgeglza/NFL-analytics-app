@@ -559,6 +559,39 @@ Full work list, with per-item checkboxes and severities: **`docs/MOBILE_READINES
 
 ## Session notes (newest first)
 
+### 2026-09-02 — Pick'em Recommendations tab (Spread Analytics)
+New 2nd tab on Spread Analytics (right after Win Types): `spread-analytics/PickemRecommendationsTab.tsx`,
+a `Segmented` toggle between two sub-views, both client-side only, no pipeline changes.
+- **Recommendations** (`pickem/RecommendationsView.tsx`): per-week favorite/coin-flip decision tool.
+  Season/week `Select` defaults to the live `predictive_model/upcoming.json` week, falling back to
+  `currentWeek(schedule)` in the offseason. An adjustable threshold (`RangeInput`, default >5 pts, 3–10
+  range) auto-recommends the favorite above it; games at/under it render as "Coin flip" with no auto-pick —
+  instead the FH/FA/UH/UA historical read for that game's spread bucket (via `spreadPicks.ts`'s existing
+  `historicFavRate`/`bucketOf`, same math as Weekly Picks) plus a situational chip row (`div_game`, `roof`,
+  `home_rest`/`away_rest` diff, all straight from `schedule.json` — works for future weeks too, unlike the
+  model's feature export which only covers played games) and a static "worth a human look, not a model"
+  checklist. A small inline-SVG spread-distribution strip next to the threshold slider shows the week's
+  min–max spreads at a glance.
+- **The Story** (`pickem/StoryView.tsx`): a recolored, paraphrased retelling of the user's own "Model vs.
+  the Pool" artifact (a Yahoo Pick'em pool analysis comparing the predictive model/market/Elo against 98
+  human entrants). Spread-bucket favorite win rate, home/away splits, and the "edge-hunting" factor-ranking
+  analysis are all recomputed **live** from this repo's own data (new `lib/logic/edgeFactors.ts`: joins
+  `predictive_model/games.json` + `game_features.json` by (season,week,home,away), computes sign-match hit
+  rates per feature, grouped into 6 human-readable families instead of the artifact's 33 individual bars,
+  bucketed into 0–3/4–5/7+ pt zones with a ±1.96·√(0.25/n) coin-flip band) — spot-checked against the
+  artifact's own frozen numbers as a sanity check (Elo clears the band at 4–5pt: 60.9% here vs. 60.86%
+  there; model accuracy 59.7% here vs. 59.67% there — matches closely despite different grouping/dataset
+  cutoff). The pool-vs-model comparison numbers (season scoreboard, upset-call-rate-by-entrant-type) have no
+  live source in this app (no pool-picks pipeline) and are ported as a static, clearly-labeled 2025 snapshot
+  in new `lib/data/pickemPoolReference.ts`; per the user's direction, a current-season week not yet played
+  shows last year's winning score for that week as a rough target instead of a live number. Cut from scope:
+  the artifact's interactive fade-favorites simulator and full 33-factor table (secondary value, high
+  engineering cost) — see the approved plan for full rationale.
+- Verified in the browser pane on 2026 week 1 (live `upcoming.json` week): favorite auto-picks show model
+  win prob/market fair (e.g. ARI @ LAC -10.5 → 69%/82%), coin-flip games (e.g. NE @ SEA -3.5) show FH/UA
+  historical splits (61%/39%) + division/roof/rest chips; Story tab renders real (non-NaN) numbers
+  throughout, zero console errors. `npm run build` green, no new type errors.
+
 ### 2026-08-09 — Model Backtest page (M7)
 Built `/data/model_backtest` per the user's request: is any prediction model profitable betting
 straight-up against real moneyline payout odds, by model/season/team, with trends. See the M7

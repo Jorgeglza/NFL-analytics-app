@@ -7,8 +7,11 @@
 // underdog question, made the default tab, and Spread Analytics moved up to
 // #2 in Game Analysis (see nav.ts) as part of the same change. Tab 2 (Win
 // Rate & Calibration) is the original page, unchanged — see
-// spread-analytics/WinRateTab.tsx's header for its own porting notes. Tab 3
-// (Weekly Breakdown) is new: per-week spread/upset analytics.
+// spread-analytics/WinRateTab.tsx's header for its own porting notes. Tab 4
+// (Weekly Breakdown) is new: per-week spread/upset analytics. Tab 2
+// (Pick'em Recommendations, added 2026-09-02) is a weekly favorite/coin-flip
+// decision tool plus a narrative "Story" view — see
+// spread-analytics/PickemRecommendationsTab.tsx.
 import { useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { usePageTitle } from "../../lib/hooks/usePageTitle";
@@ -17,9 +20,11 @@ import { InfoDot } from "../../components/InfoDot";
 import WinRateTab from "./spread-analytics/WinRateTab";
 import WeeklyBreakdownTab from "./spread-analytics/WeeklyBreakdownTab";
 import WinTypesTab from "./spread-analytics/WinTypesTab";
+import PickemRecommendationsTab from "./spread-analytics/PickemRecommendationsTab";
 
 const TABS = [
   ["Win Types", "win_types", "🥧", "Win-type distribution across seasons and weeks with favorite/home KPIs"],
+  ["Pick'em Recommendations", "pickem", "🪙", "Weekly favorite/coin-flip picks and the season's upset-vs-model story"],
   ["Win Rate & Calibration", "win_rate", "📈", "Favorite win rates by spread bucket — calibration curve, lift, outcome mix and Weekly Picks"],
   ["Weekly Breakdown", "weekly_breakdown", "🗓️", "Spread-by-game view for one week, upset-rate-by-rank and upset candidates"],
 ] as const;
@@ -51,9 +56,17 @@ export default function SpreadAnalytics() {
         <InfoDot text="For the season's full outlook, see Season Outlook. For a specific upcoming game, see what the model recommends on Matchup Previews." />
       </h1>
 
-      <TabBar tabs={TABS.map(([t, , icon, desc]) => [t, icon, desc] as const)} active={tab} onChange={setTab} gridClassName="sm:grid-cols-3" />
+      <TabBar tabs={TABS.map(([t, , icon, desc]) => [t, icon, desc] as const)} active={tab} onChange={setTab} gridClassName="sm:grid-cols-2 lg:grid-cols-4" />
 
-      {tab === "Win Rate & Calibration" ? <WinRateTab /> : tab === "Weekly Breakdown" ? <WeeklyBreakdownTab /> : <WinTypesTab />}
+      {tab === "Win Rate & Calibration" ? (
+        <WinRateTab />
+      ) : tab === "Weekly Breakdown" ? (
+        <WeeklyBreakdownTab />
+      ) : tab === "Pick'em Recommendations" ? (
+        <PickemRecommendationsTab />
+      ) : (
+        <WinTypesTab />
+      )}
     </div>
   );
 }
