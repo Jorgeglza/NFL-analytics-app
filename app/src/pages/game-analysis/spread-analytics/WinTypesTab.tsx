@@ -24,8 +24,9 @@ import { LazyMount } from "../../../components/LazyMount";
 import { Glossary } from "../../../components/Glossary";
 import { GLOSSARY_SECTIONS } from "../../../lib/glossary";
 import { CATEGORY_COLORS, CATEGORY_CODES, type Category } from "../../../lib/logic/winType";
+import WinTypeDetailModal from "./WinTypeDetailModal";
 
-const CATEGORY_ORDER: Category[] = [
+export const CATEGORY_ORDER: Category[] = [
   "Favorite home",
   "Underdog away",
   "Favorite away",
@@ -52,7 +53,7 @@ const SPLIT_DEFS = [
 ] as const;
 type SplitKey = (typeof SPLIT_DEFS)[number]["key"];
 
-interface Game {
+export interface Game {
   gameId: string;
   x: number; // week (season mode) or season (week mode)
   spread: number | null;
@@ -61,6 +62,11 @@ interface Game {
   winnerTeam: string | null;
   played: boolean;
   category: Category;
+  homeTeam: string;
+  awayTeam: string;
+  homeScore: number | null;
+  awayScore: number | null;
+  gameday: string | null;
 }
 
 function classify(r: Row, xKey: "week" | "season"): Game {
@@ -101,12 +107,17 @@ function classify(r: Row, xKey: "week" | "season"): Game {
     winnerTeam: winner === "home" ? String(r.home_team) : winner === "away" ? String(r.away_team) : null,
     played,
     category,
+    homeTeam: String(r.home_team),
+    awayTeam: String(r.away_team),
+    homeScore: hs,
+    awayScore: as_,
+    gameday: r.gameday == null ? null : String(r.gameday),
   };
 }
 
 /** The three block KPIs. Favorite Win % / Home Win % exclude ties entirely
  *  (2026-07-20: ties are their own category now, not a favorite loss). */
-function kpis(games: Game[]): Record<KpiKey, number | null> {
+export function kpis(games: Game[]): Record<KpiKey, number | null> {
   const played = games.filter((g) => g.played && g.category !== "Tie");
   return {
     favHomePct: games.length ? (games.filter((g) => g.favorite === "home").length / games.length) * 100 : null,
@@ -119,7 +130,7 @@ function kpis(games: Game[]): Record<KpiKey, number | null> {
 
 /** Favorite Win % split by where the favorite played. Played, non-tie games
  *  only (same convention as kpis()); pick'ems excluded. */
-function splitKpis(games: Game[]): Record<SplitKey, number | null> {
+export function splitKpis(games: Game[]): Record<SplitKey, number | null> {
   const rate = (side: "home" | "away") => {
     const pool = games.filter((g) => g.played && g.category !== "Tie" && g.favorite === side);
     return pool.length ? (pool.filter((g) => g.winner === g.favorite).length / pool.length) * 100 : null;
@@ -127,7 +138,7 @@ function splitKpis(games: Game[]): Record<SplitKey, number | null> {
   return { homeFavWinPct: rate("home"), awayFavWinPct: rate("away") };
 }
 
-const pct = (v: number | null) => (v == null ? "N/A" : `${Math.round(v)}%`);
+export const pct = (v: number | null) => (v == null ? "N/A" : `${Math.round(v)}%`);
 
 function Kpi({ label, value, border }: { label: string; value: string; border: string }) {
   return (
@@ -398,7 +409,16 @@ function Block({ title, rows, xKey }: { title: string; rows: Row[]; xKey: "week"
     };
   }, [games, xs, xLabel]);
 
-  const barRef = useECharts(barOption);
+  const [selectedX, setSelectedX] = useState<number | null>(null);
+  const barRef = useECharts(barOption, {
+    onInit: (chart) => {
+      chart.on("click", (p: { dataIndex?: number }) => {
+        if (p.dataIndex == null) return;
+        const x = xs[p.dataIndex];
+        if (x != null) setSelectedX(x);
+      });
+    },
+  });
   const scatterRef = useECharts(scatterOption);
 
   return (
@@ -411,10 +431,21 @@ function Block({ title, rows, xKey }: { title: string; rows: Row[]; xKey: "week"
           <Kpi label="Home Win %" value={pct(homeWinPct)} border="#C8102E" />
         </div>
         <div className="grid min-w-0 flex-1 gap-4 lg:grid-cols-3">
-          <div ref={barRef} className="h-[460px] lg:col-span-2" />
+          <div className="lg:col-span-2">
+            <div className="mb-1 text-[11px] text-slate-400">Click a bar to see that {xLabel.toLowerCase()}&apos;s games.</div>
+            <div ref={barRef} className="h-[452px]" />
+          </div>
           <div ref={scatterRef} className="h-[460px]" />
         </div>
       </div>
+      {selectedX != null && (
+        <WinTypeDetailModal
+          x={selectedX}
+          xLabel={xLabel}
+          games={games.filter((g) => g.x === selectedX)}
+          onClose={() => setSelectedX(null)}
+        />
+      )}
     </div>
   );
 }
