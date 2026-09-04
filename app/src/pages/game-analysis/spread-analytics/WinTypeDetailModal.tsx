@@ -21,6 +21,97 @@ function TeamBadge({ abbr, meta }: { abbr: string; meta?: TeamMeta }) {
   );
 }
 
+// Compact one-row strip plot: every game with a spread plotted as a dot on a
+// single -max…0…+max axis, colored by its win-type category (same palette as
+// the bar chart and section headers below) — dot color already encodes the
+// winner (favorite vs underdog, home vs away), so this one glance answers
+// "how were spreads distributed, and who tended to cover them". Dots that
+// would collide horizontally stack into extra rows (greedy, ascending by
+// spread) rather than overlap into an unreadable blob.
+const STRIP_W = 600;
+const STRIP_ROW_H = 11;
+const STRIP_MAX_ROWS = 3;
+const STRIP_DOT_R = 4;
+const STRIP_AXIS_Y_FROM_BOTTOM = 16;
+
+function SpreadStrip({ games }: { games: Game[] }) {
+  const pts = games.filter((g) => g.spread != null).sort((a, b) => a.spread! - b.spread!);
+  if (!pts.length) return null;
+
+  const maxAbs = Math.max(3, Math.ceil(Math.max(...pts.map((g) => Math.abs(g.spread!)))));
+  const padX = 22;
+  const xScale = (spread: number) => padX + ((spread + maxAbs) / (2 * maxAbs)) * (STRIP_W - 2 * padX);
+
+  // Greedy row-packing so close spreads don't render as one overlapping dot.
+  const minGap = STRIP_DOT_R * 2 + 2;
+  const rowLastX: number[] = [];
+  const rows = pts.map((g) => {
+    const gx = xScale(g.spread!);
+    let row = rowLastX.findIndex((lastX) => gx - lastX >= minGap);
+    if (row === -1) {
+      if (rowLastX.length < STRIP_MAX_ROWS) {
+        row = rowLastX.length;
+        rowLastX.push(gx);
+      } else {
+        row = rowLastX.indexOf(Math.min(...rowLastX));
+        rowLastX[row] = gx;
+      }
+    } else {
+      rowLastX[row] = gx;
+    }
+    return row;
+  });
+
+  const height = STRIP_AXIS_Y_FROM_BOTTOM + STRIP_MAX_ROWS * STRIP_ROW_H + 14;
+  const axisY = height - STRIP_AXIS_Y_FROM_BOTTOM;
+  const zeroX = xScale(0);
+
+  const present = CATEGORY_ORDER.filter((c) => pts.some((g) => g.category === c));
+
+  return (
+    <div>
+      <svg viewBox={`0 0 ${STRIP_W} ${height}`} className="h-auto w-full" preserveAspectRatio="none">
+        {/* zero reference (pick'em line) */}
+        <line x1={zeroX} y1={4} x2={zeroX} y2={axisY} stroke="#cbd5e1" strokeWidth={1} strokeDasharray="2,2" />
+        <line x1={padX} y1={axisY} x2={STRIP_W - padX} y2={axisY} stroke="#e2e8f0" strokeWidth={1} />
+        {[-maxAbs, 0, maxAbs].map((t) => (
+          <g key={t}>
+            <line x1={xScale(t)} y1={axisY} x2={xScale(t)} y2={axisY + 3} stroke="#cbd5e1" strokeWidth={1} />
+            <text x={xScale(t)} y={axisY + 12} fontSize={9} fill="#94a3b8" textAnchor="middle">
+              {t > 0 ? `+${t}` : t}
+            </text>
+          </g>
+        ))}
+        {pts.map((g, i) => (
+          <circle
+            key={g.gameId}
+            cx={xScale(g.spread!)}
+            cy={axisY - 5 - rows[i] * STRIP_ROW_H}
+            r={STRIP_DOT_R}
+            fill={CATEGORY_COLORS[g.category]}
+            opacity={g.played ? 0.9 : 0.35}
+            stroke="#fff"
+            strokeWidth={1}
+          >
+            <title>
+              {g.awayTeam} @ {g.homeTeam} · spread {g.spread! > 0 ? `+${g.spread}` : g.spread}
+              {g.played ? ` · ${g.awayScore}–${g.homeScore} · ${g.category}` : " · not played"}
+            </title>
+          </circle>
+        ))}
+      </svg>
+      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+        {present.map((cat) => (
+          <span key={cat} className="inline-flex items-center gap-1 text-[10px] text-slate-500">
+            <span className="h-2 w-2 rounded-full" style={{ background: CATEGORY_COLORS[cat] }} />
+            {CATEGORY_CODES[cat]}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function WinTypeDetailModal({
   x,
   xLabel,
@@ -77,6 +168,13 @@ export default function WinTypeDetailModal({
             accent="#7c3aed"
             sub="Favorite win % by side"
           />
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm" style={{ borderTop: "3px solid #94a3b8" }}>
+          <div className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Spread distribution</div>
+          <div className="mt-2">
+            <SpreadStrip games={games} />
+          </div>
         </div>
 
         {biggestUpset && (
