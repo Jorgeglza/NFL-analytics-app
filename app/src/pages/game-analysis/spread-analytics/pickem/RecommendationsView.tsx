@@ -8,6 +8,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   getSchedule,
+  getGrades,
   getPredictiveModelUpcoming,
   getPredictiveModelUpcomingMeta,
   type Row,
@@ -150,11 +151,43 @@ interface UpcomingRow {
   elo_p_home?: number | null;
 }
 
+/** Last up to 3 REG results for a team, before `beforeWeek` of `season` —
+ * cheap to compute from the already-loaded schedule (win/loss only, no score
+ * needed). Used for the coin-flip cards' "recent form" context. */
+function recentForm(games: Game[], team: string, season: number, beforeWeek: number) {
+  const played = games
+    .filter((g) => g.season === season && g.week < beforeWeek && g.played && g.winner != null && (g.homeTeam === team || g.awayTeam === team))
+    .sort((a, b) => b.week - a.week)
+    .slice(0, 3);
+  const results = played.map((g) => {
+    const isHome = g.homeTeam === team;
+    const opp = isHome ? g.awayTeam : g.homeTeam;
+    const won = (isHome && g.winner === "home") || (!isHome && g.winner === "away");
+    return { week: g.week, opp, won, vsAt: isHome ? "vs" : "@" };
+  });
+  const wins = results.filter((r) => r.won).length;
+  return { record: `${wins}-${results.length - wins}`, results };
+}
+
+/** This team's league-wide Overall Grade rank as of the most recent graded
+ * week before `beforeWeek` of `season` (grades are computed after games are
+ * played, so there's no grade yet for the current/upcoming week itself). */
+function gradeRank(grades: Row[], season: number, beforeWeek: number, team: string) {
+  const seasonRows = grades.filter((r) => Number(r.Season) === season && Number(r.Week) < beforeWeek);
+  if (!seasonRows.length) return null;
+  const latestWeek = Math.max(...seasonRows.map((r) => Number(r.Week)));
+  const weekRows = seasonRows.filter((r) => Number(r.Week) === latestWeek).sort((a, b) => Number(b["Overall Grade"]) - Number(a["Overall Grade"]));
+  const idx = weekRows.findIndex((r) => r.Team === team);
+  if (idx === -1) return null;
+  return { week: latestWeek, rank: idx + 1, of: weekRows.length, grade: Number(weekRows[idx]["Overall Grade"]) };
+}
+
 export default function RecommendationsView() {
   const [schedule, setSchedule] = useState<Row[]>([]);
   const [upcoming, setUpcoming] = useState<Row[]>([]);
   const [upcomingMeta, setUpcomingMeta] = useState<{ season: number | null; week: number | null; n_games: number } | null>(null);
   const [teamMeta, setTeamMeta] = useState<Map<string, TeamMeta>>(new Map());
+  const [grades, setGrades] = useState<Row[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [retryTick, setRetryTick] = useState(0);
 
@@ -173,6 +206,7 @@ export default function RecommendationsView() {
       })
       .catch((err) => setLoadError(err instanceof Error ? err.message : "Failed to load"));
     getTeamMetaMap().then(setTeamMeta);
+    getGrades().then(setGrades);
   }, [retryTick]);
 
   const reg = useMemo(() => schedule.filter((r) => r.game_type === "REG"), [schedule]);
@@ -294,7 +328,7 @@ export default function RecommendationsView() {
               if (isFavPick) {
                 return (
                   <Card key={g.gameId} accent={favColor}>
-                    <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div className="flex items-center gap-3">
                         <TeamPair away={g.awayTeam} home={g.homeTeam} season={season} week={week} meta={teamMeta} />
                         <div>
@@ -302,15 +336,15 @@ export default function RecommendationsView() {
                             {g.awayTeam} @ {g.homeTeam} &middot; spread {g.spread > 0 ? "+" : ""}
                             {g.spread}
                           </div>
-                          <div className="mt-0.5 text-lg font-bold text-slate-900">
+                          <div className="mt-0.5 text-base font-bold text-slate-900 sm:text-lg">
                             Pick <span style={{ color: favColor }}>{favTeam}</span>
-                            <span className="ml-2 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white" style={{ background: favColor }}>
+                            <span className="ml-2 inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold text-white" style={{ background: favColor }}>
                               Favorite &middot; |spread| {g.absSpread.toFixed(1)}
                             </span>
                           </div>
                         </div>
                       </div>
-                      <div className="text-right text-xs text-slate-500">
+                      <div className="text-xs text-slate-500 sm:text-right">
                         {modelProb != null && <div>Model win prob: {Math.round(modelProb * 100)}%</div>}
                         {u?.market_home_fair != null && (
                           <div>Market fair: {Math.round((g.favorite === "home" ? Number(u.market_home_fair) : 1 - Number(u.market_home_fair)) * 100)}%</div>
@@ -332,11 +366,18 @@ export default function RecommendationsView() {
               const restDiff = raw?.home_rest != null && raw?.away_rest != null ? Number(raw.home_rest) - Number(raw.away_rest) : null;
               const divGame = raw?.div_game != null ? Number(raw.div_game) === 1 : null;
               const roof = raw?.roof != null ? String(raw.roof) : null;
+              const totalLine = raw?.total_line != null ? Number(raw.total_line) : null;
+              const kickoff = raw?.weekday != null && raw?.gametime != null ? `${raw.weekday}, ${raw.gameday} · ${raw.gametime}` : null;
+
+              const awayForm = recentForm(games, g.awayTeam, Number(season), Number(week));
+              const homeForm = recentForm(games, g.homeTeam, Number(season), Number(week));
+              const awayRank = gradeRank(grades, Number(season), Number(week), g.awayTeam);
+              const homeRank = gradeRank(grades, Number(season), Number(week), g.homeTeam);
 
               return (
                 <Card key={g.gameId} accent={POOL_COLOR}>
                   <div className="space-y-3">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                       <div className="flex items-center gap-3">
                         <TeamPair away={g.awayTeam} home={g.homeTeam} season={season} week={week} meta={teamMeta} />
                         <div>
@@ -344,10 +385,10 @@ export default function RecommendationsView() {
                             {g.awayTeam} @ {g.homeTeam} &middot; spread {g.spread > 0 ? "+" : ""}
                             {g.spread}
                           </div>
-                          <div className="mt-0.5 text-lg font-bold text-slate-900">Coin flip</div>
+                          <div className="mt-0.5 text-base font-bold text-slate-900 sm:text-lg">Coin flip</div>
                         </div>
                       </div>
-                      <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold text-white" style={{ background: POOL_COLOR }}>
+                      <span className="inline-block w-fit rounded-full px-2 py-0.5 text-[10px] font-semibold text-white" style={{ background: POOL_COLOR }}>
                         |spread| {g.absSpread.toFixed(1)} &le; {threshold}
                       </span>
                     </div>
@@ -383,13 +424,61 @@ export default function RecommendationsView() {
                       )}
                     </div>
 
-                    <details className="text-xs text-slate-500">
-                      <summary className="cursor-pointer font-medium text-slate-600">Worth a human look, not a model (see the Story tab)</summary>
-                      <ul className="mt-1.5 list-disc space-y-1 pl-4">
-                        {CHECKLIST_REMINDERS.map((r) => (
-                          <li key={r}>{r}</li>
-                        ))}
-                      </ul>
+                    <details className="rounded-lg border border-slate-200 bg-slate-50/60 text-xs text-slate-600">
+                      <summary className="cursor-pointer select-none px-3 py-2 font-medium text-slate-600">
+                        Recent form, grade ranks &amp; more &mdash; {g.awayTeam} @ {g.homeTeam}
+                      </summary>
+                      <div className="space-y-3 border-t border-slate-200 px-3 py-3">
+                        <div className="grid grid-cols-2 gap-3">
+                          {[
+                            { team: g.awayTeam, form: awayForm, rank: awayRank },
+                            { team: g.homeTeam, form: homeForm, rank: homeRank },
+                          ].map(({ team, form, rank }) => (
+                            <div key={team}>
+                              <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{team}</div>
+                              <div className="mt-0.5 font-semibold text-slate-700">
+                                Last {form.results.length || 0}: {form.results.length ? form.record : "—"}
+                              </div>
+                              {form.results.length > 0 && (
+                                <ul className="mt-1 space-y-0.5 text-slate-500">
+                                  {form.results.map((r) => (
+                                    <li key={r.week}>
+                                      {r.won ? "W" : "L"} {r.vsAt} {r.opp} (Wk {r.week})
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
+                              <div className="mt-1.5 text-slate-500">
+                                {rank ? (
+                                  <>
+                                    Overall grade rank: <span className="font-semibold text-slate-700">#{rank.rank}</span> of {rank.of} ({rank.grade.toFixed(1)}, thru Wk {rank.week})
+                                  </>
+                                ) : (
+                                  "No grade yet this season"
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        {(kickoff || totalLine != null) && (
+                          <div>
+                            <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Game info</div>
+                            <div className="mt-0.5 text-slate-600">
+                              {kickoff}
+                              {kickoff && totalLine != null && " · "}
+                              {totalLine != null && `O/U ${totalLine}`}
+                            </div>
+                          </div>
+                        )}
+                        <div>
+                          <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Worth a human look, not a model</div>
+                          <ul className="mt-1 list-disc space-y-1 pl-4 text-slate-500">
+                            {CHECKLIST_REMINDERS.map((r) => (
+                              <li key={r}>{r}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
                     </details>
                   </div>
                 </Card>

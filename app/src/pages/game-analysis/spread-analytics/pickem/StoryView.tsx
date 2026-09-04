@@ -25,17 +25,25 @@ const MARKET_COLOR = "#eb6834";
 const ELO_COLOR = "#1baf7a";
 const pct = (v: number) => `${(v * 100).toFixed(1)}%`;
 
+// BarRow/DivergingRow deliberately stack label-over-bar rather than a 3-col
+// grid (label | track | value) — a fixed-width label column either clips
+// long factor-family names ("Situational (rest / dome / division /
+// weather)") or forces the track column down to near-zero width on a phone.
+// A full-width label+value line above a full-width track works at any size
+// with no breakpoints needed.
 function BarRow({ label, sub, value, max, color }: { label: string; sub?: string; value: number; max: number; color: string }) {
   return (
-    <div className="grid grid-cols-[1fr_auto] items-center gap-3 sm:grid-cols-[140px_1fr_56px]">
-      <div className="text-right text-xs text-slate-500">
-        <div className="font-medium text-slate-700">{label}</div>
-        {sub && <div className="text-[10px] text-slate-400">{sub}</div>}
+    <div className="space-y-1">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-2">
+        <span className="text-xs font-medium text-slate-700">
+          {label}
+          {sub && <span className="ml-1.5 font-normal text-slate-400">{sub}</span>}
+        </span>
+        <span className="text-xs font-semibold text-slate-800">{pct(value)}</span>
       </div>
       <div className="h-3.5 overflow-hidden rounded-full bg-slate-100">
         <div className="h-full rounded-full" style={{ width: `${Math.min(100, (value / max) * 100)}%`, background: color }} />
       </div>
-      <div className="text-right text-xs font-semibold text-slate-800">{pct(value)}</div>
     </div>
   );
 }
@@ -47,10 +55,15 @@ function DivergingRow({ label, sub, value, band, n }: { label: string; sub?: str
   const pos = (v: number) => `${Math.max(0, Math.min(100, ((v - lo) / (hi - lo)) * 100))}%`;
   const clears = value > band.hi || value < band.lo;
   return (
-    <div className="grid grid-cols-[1fr_auto] items-center gap-3 sm:grid-cols-[170px_1fr_60px]">
-      <div className="text-right text-xs text-slate-500">
-        <div className="font-medium text-slate-700">{label}</div>
-        {sub && <div className="text-[10px] text-slate-400">{sub}</div>}
+    <div className="space-y-1">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-2">
+        <span className="text-xs font-medium text-slate-700">
+          {label}
+          {sub && <span className="ml-1.5 font-normal text-slate-400">{sub}</span>}
+        </span>
+        <span className="text-xs font-semibold text-slate-800">
+          {pct(value)} <span className="font-normal text-slate-400">n={n}</span>
+        </span>
       </div>
       <div className="relative h-4 rounded-full bg-slate-100">
         <div className="absolute inset-y-0 rounded-full bg-slate-200" style={{ left: pos(band.lo), width: `calc(${pos(band.hi)} - ${pos(band.lo)})` }} />
@@ -59,9 +72,6 @@ function DivergingRow({ label, sub, value, band, n }: { label: string; sub?: str
           className="absolute top-0.5 h-3 w-1.5 -translate-x-1/2 rounded-full"
           style={{ left: pos(value), background: clears ? NAVY : POOL_COLOR }}
         />
-      </div>
-      <div className="text-right text-xs font-semibold text-slate-800">
-        {pct(value)} <span className="text-slate-400">n={n}</span>
       </div>
     </div>
   );
@@ -414,7 +424,7 @@ export default function StoryView() {
       <Card title="0–3 points: grouped factors, ranked" subtitle="Each bar is a family of related model features (see method note). Shaded band = the range a coin flip alone would land in ~95% of the time at this sample size — a bar has to clear it to count as a real signal.">
         <div className="space-y-2.5">
           {zone03.factors.map((f) => (
-            <DivergingRow key={f.key} label={f.label} sub={`n≈${f.n}`} value={f.hit} band={zone03.band} n={f.n} />
+            <DivergingRow key={f.key} label={f.label} value={f.hit} band={zone03.band} n={f.n} />
           ))}
         </div>
         {zone03.accuracy && <p className="mt-3 text-xs text-slate-500">Model straight-up accuracy here: {pct(zone03.accuracy.accuracy)} ({zone03.accuracy.hits}/{zone03.accuracy.n}) — inside the coin-flip band.</p>}
@@ -423,14 +433,14 @@ export default function StoryView() {
       <Card title="4–5 points: a different story" subtitle="Widen the spread by a point or two and several factor families clear the coin-flip band with room to spare.">
         <div className="space-y-2.5">
           {zone45.factors.map((f) => (
-            <DivergingRow key={f.key} label={f.label} sub={`n≈${f.n}`} value={f.hit} band={zone45.band} n={f.n} />
+            <DivergingRow key={f.key} label={f.label} value={f.hit} band={zone45.band} n={f.n} />
           ))}
         </div>
         {zone45.accuracy && <p className="mt-3 text-xs text-slate-500">Model straight-up accuracy here: {pct(zone45.accuracy.accuracy)} ({zone45.accuracy.hits}/{zone45.accuracy.n}) — a real edge, not noise.</p>}
       </Card>
 
       <Card title="Same factors, three zones" subtitle="The same feature families climb steadily as the spread widens — priced into the line in proportion to how much room the line has to move.">
-        <div className="table-wrap overflow-x-auto">
+        <div className="overflow-x-auto">
           <table className="w-full min-w-[480px] text-sm">
             <thead>
               <tr className="text-left text-[11px] uppercase tracking-wider text-slate-400">

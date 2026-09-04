@@ -559,6 +559,35 @@ Full work list, with per-item checkboxes and severities: **`docs/MOBILE_READINES
 
 ## Session notes (newest first)
 
+### 2026-09-02 (cont. x2) — Pick'em Recommendations: mobile pass + coin-flip matchup context
+User feedback: make Story/Recommendations mobile-friendly, and add more representative data to
+coin-flip cards (recent results, game data, ranks) without cluttering — behind a dropdown if needed.
+- **Mobile fixes**: `BarRow`/`DivergingRow` in `StoryView.tsx` were a `grid-cols-[1fr_auto] sm:grid-cols-[140px_1fr_56px]`
+  layout — on mobile (2 cols, 3 children) the bar track landed in an `auto`-sized column that could
+  collapse near-zero width, and long factor-family labels ("Situational (rest / dome / division /
+  weather)") had no room. Rewrote both as label+value on one line, full-width track below — no
+  breakpoints needed, works at any width. Card headers in `RecommendationsView.tsx` (both favorite-pick
+  and coin-flip) switched from a single `flex-wrap` row (logos+pick text and model-prob text could
+  wrap unpredictably) to explicit `flex-col sm:flex-row`, so mobile always stacks cleanly. Verified via
+  a programmatic full-page overflow scan (every element's `getBoundingClientRect().right` vs.
+  `window.innerWidth`, excluding intentional horizontal-scroll containers) at 375px with every coin-flip
+  dropdown forced open at once — zero overflowing elements. (The Browser pane's own `screenshot` tool
+  was unreliable this session — intermittently froze on a stale frame — so this DOM-based check stood
+  in for visual review, same workaround M6 used previously per `docs/MOBILE_READINESS.md`.)
+- **Coin-flip cards: new "Recent form, grade ranks & more" dropdown** (`<details>`, closed by default —
+  same collapse pattern as the prior "Worth a human look" note, which now lives inside it instead of as
+  its own separate disclosure) added per team: last-3 REG results this season (`recentForm()`, win/loss
+  + opponent + week, computed from the already-loaded schedule — no new fetch), and Overall Grade
+  league rank as of the most recent graded week (`gradeRank()`, new `getGrades()` fetch, ranks all 32
+  teams by `grades.json`'s `Overall Grade` for that week — same grading-model output used by Team
+  Comparison/Scorecard). Also added kickoff day/time and O/U total line (`total_line`, already in
+  `schedule.json`) under a small "Game info" line. Both helpers return "no data yet" gracefully for
+  week 1 / a new season (no prior games or grades exist yet) — verified with 2026 week 1 (empty) vs.
+  2025 week 10 (real records/ranks, e.g. NYG 0-3 last 3, #22 of 28 overall grade).
+- Visible-by-default content (FH/FA/UH/UA split, division/roof/rest chips) unchanged — only the new,
+  denser data went behind the dropdown, per the user's clutter concern.
+- `npm run build` green, no new type errors.
+
 ### 2026-09-02 (cont.) — Pick'em Recommendations: weekly field chart, hover tooltips, team logos
 User feedback on the new tab (three changes):
 - **Weekly field chart restored, near the top of the Story tab**: new `WeeklyFieldChart` in
