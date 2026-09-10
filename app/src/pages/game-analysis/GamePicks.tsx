@@ -51,13 +51,12 @@ const EXPORT_TIGHT_CSS = `
   .${EXPORT_TIGHT_CLASS} td:nth-child(7), .${EXPORT_TIGHT_CLASS} th:nth-child(7) { text-align: center; }
 `;
 
-/** Forces every lazy-loaded `<img>` inside `container` to fetch now and
- * waits for them — team logos use `loading="lazy"` so the browser only
- * fetches ones that have actually scrolled into view, but the table's
- * horizontally-scrolling wrapper means most columns (and on mobile, most
- * rows) never do. Without this, capturing the table for the copy-as-image
- * export would leave those never-loaded logos blank. Bounded by a timeout
- * per image so one stalled/broken logo can't hang the whole export. */
+/** Waits for every `<img>` inside `container` to finish loading before the
+ * copy-as-image capture proceeds — team logos load eagerly, but one could
+ * still be mid-fetch the instant the copy button is tapped (e.g. right
+ * after the page loads, or on a slow connection), which would otherwise
+ * leave it blank in that capture. Bounded by a timeout per image so one
+ * stalled/broken logo can't hang the whole export. */
 async function loadAllImages(container: HTMLElement, timeoutMs = 4000): Promise<void> {
   const imgs = Array.from(container.querySelectorAll("img"));
   await Promise.all(
@@ -132,7 +131,12 @@ function TeamBadge({
   elo?: number | null;
   favored?: boolean;
 }) {
-  const logo = meta?.logo && <img src={meta.logo} alt="" className="h-5 w-5 shrink-0 object-contain" loading="lazy" decoding="async" />;
+  // Eager, not lazy: these are tiny (few-KB) icons, and a copy-as-image
+  // export renders an off-screen clone of the table that a lazy <img> would
+  // never scroll into view for — real mobile browsers have proven flaky
+  // about honoring a later loading="lazy" -> "eager" attribute flip, so it's
+  // simplest and most reliable to just never lazy-load these in the first place.
+  const logo = meta?.logo && <img src={meta.logo} alt="" className="h-5 w-5 shrink-0 object-contain" loading="eager" decoding="async" />;
   return (
     <span className="inline-flex flex-col">
       <span className={`inline-flex items-center gap-1.5 ${bold ? "font-bold" : "font-medium"}`}>
@@ -481,25 +485,30 @@ export default function GamePicks() {
   // Copies the results table as a PNG (row colors + picks, "Links" column
   // omitted via data-export-exclude) to the clipboard; falls back to a
   // download when the async Clipboard image API isn't available (e.g. some
-  // mobile browsers). Targets the <table> itself (not the horizontally-
-  // scrolling wrapper around it) and pins the render to the table's full,
-  // unclipped content size — so the export always shows every column at
-  // full width, with no scrollbar and no cropping, regardless of how narrow
-  // the on-screen viewport is.
+  // mobile browsers). All of the export-only rework (tighter padding,
+  // center-justified columns, forced logo loads, full unclipped width) runs
+  // on a detached clone rendered off-screen — never on the live <table> —
+  // so what the user is looking at never visibly changes while a capture
+  // is in flight.
   const copyTableAsImage = async () => {
     const table = tableRef.current;
     if (!table || copyState === "working") return;
     // Set before any async work so the button visibly reacts the instant
     // it's tapped, rather than sitting still until the capture finishes.
     setCopyState("working");
-    table.classList.add(EXPORT_TIGHT_CLASS);
+    const clone = table.cloneNode(true) as HTMLTableElement;
+    clone.classList.add(EXPORT_TIGHT_CLASS);
+    const host = document.createElement("div");
+    host.style.cssText = "position:fixed; top:0; left:-10000px; pointer-events:none;";
+    host.appendChild(clone);
+    document.body.appendChild(host);
     try {
-      await loadAllImages(table);
-      const dataUrl = await toPng(table, {
+      await loadAllImages(clone);
+      const dataUrl = await toPng(clone, {
         backgroundColor: "#ffffff",
         pixelRatio: 2,
-        width: table.scrollWidth,
-        height: table.scrollHeight,
+        width: clone.scrollWidth,
+        height: clone.scrollHeight,
         filter: (node) => !(node instanceof HTMLElement && node.dataset.exportExclude != null),
       });
       let copied = false;
@@ -525,7 +534,7 @@ export default function GamePicks() {
     } catch {
       setCopyState("error");
     } finally {
-      table.classList.remove(EXPORT_TIGHT_CLASS);
+      host.remove();
       setTimeout(() => setCopyState("idle"), 1800);
     }
   };
