@@ -51,19 +51,53 @@ const EXPORT_TIGHT_CSS = `
   .${EXPORT_TIGHT_CLASS} td:nth-child(7), .${EXPORT_TIGHT_CLASS} th:nth-child(7) { text-align: center; }
 `;
 
-/** Waits for every `<img>` inside `container` to finish loading before the
- * copy-as-image capture proceeds — team logos load eagerly, but one could
- * still be mid-fetch the instant the copy button is tapped (e.g. right
- * after the page loads, or on a slow connection), which would otherwise
- * leave it blank in that capture. Bounded by a timeout per image so one
+// Team logos live on a cross-origin CDN. html-to-image's own approach —
+// clone the DOM into an SVG <foreignObject> and rasterize that to canvas —
+// needs each cross-origin <img> converted to a same-origin data: URI first,
+// or the canvas comes back tainted (silently blank on some engines, not
+// even a thrown error) rather than throwing. That inlining step turned out
+// unreliable on real mobile browsers specifically, so it's done by hand
+// here instead of leaning on the library's internal handling. Cached by
+// URL (module-level, survives across captures) since the same handful of
+// team logos repeat every week.
+const logoDataUriCache = new Map<string, Promise<string | null>>();
+
+function toDataUri(url: string): Promise<string | null> {
+  let cached = logoDataUriCache.get(url);
+  if (!cached) {
+    cached = fetch(url)
+      .then((r) => (r.ok ? r.blob() : Promise.reject(new Error(`${r.status}`))))
+      .then(
+        (blob) =>
+          new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(String(reader.result));
+            reader.onerror = () => reject(reader.error);
+            reader.readAsDataURL(blob);
+          }),
+      )
+      .catch(() => null); // leave the original src if the fetch/read fails
+    logoDataUriCache.set(url, cached);
+  }
+  return cached;
+}
+
+/** Prepares every `<img>` inside `container` for the copy-as-image capture:
+ * swaps each remote src for a same-origin data: URI (see `toDataUri` above)
+ * and waits for it to finish loading, bounded by a timeout per image so one
  * stalled/broken logo can't hang the whole export. */
 async function loadAllImages(container: HTMLElement, timeoutMs = 4000): Promise<void> {
   const imgs = Array.from(container.querySelectorAll("img"));
   await Promise.all(
-    imgs.map((img) => {
-      if (img.complete) return Promise.resolve();
+    imgs.map(async (img) => {
+      const src = img.getAttribute("src");
+      if (src && !src.startsWith("data:")) {
+        const dataUri = await toDataUri(src);
+        if (dataUri) img.src = dataUri;
+      }
+      if (img.complete) return;
       img.loading = "eager";
-      return new Promise<void>((resolve) => {
+      await new Promise<void>((resolve) => {
         const done = () => resolve();
         img.addEventListener("load", done, { once: true });
         img.addEventListener("error", done, { once: true });
@@ -176,6 +210,11 @@ export default function GamePicks() {
   const isMobile = useIsMobileViewport();
   const tableRef = useRef<HTMLTableElement>(null);
   const [copyState, setCopyState] = useState<"idle" | "working" | "copied" | "downloaded" | "error">("idle");
+  // Which prefill pill (if any) the current picks came from — lightly
+  // shaded while it still applies, and cleared the moment a pick is
+  // touched by hand or a different prefill is applied, since the picks no
+  // longer purely reflect that one recommendation.
+  const [activePrefill, setActivePrefill] = useState<"favorite" | "home" | "spread" | "elo" | "avg" | null>(null);
 
   // Best-effort inputs for the model-consensus probability (backs both the
   // "Avg models" prefill and the small win% under each team badge below).
@@ -191,6 +230,11 @@ export default function GamePicks() {
   useEffect(() => {
     localStorage.setItem(LS_KEY, JSON.stringify(manual));
   }, [manual]);
+
+  // A different week's picks aren't the ones a prior prefill produced.
+  useEffect(() => {
+    setActivePrefill(null);
+  }, [season, week]);
 
   useEffect(() => {
     setLoadError(null);
@@ -305,6 +349,9 @@ export default function GamePicks() {
       const key = `${gid}_${side}`;
       return cur.includes(key) ? cleared : [...cleared, key];
     });
+    // A hand-picked change no longer purely reflects whichever prefill was
+    // last applied — drop the highlight rather than let it lie.
+    setActivePrefill(null);
   };
 
   const unplayedGames = useMemo(() => games.filter((g) => g.hs == null && g.as_ == null), [games]);
@@ -364,9 +411,14 @@ export default function GamePicks() {
   }, [games, eloIdx]);
 
   // Replaces every unplayed game's pick for the current week with whatever
-  // `pickFor` returns (null = leave that game unset) — all four prefill
-  // buttons share this so "overwrite the whole week" behaves identically.
-  const applyToUnplayed = (pickFor: (g: (typeof unplayedGames)[number]) => "home" | "away" | null) => {
+  // `pickFor` returns (null = leave that game unset) — all five prefill
+  // buttons share this so "overwrite the whole week" behaves identically,
+  // and records which one so its pill can stay lightly shaded while it
+  // still applies (see activePrefill above).
+  const applyToUnplayed = (
+    key: "favorite" | "home" | "spread" | "elo" | "avg",
+    pickFor: (g: (typeof unplayedGames)[number]) => "home" | "away" | null,
+  ) => {
     setManual((cur) => {
       const unplayedIds = new Set(unplayedGames.map((g) => g.gid));
       const kept = cur.filter((c) => !unplayedIds.has(c.slice(0, c.lastIndexOf("_"))));
@@ -378,12 +430,13 @@ export default function GamePicks() {
         .filter((x): x is string => x != null);
       return [...kept, ...additions];
     });
+    setActivePrefill(key);
   };
 
-  const applyAllFavorite = () => applyToUnplayed((g) => (g.spread == null || g.spread === 0 ? null : g.spread < 0 ? "home" : "away"));
-  const applyAllHome = () => applyToUnplayed(() => "home");
+  const applyAllFavorite = () => applyToUnplayed("favorite", (g) => (g.spread == null || g.spread === 0 ? null : g.spread < 0 ? "home" : "away"));
+  const applyAllHome = () => applyToUnplayed("home", () => "home");
   const applyElo = () =>
-    applyToUnplayed((g) => {
+    applyToUnplayed("elo", (g) => {
       const p = upcomingByGame.get(`${season}|${week}|${g.g.home_team}|${g.g.away_team}`)?.elo_p_home;
       return p == null ? null : Number(p) >= 0.5 ? "home" : "away";
     });
@@ -391,10 +444,10 @@ export default function GamePicks() {
     const df = regGames.filter((g) => g.played && g.winType != null);
     const picks = computeWeekPicks(regGames, Number(season), Number(week), 1.0, true, df, 10);
     const bySide = new Map(picks?.rows.map((r) => [r.gameId, r.reco.endsWith("home") ? ("home" as const) : ("away" as const)]));
-    applyToUnplayed((g) => bySide.get(g.gid) ?? null);
+    applyToUnplayed("spread", (g) => bySide.get(g.gid) ?? null);
   };
   const applyAvgModels = () =>
-    applyToUnplayed((g) => {
+    applyToUnplayed("avg", (g) => {
       const [pAway, pHome] = consensusByGame.get(g.gid) ?? [null, null];
       if (pAway == null || pHome == null) return null;
       return pHome >= pAway ? "home" : "away";
@@ -480,7 +533,16 @@ export default function GamePicks() {
   const weekIdx = weeks.indexOf(Number(week));
   const stepBtnCls =
     "grid h-11 w-11 sm:h-8 sm:w-8 place-items-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm transition-all duration-150 hover:text-slate-900 active:scale-90 disabled:opacity-30 disabled:hover:text-slate-500 disabled:active:scale-100";
-  const prefillBtnCls = "min-h-9 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 shadow-sm transition-colors hover:border-[#002f6c]/50 hover:text-[#002f6c]";
+  // `active` gets a light permanent tint (not just a hover state) so the
+  // pill whose recommendation the current picks came from stays visibly
+  // marked — cleared as soon as a pick is hand-edited or another prefill
+  // is applied (see activePrefill above).
+  const prefillBtnCls = (active: boolean) =>
+    `min-h-9 rounded-full border px-3 py-1.5 text-xs font-semibold shadow-sm transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+      active
+        ? "border-[#002f6c]/40 bg-[#002f6c]/10 text-[#002f6c]"
+        : "border-slate-200 bg-white text-slate-600 hover:border-[#002f6c]/50 hover:text-[#002f6c]"
+    }`;
 
   // Copies the results table as a PNG (row colors + picks, "Links" column
   // omitted via data-export-exclude) to the clipboard; falls back to a
@@ -564,19 +626,23 @@ export default function GamePicks() {
           <div className="flex flex-col gap-1">
             <span className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Prefill picks</span>
             <div className="flex flex-wrap gap-1.5">
-              <button onClick={applyAllFavorite} className={prefillBtnCls} title="Pick every closing-spread favorite">
+              <button onClick={applyAllFavorite} className={prefillBtnCls(activePrefill === "favorite")} title="Pick every closing-spread favorite">
                 ⭐ All favorites
               </button>
-              <button onClick={applyAllHome} className={prefillBtnCls} title="Pick every home team">
+              <button onClick={applyAllHome} className={prefillBtnCls(activePrefill === "home")} title="Pick every home team">
                 🏠 All home
               </button>
-              <button onClick={applySpreadTrend} className={prefillBtnCls} title="Recommended favorite/underdog mix from historical spread-bucket win rates (see Win % by Win Type & Spread)">
+              <button
+                onClick={applySpreadTrend}
+                className={prefillBtnCls(activePrefill === "spread")}
+                title="Recommended favorite/underdog mix from historical spread-bucket win rates (see Win % by Win Type & Spread)"
+              >
                 📊 Spread trend
               </button>
               <button
                 onClick={applyElo}
                 disabled={!eloAvailable}
-                className={`${prefillBtnCls} disabled:cursor-not-allowed disabled:opacity-40`}
+                className={prefillBtnCls(activePrefill === "elo")}
                 title={eloAvailable ? "Pick whichever side the Elo model favors" : "No Elo data for this week"}
               >
                 📈 Elo pick
@@ -584,7 +650,7 @@ export default function GamePicks() {
               <button
                 onClick={applyAvgModels}
                 disabled={!avgModelsAvailable}
-                className={`${prefillBtnCls} disabled:cursor-not-allowed disabled:opacity-40`}
+                className={prefillBtnCls(activePrefill === "avg")}
                 title={avgModelsAvailable ? "Pick whichever side the average of all models favors" : "No model consensus data for this week"}
               >
                 🧮 Avg models
