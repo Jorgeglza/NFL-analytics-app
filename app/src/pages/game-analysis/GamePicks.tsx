@@ -4,7 +4,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import type { EChartsOption } from "echarts";
-import { getSchedule, getPredictiveModelUpcoming, type Row } from "../../lib/data/loader";
+import { toPng } from "html-to-image";
+import { getSchedule, getGrades, getTeamWeek, getMeta, getPredictiveModelGames, getPredictiveModelUpcoming, type Row } from "../../lib/data/loader";
 import { getTeamMetaMap, type TeamMeta } from "../../lib/team/meta";
 import { Select } from "../../components/filters/Select";
 import { useECharts } from "../../components/charts/useECharts";
@@ -14,8 +15,10 @@ import { usePageTitle } from "../../lib/hooks/usePageTitle";
 import { WIN_TYPE_COLORS } from "../../lib/logic/winType";
 import { toGame, computeWeekPicks } from "../../lib/logic/spreadPicks";
 import { useSeasonWeek } from "../../context/SeasonWeekContext";
+import { useIsMobileViewport } from "../../lib/useIsMobileViewport";
 import { InfoDot } from "../../components/InfoDot";
 import { tableWrapCls, theadCls, ScrollHint } from "../../components/ui";
+import { buildHist, buildGradesIndex, buildTeamWeekIndex, buildScheduleEloIndex, buildPredictiveIndex, probBundle, type PredictiveIndex } from "./previews/engine";
 
 const LABEL_FOR_NONE = "No result yet";
 const COLORS: Record<string, string> = {
@@ -64,13 +67,53 @@ function PickButton({ selected, onClick, title }: { selected: boolean; onClick: 
 
 /** Team abbreviation with its logo — falls back to the bare abbreviation
  * (no layout shift) while team metadata is still loading or if a team has
- * no logo on file. `bold` marks the actual/manual winner. */
-function TeamBadge({ abbr, meta, bold, isWinner }: { abbr: string; meta?: TeamMeta; bold: boolean; isWinner: boolean }) {
+ * no logo on file. `bold` marks the actual/manual winner. `side` flips the
+ * logo to the inner edge of the name (after the abbreviation for "away",
+ * before it for "home") so both team logos in a row face each other across
+ * the score columns, like a matchup faceoff. */
+function TeamBadge({
+  abbr,
+  meta,
+  bold,
+  isWinner,
+  side,
+  prob,
+  elo,
+  favored,
+}: {
+  abbr: string;
+  meta?: TeamMeta;
+  bold: boolean;
+  isWinner: boolean;
+  side: "home" | "away";
+  /** Model-consensus win probability for this side (0-1), when available. */
+  prob?: number | null;
+  /** Pre-game Elo power rating for this side, when available. */
+  elo?: number | null;
+  favored?: boolean;
+}) {
+  const logo = meta?.logo && <img src={meta.logo} alt="" className="h-5 w-5 shrink-0 object-contain" loading="lazy" decoding="async" />;
   return (
-    <span className={`inline-flex items-center gap-1.5 ${bold ? "font-bold" : "font-medium"}`}>
-      {meta?.logo && <img src={meta.logo} alt="" className="h-5 w-5 shrink-0 object-contain" loading="lazy" decoding="async" />}
-      {abbr}
-      {isWinner && <span className="text-xs font-black text-slate-700" title="Winner">✓</span>}
+    <span className="inline-flex flex-col">
+      <span className={`inline-flex items-center gap-1.5 ${bold ? "font-bold" : "font-medium"}`}>
+        {side === "home" && logo}
+        {abbr}
+        {side === "away" && logo}
+        {isWinner && <span className="text-xs font-black text-slate-700" title="Winner">✓</span>}
+      </span>
+      <span className="min-h-[13px] text-[10px] leading-tight">
+        {prob != null && (
+          <span className={favored ? "font-semibold text-slate-500" : "text-slate-400"} title="Model-consensus win probability — the average pick across every model on Matchup Previews.">
+            {Math.round(prob * 100)}%
+          </span>
+        )}
+        {prob != null && elo != null && " · "}
+        {elo != null && (
+          <span className="text-slate-400" title="Pre-game Elo power rating (1505 = league average).">
+            {Math.round(elo)}
+          </span>
+        )}
+      </span>
     </span>
   );
 }
@@ -86,6 +129,18 @@ export default function GamePicks() {
   const deepLinkApplied = useRef(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [retryTick, setRetryTick] = useState(0);
+  const isMobile = useIsMobileViewport();
+  const tableRef = useRef<HTMLTableElement>(null);
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "downloaded" | "error">("idle");
+
+  // Best-effort inputs for the model-consensus probability (backs both the
+  // "Avg models" prefill and the small win% under each team badge below).
+  // Same data/index-building pattern as Matchup Previews (engine.ts) — loaded
+  // separately from the schedule so a slow/missing predictive export never
+  // blocks the rest of the page.
+  const [grades, setGrades] = useState<Row[]>([]);
+  const [teamWeekBySeason, setTeamWeekBySeason] = useState<Map<number, Row[]> | null>(null);
+  const [predIdx, setPredIdx] = useState<PredictiveIndex | null>(null);
 
   usePageTitle(season && week ? `Game Picks — Wk ${week}, ${season}` : "Game Picks");
 
@@ -107,6 +162,31 @@ export default function GamePicks() {
     getTeamMetaMap()
       .then(setTeamMeta)
       .catch(() => setTeamMeta(new Map()));
+    // Best-effort — model-consensus inputs (Avg models pill + win% badges just
+    // stay unavailable if any of this fails or is slow). Mirrors the
+    // isMobile-aware progressive season loading in MatchupPreviews.tsx so
+    // mobile doesn't eagerly pull every season's team_week data up front.
+    getGrades()
+      .then(setGrades)
+      .catch(() => setGrades([]));
+    getMeta()
+      .then(async (mt) => {
+        const prioritySeasons = isMobile ? [mt.current_season] : mt.seasons;
+        const deferredSeasons = isMobile ? mt.seasons.filter((yr) => yr !== mt.current_season) : [];
+        const loadSeasons = async (seasons: number[]) => {
+          const entries = await Promise.all(
+            seasons.map(async (yr) => [yr, (await getTeamWeek(yr)).filter((r) => r.game_type === "REG" || r.game_type == null)] as [number, Row[]]),
+          );
+          setTeamWeekBySeason((prev) => new Map([...(prev ?? []), ...entries]));
+        };
+        await loadSeasons(prioritySeasons);
+        if (deferredSeasons.length) loadSeasons(deferredSeasons).catch(() => {});
+      })
+      .catch(() => {});
+    Promise.all([getPredictiveModelGames(), getPredictiveModelUpcoming()])
+      .then(([rows, upcomingRows]) => setPredIdx(buildPredictiveIndex([...rows, ...upcomingRows])))
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- isMobile read once per attempt, not a live dependency
   }, [retryTick]);
 
   // Deep-linked (e.g. from Home's "this week" launchpad or another page) —
@@ -204,6 +284,41 @@ export default function GamePicks() {
     [unplayedGames, upcomingByGame, season, week],
   );
 
+  // Model-consensus indices — same builders Matchup Previews uses (engine.ts).
+  // Each stays null until its inputs arrive, so consumers below just treat
+  // "any index missing" as "no consensus data yet" and degrade quietly.
+  const hist = useMemo(() => (schedule.length ? buildHist(schedule) : null), [schedule]);
+  const gradesIdx = useMemo(() => (grades.length ? buildGradesIndex(grades) : null), [grades]);
+  const twIdx = useMemo(() => (teamWeekBySeason ? buildTeamWeekIndex(teamWeekBySeason) : null), [teamWeekBySeason]);
+  const eloIdx = useMemo(() => (schedule.length ? buildScheduleEloIndex(schedule) : null), [schedule]);
+
+  // gid -> [pAway, pHome] consensus win probability, for this week's games only
+  // (bounded cost even though the underlying indices span full history).
+  const consensusByGame = useMemo(() => {
+    const m = new Map<string, [number | null, number | null]>();
+    if (!hist || !gradesIdx || !twIdx) return m;
+    for (const { g, gid } of games) {
+      m.set(gid, probBundle(g, Number(season), Number(week), hist, gradesIdx, twIdx, eloIdx ?? undefined, predIdx ?? undefined).consensus);
+    }
+    return m;
+  }, [games, season, week, hist, gradesIdx, twIdx, eloIdx, predIdx]);
+
+  const avgModelsAvailable = useMemo(
+    () => unplayedGames.some((g) => consensusByGame.get(g.gid)?.some((p) => p != null)),
+    [unplayedGames, consensusByGame],
+  );
+
+  // gid -> [eloAway, eloHome] pre-game Elo rating, for the same badge stack.
+  const eloByGame = useMemo(() => {
+    const m = new Map<string, [number, number]>();
+    if (!eloIdx) return m;
+    for (const { gid } of games) {
+      const e = eloIdx.get(gid);
+      if (e) m.set(gid, [e.eloAway, e.eloHome]);
+    }
+    return m;
+  }, [games, eloIdx]);
+
   // Replaces every unplayed game's pick for the current week with whatever
   // `pickFor` returns (null = leave that game unset) — all four prefill
   // buttons share this so "overwrite the whole week" behaves identically.
@@ -234,6 +349,12 @@ export default function GamePicks() {
     const bySide = new Map(picks?.rows.map((r) => [r.gameId, r.reco.endsWith("home") ? ("home" as const) : ("away" as const)]));
     applyToUnplayed((g) => bySide.get(g.gid) ?? null);
   };
+  const applyAvgModels = () =>
+    applyToUnplayed((g) => {
+      const [pAway, pHome] = consensusByGame.get(g.gid) ?? [null, null];
+      if (pAway == null || pHome == null) return null;
+      return pHome >= pAway ? "home" : "away";
+    });
 
   const countsOption = useMemo<EChartsOption | null>(() => {
     if (!games.length) return null;
@@ -316,6 +437,61 @@ export default function GamePicks() {
   const stepBtnCls = "grid h-11 w-11 sm:h-8 sm:w-8 place-items-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm transition-colors hover:text-slate-900 disabled:opacity-30 disabled:hover:text-slate-500";
   const prefillBtnCls = "min-h-9 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 shadow-sm transition-colors hover:border-[#002f6c]/50 hover:text-[#002f6c]";
 
+  // Copies the results table as a PNG (row colors + picks, "Links" column
+  // omitted via data-export-exclude) to the clipboard; falls back to a
+  // download when the async Clipboard image API isn't available (e.g. some
+  // mobile browsers). Targets the <table> itself (not the horizontally-
+  // scrolling wrapper around it) and pins the render to the table's full,
+  // unclipped content size — so the export always shows every column at
+  // full width, with no scrollbar and no cropping, regardless of how narrow
+  // the on-screen viewport is.
+  const copyTableAsImage = async () => {
+    const table = tableRef.current;
+    if (!table) return;
+    try {
+      const dataUrl = await toPng(table, {
+        backgroundColor: "#ffffff",
+        pixelRatio: 2,
+        width: table.scrollWidth,
+        height: table.scrollHeight,
+        filter: (node) => !(node instanceof HTMLElement && node.dataset.exportExclude != null),
+      });
+      let copied = false;
+      if (typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
+        try {
+          const blob = await (await fetch(dataUrl)).blob();
+          await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+          copied = true;
+        } catch {
+          // Clipboard API present but denied/unsupported (permissions policy,
+          // browser quirk, etc.) — fall through to the download fallback below.
+        }
+      }
+      if (copied) {
+        setCopyState("copied");
+      } else {
+        const a = document.createElement("a");
+        a.href = dataUrl;
+        a.download = `game-picks-${season}-wk${week}.png`;
+        a.click();
+        setCopyState("downloaded");
+      }
+    } catch {
+      setCopyState("error");
+    } finally {
+      setTimeout(() => setCopyState("idle"), 1800);
+    }
+  };
+  const copyBtnLabel = copyState === "copied" ? "✅" : copyState === "downloaded" ? "⬇️" : copyState === "error" ? "⚠️" : "📋";
+  const copyBtnTitle =
+    copyState === "copied"
+      ? "Copied!"
+      : copyState === "downloaded"
+        ? "Clipboard unavailable — downloaded instead"
+        : copyState === "error"
+          ? "Couldn't copy image"
+          : "Copy table as image";
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end gap-4">
@@ -345,6 +521,14 @@ export default function GamePicks() {
               >
                 📈 Elo pick
               </button>
+              <button
+                onClick={applyAvgModels}
+                disabled={!avgModelsAvailable}
+                className={`${prefillBtnCls} disabled:cursor-not-allowed disabled:opacity-40`}
+                title={avgModelsAvailable ? "Pick whichever side the average of all models favors" : "No model consensus data for this week"}
+              >
+                🧮 Avg models
+              </button>
             </div>
           </div>
         )}
@@ -364,6 +548,7 @@ export default function GamePicks() {
           <Select label="Week" value={week} onChange={setWeek} options={weeks.map((w) => ({ value: String(w), label: `Week ${w}` }))} />
           <button className={stepBtnCls} onClick={() => stepWeek(-1)} disabled={weekIdx <= 0} title="Previous week">‹</button>
           <button className={stepBtnCls} onClick={() => stepWeek(1)} disabled={weekIdx < 0 || weekIdx >= weeks.length - 1} title="Next week">›</button>
+          <button className={stepBtnCls} onClick={copyTableAsImage} title={copyBtnTitle}>{copyBtnLabel}</button>
         </div>
       </div>
 
@@ -379,16 +564,19 @@ export default function GamePicks() {
       </div>
 
       <div className={tableWrapCls}>
-        <table className="w-full text-sm">
+        <table className="w-full text-sm" ref={tableRef}>
           <thead className={theadCls}>
             <tr>
               {["Date", "Away", "A Score", "H Score", "Home", "Spread", "Win Type", "Links"].map((h) => (
-                <th key={h} className="px-3 py-2">{h}</th>
+                <th key={h} className="px-3 py-2" data-export-exclude={h === "Links" ? "" : undefined}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {games.map(({ g, gid, hs, as_, spread, winner, winType }) => (
+            {games.map(({ g, gid, hs, as_, spread, winner, winType }) => {
+              const [pAway, pHome] = consensusByGame.get(gid) ?? [null, null];
+              const [eloAway, eloHome] = eloByGame.get(gid) ?? [null, null];
+              return (
               <tr
                 key={gid}
                 className="border-t border-slate-100 transition-[filter] duration-150 hover:brightness-95"
@@ -396,7 +584,16 @@ export default function GamePicks() {
               >
                 <td className="px-3 py-2 whitespace-nowrap text-slate-600">{String(g.gameday ?? "")}</td>
                 <td className="px-3 py-2">
-                  <TeamBadge abbr={String(g.away_team)} meta={teamMeta.get(String(g.away_team))} bold={winner === "away"} isWinner={winner === "away"} />
+                  <TeamBadge
+                    abbr={String(g.away_team)}
+                    meta={teamMeta.get(String(g.away_team))}
+                    bold={winner === "away"}
+                    isWinner={winner === "away"}
+                    side="away"
+                    prob={pAway}
+                    elo={eloAway}
+                    favored={pAway != null && pHome != null && pAway > pHome}
+                  />
                 </td>
                 <td className="px-3 py-2 text-center tabular-nums">
                   {as_ != null ? (
@@ -413,19 +610,31 @@ export default function GamePicks() {
                   )}
                 </td>
                 <td className="px-3 py-2">
-                  <TeamBadge abbr={String(g.home_team)} meta={teamMeta.get(String(g.home_team))} bold={winner === "home"} isWinner={winner === "home"} />
+                  <TeamBadge
+                    abbr={String(g.home_team)}
+                    meta={teamMeta.get(String(g.home_team))}
+                    bold={winner === "home"}
+                    isWinner={winner === "home"}
+                    side="home"
+                    prob={pHome}
+                    elo={eloHome}
+                    favored={pAway != null && pHome != null && pHome > pAway}
+                  />
                 </td>
                 <td className="px-3 py-2 text-center tabular-nums">{spread ?? "—"}</td>
                 <td className="px-3 py-2">
                   {winType ? (
-                    <span className="rounded-full px-2 py-0.5 text-xs font-semibold text-white" style={{ background: COLORS[winType] }}>
+                    <span
+                      className="inline-block w-[88px] rounded-xl px-2 py-1 text-center text-xs font-semibold leading-tight text-white"
+                      style={{ background: COLORS[winType] }}
+                    >
                       {winType}
                     </span>
                   ) : (
                     <span className="text-xs text-slate-400">{LABEL_FOR_NONE}</span>
                   )}
                 </td>
-                <td className="px-3 py-2">
+                <td className="px-3 py-2" data-export-exclude="">
                   <div className="flex items-center gap-3 sm:gap-1.5">
                     <Link
                       to={`/game_analysis/matchup_previews?tab=matchup&season=${season}&week=${week}&game=${gid}`}
@@ -444,7 +653,8 @@ export default function GamePicks() {
                   </div>
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
         <ScrollHint />
