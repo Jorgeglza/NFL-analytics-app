@@ -41,11 +41,38 @@ const LS_KEY = "gamePicks.manualWinners";
 // Scoped to this one class so the live, interactive table is untouched.
 const EXPORT_TIGHT_CLASS = "gp-export-tight";
 const EXPORT_TIGHT_CSS = `
+  /* The live table is deliberately "w-full" (stretches to fill the scrolling
+     wrapper) — for the exported image that just leaves wide gaps between
+     tightly-padded columns, so force it back to shrink-to-fit here. */
+  table.${EXPORT_TIGHT_CLASS} { width: auto; }
   .${EXPORT_TIGHT_CLASS} th, .${EXPORT_TIGHT_CLASS} td { padding-left: 6px; padding-right: 6px; padding-top: 4px; padding-bottom: 4px; }
   .${EXPORT_TIGHT_CLASS} td:nth-child(2), .${EXPORT_TIGHT_CLASS} th:nth-child(2),
   .${EXPORT_TIGHT_CLASS} td:nth-child(5), .${EXPORT_TIGHT_CLASS} th:nth-child(5),
   .${EXPORT_TIGHT_CLASS} td:nth-child(7), .${EXPORT_TIGHT_CLASS} th:nth-child(7) { text-align: center; }
 `;
+
+/** Forces every lazy-loaded `<img>` inside `container` to fetch now and
+ * waits for them — team logos use `loading="lazy"` so the browser only
+ * fetches ones that have actually scrolled into view, but the table's
+ * horizontally-scrolling wrapper means most columns (and on mobile, most
+ * rows) never do. Without this, capturing the table for the copy-as-image
+ * export would leave those never-loaded logos blank. Bounded by a timeout
+ * per image so one stalled/broken logo can't hang the whole export. */
+async function loadAllImages(container: HTMLElement, timeoutMs = 4000): Promise<void> {
+  const imgs = Array.from(container.querySelectorAll("img"));
+  await Promise.all(
+    imgs.map((img) => {
+      if (img.complete) return Promise.resolve();
+      img.loading = "eager";
+      return new Promise<void>((resolve) => {
+        const done = () => resolve();
+        img.addEventListener("load", done, { once: true });
+        img.addEventListener("error", done, { once: true });
+        setTimeout(done, timeoutMs);
+      });
+    }),
+  );
+}
 
 function loadManual(): string[] {
   try {
@@ -114,7 +141,7 @@ function TeamBadge({
         {side === "away" && logo}
         {isWinner && <span className="text-xs font-black text-slate-700" title="Winner">✓</span>}
       </span>
-      <span className="min-h-[13px] text-[10px] leading-tight">
+      <span className="min-h-[13px] whitespace-nowrap text-[10px] leading-tight">
         {prob != null && (
           <span className={favored ? "font-semibold text-slate-500" : "text-slate-400"} title="Model-consensus win probability — the average pick across every model on Matchup Previews.">
             {Math.round(prob * 100)}%
@@ -144,7 +171,7 @@ export default function GamePicks() {
   const [retryTick, setRetryTick] = useState(0);
   const isMobile = useIsMobileViewport();
   const tableRef = useRef<HTMLTableElement>(null);
-  const [copyState, setCopyState] = useState<"idle" | "copied" | "downloaded" | "error">("idle");
+  const [copyState, setCopyState] = useState<"idle" | "working" | "copied" | "downloaded" | "error">("idle");
 
   // Best-effort inputs for the model-consensus probability (backs both the
   // "Avg models" prefill and the small win% under each team badge below).
@@ -447,7 +474,8 @@ export default function GamePicks() {
   if (!schedule.length) return <Loading label="Loading schedule…" />;
 
   const weekIdx = weeks.indexOf(Number(week));
-  const stepBtnCls = "grid h-11 w-11 sm:h-8 sm:w-8 place-items-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm transition-colors hover:text-slate-900 disabled:opacity-30 disabled:hover:text-slate-500";
+  const stepBtnCls =
+    "grid h-11 w-11 sm:h-8 sm:w-8 place-items-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm transition-all duration-150 hover:text-slate-900 active:scale-90 disabled:opacity-30 disabled:hover:text-slate-500 disabled:active:scale-100";
   const prefillBtnCls = "min-h-9 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 shadow-sm transition-colors hover:border-[#002f6c]/50 hover:text-[#002f6c]";
 
   // Copies the results table as a PNG (row colors + picks, "Links" column
@@ -460,9 +488,13 @@ export default function GamePicks() {
   // the on-screen viewport is.
   const copyTableAsImage = async () => {
     const table = tableRef.current;
-    if (!table) return;
+    if (!table || copyState === "working") return;
+    // Set before any async work so the button visibly reacts the instant
+    // it's tapped, rather than sitting still until the capture finishes.
+    setCopyState("working");
     table.classList.add(EXPORT_TIGHT_CLASS);
     try {
+      await loadAllImages(table);
       const dataUrl = await toPng(table, {
         backgroundColor: "#ffffff",
         pixelRatio: 2,
@@ -497,7 +529,8 @@ export default function GamePicks() {
       setTimeout(() => setCopyState("idle"), 1800);
     }
   };
-  const copyBtnLabel = copyState === "copied" ? "✅" : copyState === "downloaded" ? "⬇️" : copyState === "error" ? "⚠️" : "📋";
+  const copyBtnLabel =
+    copyState === "copied" ? "✅" : copyState === "downloaded" ? "⬇️" : copyState === "error" ? "⚠️" : copyState === "working" ? "⏳" : "📋";
   const copyBtnTitle =
     copyState === "copied"
       ? "Copied!"
@@ -505,7 +538,9 @@ export default function GamePicks() {
         ? "Clipboard unavailable — downloaded instead"
         : copyState === "error"
           ? "Couldn't copy image"
-          : "Copy table as image";
+          : copyState === "working"
+            ? "Copying…"
+            : "Copy table as image";
 
   return (
     <div className="space-y-6">
@@ -564,7 +599,13 @@ export default function GamePicks() {
           <Select label="Week" value={week} onChange={setWeek} options={weeks.map((w) => ({ value: String(w), label: `Week ${w}` }))} />
           <button className={stepBtnCls} onClick={() => stepWeek(-1)} disabled={weekIdx <= 0} title="Previous week">‹</button>
           <button className={stepBtnCls} onClick={() => stepWeek(1)} disabled={weekIdx < 0 || weekIdx >= weeks.length - 1} title="Next week">›</button>
-          <button className={stepBtnCls} onClick={copyTableAsImage} title={copyBtnTitle}>{copyBtnLabel}</button>
+          <button
+            className={`${stepBtnCls} ${copyState === "working" ? "animate-pulse" : ""}`}
+            onClick={copyTableAsImage}
+            title={copyBtnTitle}
+          >
+            {copyBtnLabel}
+          </button>
         </div>
       </div>
 
@@ -592,6 +633,13 @@ export default function GamePicks() {
             {games.map(({ g, gid, hs, as_, spread, winner, winType }) => {
               const [pAway, pHome] = consensusByGame.get(gid) ?? [null, null];
               const [eloAway, eloHome] = eloByGame.get(gid) ?? [null, null];
+              // `winner` also carries a pending manual pick (for unplayed
+              // games) so it can drive Win Type coloring the same way a
+              // real result would — but the "Winner" checkmark on the team
+              // badge below should only ever mark an actual final result,
+              // not just what you picked (the pick button already shows
+              // that state); otherwise it duplicates as a second checkmark.
+              const played = hs != null && as_ != null;
               return (
               <tr
                 key={gid}
@@ -604,7 +652,7 @@ export default function GamePicks() {
                     abbr={String(g.away_team)}
                     meta={teamMeta.get(String(g.away_team))}
                     bold={winner === "away"}
-                    isWinner={winner === "away"}
+                    isWinner={played && winner === "away"}
                     side="away"
                     prob={pAway}
                     elo={eloAway}
@@ -630,7 +678,7 @@ export default function GamePicks() {
                     abbr={String(g.home_team)}
                     meta={teamMeta.get(String(g.home_team))}
                     bold={winner === "home"}
-                    isWinner={winner === "home"}
+                    isWinner={played && winner === "home"}
                     side="home"
                     prob={pHome}
                     elo={eloHome}
