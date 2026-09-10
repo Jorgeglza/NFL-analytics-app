@@ -34,6 +34,19 @@ const ROW_BG: Record<string, string> = {
 const ORDER = ["Favorite home", "Favorite away", "Underdog home", "Underdog away", LABEL_FOR_NONE];
 const LS_KEY = "gamePicks.manualWinners";
 
+// Toggled on the <table> only for the instant of the copy-as-image capture
+// (see copyTableAsImage) — tighter cell padding and center-justified team/
+// spread/win-type columns read better as a shared static image than the
+// wider, left-aligned columns that work fine for on-screen scanning+editing.
+// Scoped to this one class so the live, interactive table is untouched.
+const EXPORT_TIGHT_CLASS = "gp-export-tight";
+const EXPORT_TIGHT_CSS = `
+  .${EXPORT_TIGHT_CLASS} th, .${EXPORT_TIGHT_CLASS} td { padding-left: 6px; padding-right: 6px; padding-top: 4px; padding-bottom: 4px; }
+  .${EXPORT_TIGHT_CLASS} td:nth-child(2), .${EXPORT_TIGHT_CLASS} th:nth-child(2),
+  .${EXPORT_TIGHT_CLASS} td:nth-child(5), .${EXPORT_TIGHT_CLASS} th:nth-child(5),
+  .${EXPORT_TIGHT_CLASS} td:nth-child(7), .${EXPORT_TIGHT_CLASS} th:nth-child(7) { text-align: center; }
+`;
+
 function loadManual(): string[] {
   try {
     return JSON.parse(localStorage.getItem(LS_KEY) ?? "[]");
@@ -448,6 +461,7 @@ export default function GamePicks() {
   const copyTableAsImage = async () => {
     const table = tableRef.current;
     if (!table) return;
+    table.classList.add(EXPORT_TIGHT_CLASS);
     try {
       const dataUrl = await toPng(table, {
         backgroundColor: "#ffffff",
@@ -479,6 +493,7 @@ export default function GamePicks() {
     } catch {
       setCopyState("error");
     } finally {
+      table.classList.remove(EXPORT_TIGHT_CLASS);
       setTimeout(() => setCopyState("idle"), 1800);
     }
   };
@@ -494,6 +509,7 @@ export default function GamePicks() {
 
   return (
     <div className="space-y-6">
+      <style>{EXPORT_TIGHT_CSS}</style>
       <div className="flex flex-wrap items-end gap-4">
         <h1 className="mr-auto flex items-center gap-2.5 text-2xl font-extrabold tracking-tight text-[#002f6c]">
           <span className="h-6 w-1.5 rounded-full bg-gradient-to-b from-[#002f6c] to-[#164a9c]" />
