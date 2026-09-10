@@ -143,6 +143,28 @@ async function loadAllImages(container: HTMLElement, timeoutMs = 4000): Promise<
   );
 }
 
+/** Mobile WebKit (iOS Safari) has a documented, still-open bug in
+ * html-to-image (github.com/bubkoo/html-to-image issue #591 — reproduced
+ * by the library's own maintainers on a real iPhone, on 1.11.13, the exact
+ * version this app uses) where a capture containing images comes back with
+ * some of them blank under memory pressure, non-deterministically; desktop
+ * Chromium isn't affected. A single retry isn't reliable either — the fix
+ * that issue converged on, and the one used here, is to recapture until
+ * two consecutive attempts come back byte-identical (or a small attempt
+ * cap is hit), which reliably lands on a fully-rendered result. This is a
+ * no-op extra cost on desktop/anyone unaffected: the very first attempt is
+ * already stable there, so the loop exits on the second iteration. */
+async function capturePngStable(node: HTMLElement, options: Parameters<typeof toPng>[1], maxAttempts = 4): Promise<string> {
+  let previous: string | null = null;
+  let last = "";
+  for (let i = 0; i < maxAttempts; i++) {
+    last = await toPng(node, options);
+    if (previous === last) return last;
+    previous = last;
+  }
+  return last;
+}
+
 function loadManual(): string[] {
   try {
     return JSON.parse(localStorage.getItem(LS_KEY) ?? "[]");
@@ -602,7 +624,7 @@ export default function GamePicks() {
     document.body.appendChild(host);
     try {
       await loadAllImages(clone);
-      const dataUrl = await toPng(clone, {
+      const dataUrl = await capturePngStable(clone, {
         backgroundColor: "#ffffff",
         pixelRatio: EXPORT_PIXEL_RATIO,
         width: clone.scrollWidth,

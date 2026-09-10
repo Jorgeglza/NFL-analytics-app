@@ -142,10 +142,15 @@ export const stickyColCls = "sticky left-0 z-10 bg-white shadow-[2px_0_4px_-2px_
  * matching the header's, not the body's white. */
 export const stickyColHeadCls = "sticky left-0 z-10 bg-slate-50 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.15)]";
 
-/** Right-edge fade + "swipe" affordance for a horizontally-scrollable table
- * wrapper — pair with `tableWrapCls` on a `relative`-positioned ancestor. */
-export const scrollHintCls =
-  "pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-white to-transparent";
+/** Right-edge "more to scroll" affordance for a horizontally-scrollable
+ * table wrapper — pair with `tableWrapCls` on a `relative`-positioned
+ * ancestor. A `box-shadow` (mirroring `stickyColCls` below, just on the
+ * opposite edge) rather than a `from-white` gradient: several tables tint
+ * their rows (win-type colors, etc.), and a hardcoded white fade visibly
+ * mismatches against anything that isn't a plain white row, reading as a
+ * stray line rather than a hint. A shadow just darkens whatever's
+ * underneath, so it blends over any row color. */
+export const scrollHintCls = "pointer-events-none absolute inset-y-0 right-0 w-2 shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.15)]";
 
 /** Drop as the last child of a `tableWrapCls` wrapper (a scrolling parent)
  * to add a right-edge fade affordance — hides itself once there's nothing
