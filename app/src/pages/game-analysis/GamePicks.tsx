@@ -40,6 +40,11 @@ const LS_KEY = "gamePicks.manualWinners";
 // wider, left-aligned columns that work fine for on-screen scanning+editing.
 // Scoped to this one class so the live, interactive table is untouched.
 const EXPORT_TIGHT_CLASS = "gp-export-tight";
+// Shared with the toPng({ pixelRatio }) call in copyTableAsImage — kept as
+// one constant so the logo re-encode below always matches the export's
+// actual output resolution instead of drifting out of sync with a
+// hardcoded literal at the call site.
+const EXPORT_PIXEL_RATIO = 2;
 const EXPORT_TIGHT_CSS = `
   /* The live table is deliberately "w-full" (stretches to fill the scrolling
      wrapper) — for the exported image that just leaves wide gaps between
@@ -51,48 +56,79 @@ const EXPORT_TIGHT_CSS = `
   .${EXPORT_TIGHT_CLASS} td:nth-child(7), .${EXPORT_TIGHT_CLASS} th:nth-child(7) { text-align: center; }
 `;
 
-// Team logos live on a cross-origin CDN. html-to-image's own approach —
-// clone the DOM into an SVG <foreignObject> and rasterize that to canvas —
-// needs each cross-origin <img> converted to a same-origin data: URI first,
-// or the canvas comes back tainted (silently blank on some engines, not
-// even a thrown error) rather than throwing. That inlining step turned out
-// unreliable on real mobile browsers specifically, so it's done by hand
-// here instead of leaning on the library's internal handling. Cached by
-// URL (module-level, survives across captures) since the same handful of
-// team logos repeat every week.
+// Team logos live on a cross-origin CDN, served at a fixed 500×500px
+// (ESPN's CDN) even though they render at a small icon size here (20 CSS
+// px). html-to-image's own approach — clone the DOM into an SVG
+// <foreignObject>, then base64 the *whole SVG* into a second data: URI for
+// final canvas rasterization — means every embedded image's full byte size
+// gets compounded into that outer payload. With ~16-32 full-resolution
+// logos embedded, that payload can reach multiple MB; real mobile
+// Safari/WebKit has a documented history of silently failing to rasterize
+// data: URIs in that size class (blank output, no thrown error) where
+// desktop Chromium tolerates it fine — which matches exactly what was
+// happening (everything else in the export is comparatively tiny and
+// rendered correctly; only the image-heavy portion came out blank, and
+// only on mobile). Downscaling each logo to its actual rendered size
+// before embedding keeps the whole export payload small enough to
+// rasterize reliably everywhere, as a bonus this also makes the export
+// noticeably lighter/faster. Cached by URL+size (module-level, survives
+// across captures) since the same handful of team logos repeat every week.
 const logoDataUriCache = new Map<string, Promise<string | null>>();
 
-function toDataUri(url: string): Promise<string | null> {
-  let cached = logoDataUriCache.get(url);
+/** Fetches `url` and re-encodes it as a small PNG data: URI at `renderPx`
+ * (its actual on-screen size, not the source's native resolution) — see
+ * the comment above for why this matters for the mobile export. Falls back
+ * to `null` (leaving the original remote URL in place, same as before this
+ * inlining existed) on any fetch/decode failure. */
+function toDataUri(url: string, renderPx: number): Promise<string | null> {
+  const key = `${url}@${renderPx}`;
+  let cached = logoDataUriCache.get(key);
   if (!cached) {
     cached = fetch(url)
       .then((r) => (r.ok ? r.blob() : Promise.reject(new Error(`${r.status}`))))
       .then(
         (blob) =>
-          new Promise<string>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(String(reader.result));
-            reader.onerror = () => reject(reader.error);
-            reader.readAsDataURL(blob);
+          new Promise<string | null>((resolve) => {
+            const objectUrl = URL.createObjectURL(blob);
+            const img = new Image();
+            img.onload = () => {
+              URL.revokeObjectURL(objectUrl);
+              const canvas = document.createElement("canvas");
+              canvas.width = renderPx;
+              canvas.height = renderPx;
+              const ctx = canvas.getContext("2d");
+              if (!ctx) {
+                resolve(null);
+                return;
+              }
+              ctx.drawImage(img, 0, 0, renderPx, renderPx);
+              resolve(canvas.toDataURL("image/png"));
+            };
+            img.onerror = () => {
+              URL.revokeObjectURL(objectUrl);
+              resolve(null);
+            };
+            img.src = objectUrl;
           }),
       )
-      .catch(() => null); // leave the original src if the fetch/read fails
-    logoDataUriCache.set(url, cached);
+      .catch(() => null);
+    logoDataUriCache.set(key, cached);
   }
   return cached;
 }
 
 /** Prepares every `<img>` inside `container` for the copy-as-image capture:
- * swaps each remote src for a same-origin data: URI (see `toDataUri` above)
- * and waits for it to finish loading, bounded by a timeout per image so one
- * stalled/broken logo can't hang the whole export. */
+ * swaps each remote src for a small same-origin data: URI (see `toDataUri`
+ * above) and waits for it to finish loading, bounded by a timeout per image
+ * so one stalled/broken logo can't hang the whole export. */
 async function loadAllImages(container: HTMLElement, timeoutMs = 4000): Promise<void> {
   const imgs = Array.from(container.querySelectorAll("img"));
   await Promise.all(
     imgs.map(async (img) => {
       const src = img.getAttribute("src");
       if (src && !src.startsWith("data:")) {
-        const dataUri = await toDataUri(src);
+        const renderPx = Math.max(20, Math.round((img.clientWidth || 20) * EXPORT_PIXEL_RATIO));
+        const dataUri = await toDataUri(src, renderPx);
         if (dataUri) img.src = dataUri;
       }
       if (img.complete) return;
@@ -568,7 +604,7 @@ export default function GamePicks() {
       await loadAllImages(clone);
       const dataUrl = await toPng(clone, {
         backgroundColor: "#ffffff",
-        pixelRatio: 2,
+        pixelRatio: EXPORT_PIXEL_RATIO,
         width: clone.scrollWidth,
         height: clone.scrollHeight,
         filter: (node) => !(node instanceof HTMLElement && node.dataset.exportExclude != null),
