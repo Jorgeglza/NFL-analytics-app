@@ -3,6 +3,8 @@ name: weekly-data-refresh
 on:
   schedule:
     - cron: "0 12 * * 2" # Tuesday 12:00 UTC (after Monday Night Football)
+    - cron: "0 12 * * 5" # Friday 12:00 UTC (after Thursday Night Football)
+    - cron: "0 12 * * 1" # Monday 12:00 UTC (after Sunday Night Football)
   workflow_dispatch:
 
 permissions:
