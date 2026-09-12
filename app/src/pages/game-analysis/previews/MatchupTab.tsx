@@ -460,6 +460,28 @@ export default function MatchupTab({
               );
             })}
           </div>
+          {/* Model distribution — every model's home-win probability plotted on one axis, dot-colored by model */}
+          <div className="flex items-center gap-2 border-t border-slate-100 px-3 py-2">
+            <span className="w-8 shrink-0 text-right text-[9px] font-medium text-slate-300" title={`${away} win probability`}>{away}</span>
+            <div className="relative h-2.5 flex-1">
+              <div className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-slate-200" />
+              <div className="absolute inset-y-0 left-1/2 w-px bg-slate-300" title="50%" />
+              {modelKeys.map(([k, lbl]) => {
+                const pH = bundle[k][1];
+                if (pH == null) return null;
+                const left = Math.max(0, Math.min(100, 100 * pH));
+                return (
+                  <div
+                    key={k}
+                    className="absolute top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full ring-1 ring-white"
+                    style={{ left: `${left}%`, background: MODEL_COLORS[k] }}
+                    title={`${lbl}: ${home} ${Math.round(100 * pH)}% · ${away} ${Math.round(100 * (1 - pH))}%`}
+                  />
+                );
+              })}
+            </div>
+            <span className="w-8 shrink-0 text-[9px] font-medium text-slate-300" title={`${home} win probability`}>{home}</span>
+          </div>
         </div>
       )}
 
@@ -513,46 +535,55 @@ export default function MatchupTab({
         </div>
       </div>
 
-      {/* Key stats — what actually feeds the models, side by side */}
-      {keyStats && (
-        <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-          <div className="mb-2 flex flex-wrap items-baseline gap-2">
-            <div className="text-sm font-bold">Key stats — season to date (thru W{wkPlayed})</div>
-            <div className="text-[11px] text-slate-400">Bold = better side · #N = league rank (direction-adjusted, #1 best)</div>
-          </div>
-          <div className="grid gap-x-6 gap-y-1.5 sm:grid-cols-2">
-            {keyStats.rows.map((r) => (
-              <div key={r.label} className="flex items-center gap-2 text-sm">
-                <span className={`w-20 text-right tabular-nums ${r.better === "away" ? "font-bold text-slate-900" : "text-slate-500"}`}>
-                  {r.a == null ? "—" : r.a.toFixed(1)}
-                  {r.ra != null && <span className="ml-1 text-[10px] font-semibold text-slate-400">#{r.ra}</span>}
+      {/* Key stats + Average (consensus) — side by side on desktop, key stats first on mobile */}
+      {keyStats && bundle && (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+            <div className="mb-2 flex flex-wrap items-baseline gap-2">
+              <div className="text-sm font-bold">Key stats — season to date (thru W{wkPlayed})</div>
+              <div className="text-[11px] text-slate-400">Bold = better side · #N = league rank (direction-adjusted, #1 best)</div>
+            </div>
+            <div className="grid gap-x-6 gap-y-1.5 sm:grid-cols-2">
+              {keyStats.rows.map((r) => (
+                <div key={r.label} className="flex items-center gap-2 text-sm">
+                  <span className={`w-20 text-right tabular-nums ${r.better === "away" ? "font-bold text-slate-900" : "text-slate-500"}`}>
+                    {r.a == null ? "—" : r.a.toFixed(1)}
+                    {r.ra != null && <span className="ml-1 text-[10px] font-semibold text-slate-400">#{r.ra}</span>}
+                  </span>
+                  <span className="flex-1 text-center text-xs font-medium text-slate-500">{r.label}</span>
+                  <span className={`w-20 tabular-nums ${r.better === "home" ? "font-bold text-slate-900" : "text-slate-500"}`}>
+                    {r.rh != null && <span className="mr-1 text-[10px] font-semibold text-slate-400">#{r.rh}</span>}
+                    {r.h == null ? "—" : r.h.toFixed(1)}
+                  </span>
+                </div>
+              ))}
+              <div className="flex items-center gap-2 text-sm" title="Pre-game Elo power rating (1505 = league average). Feeds the Elo model.">
+                <span className={`w-20 text-right tabular-nums ${keyStats.eloAway != null && keyStats.eloHome != null && keyStats.eloAway > keyStats.eloHome ? "font-bold" : "text-slate-500"}`}>
+                  {keyStats.eloAway == null ? "—" : Math.round(keyStats.eloAway)}
                 </span>
-                <span className="flex-1 text-center text-xs font-medium text-slate-500">{r.label}</span>
-                <span className={`w-20 tabular-nums ${r.better === "home" ? "font-bold text-slate-900" : "text-slate-500"}`}>
-                  {r.rh != null && <span className="mr-1 text-[10px] font-semibold text-slate-400">#{r.rh}</span>}
-                  {r.h == null ? "—" : r.h.toFixed(1)}
+                <span className="flex-1 text-center text-xs font-medium text-slate-500">Elo rating</span>
+                <span className={`w-20 tabular-nums ${keyStats.eloAway != null && keyStats.eloHome != null && keyStats.eloHome > keyStats.eloAway ? "font-bold" : "text-slate-500"}`}>
+                  {keyStats.eloHome == null ? "—" : Math.round(keyStats.eloHome)}
                 </span>
               </div>
-            ))}
-            <div className="flex items-center gap-2 text-sm" title="Pre-game Elo power rating (1505 = league average). Feeds the Elo model.">
-              <span className={`w-20 text-right tabular-nums ${keyStats.eloAway != null && keyStats.eloHome != null && keyStats.eloAway > keyStats.eloHome ? "font-bold" : "text-slate-500"}`}>
-                {keyStats.eloAway == null ? "—" : Math.round(keyStats.eloAway)}
-              </span>
-              <span className="flex-1 text-center text-xs font-medium text-slate-500">Elo rating</span>
-              <span className={`w-20 tabular-nums ${keyStats.eloAway != null && keyStats.eloHome != null && keyStats.eloHome > keyStats.eloAway ? "font-bold" : "text-slate-500"}`}>
-                {keyStats.eloHome == null ? "—" : Math.round(keyStats.eloHome)}
-              </span>
-            </div>
-            <div className="flex items-center gap-2 text-sm" title="Pythagorean expected win% from points scored/allowed. Feeds the Pythagorean model.">
-              <span className={`w-20 text-right tabular-nums ${keyStats.pythAway != null && keyStats.pythHome != null && keyStats.pythAway > keyStats.pythHome ? "font-bold" : "text-slate-500"}`}>
-                {keyStats.pythAway == null ? "—" : `${Math.round(100 * keyStats.pythAway)}%`}
-              </span>
-              <span className="flex-1 text-center text-xs font-medium text-slate-500">Pyth. expected win%</span>
-              <span className={`w-20 tabular-nums ${keyStats.pythAway != null && keyStats.pythHome != null && keyStats.pythHome > keyStats.pythAway ? "font-bold" : "text-slate-500"}`}>
-                {keyStats.pythHome == null ? "—" : `${Math.round(100 * keyStats.pythHome)}%`}
-              </span>
+              <div className="flex items-center gap-2 text-sm" title="Pythagorean expected win% from points scored/allowed. Feeds the Pythagorean model.">
+                <span className={`w-20 text-right tabular-nums ${keyStats.pythAway != null && keyStats.pythHome != null && keyStats.pythAway > keyStats.pythHome ? "font-bold" : "text-slate-500"}`}>
+                  {keyStats.pythAway == null ? "—" : `${Math.round(100 * keyStats.pythAway)}%`}
+                </span>
+                <span className="flex-1 text-center text-xs font-medium text-slate-500">Pyth. expected win%</span>
+                <span className={`w-20 tabular-nums ${keyStats.pythAway != null && keyStats.pythHome != null && keyStats.pythHome > keyStats.pythAway ? "font-bold" : "text-slate-500"}`}>
+                  {keyStats.pythHome == null ? "—" : `${Math.round(100 * keyStats.pythHome)}%`}
+                </span>
+              </div>
             </div>
           </div>
+
+          <ModelBlock color={MODEL_COLORS.consensus} title="Average (consensus)" pick={pickOf(bundle.consensus)} prob={probOf(bundle.consensus)}>
+            {modelKeys.filter(([k]) => k !== "consensus").map(([k, lbl]) => (
+              <ProbBar key={k} label={lbl} p={bundle[k][1]} color={MODEL_COLORS[k]} />
+            ))}
+            <div className="text-[10px] text-slate-400">Equal-weight mean of every model with data for this game — historically the best calibrated.</div>
+          </ModelBlock>
         </div>
       )}
 
@@ -617,13 +648,6 @@ export default function MatchupTab({
                 </div>
               </ModelBlock>
             )}
-
-            <ModelBlock color={MODEL_COLORS.consensus} title="Average (consensus)" pick={pickOf(bundle.consensus)} prob={probOf(bundle.consensus)}>
-              {modelKeys.filter(([k]) => k !== "consensus").map(([k, lbl]) => (
-                <ProbBar key={k} label={lbl} p={bundle[k][1]} color={MODEL_COLORS[k]} />
-              ))}
-              <div className="text-[10px] text-slate-400">Equal-weight mean of every model with data for this game — historically the best calibrated.</div>
-            </ModelBlock>
           </div>
         </div>
       )}

@@ -6,6 +6,7 @@ import type { TeamMeta } from "../../../lib/team/meta";
 import { FilterGroup, stickyColCls, stickyColHeadCls, ScrollHint } from "../../../components/ui";
 import {
   MODEL_KEYS,
+  MODEL_COLORS,
   type MetricKey,
   probBundle,
   favoriteSide,
@@ -30,6 +31,7 @@ interface Rec {
   spread: number | null;
   favSide: string | null;
   actual: string | null;
+  isTie: boolean;
   picks: Record<MetricKey, { team: string | null; side: string | null; conf: number | null; correct: boolean | null }>;
 }
 
@@ -95,6 +97,7 @@ export default function ModelOverviewTab({
         spread: g.spread_line == null ? null : Number(g.spread_line),
         favSide: favoriteSide(g.spread_line == null ? null : Number(g.spread_line)),
         actual,
+        isTie: g.home_score != null && g.away_score != null && Number(g.home_score) === Number(g.away_score),
         picks,
       };
     });
@@ -144,11 +147,12 @@ export default function ModelOverviewTab({
     const p = rec.picks[primary];
     const logo = p.team ? meta.get(p.team)?.logo : null;
     const pctTxt = p.conf == null ? "—" : `${Math.round(100 * p.conf)}%`;
-    const title = `${rec.away} @ ${rec.home}\nPick: ${p.team ?? "—"} — ${pctTxt}\nSpread: ${rec.spread ?? "—"}\nResult: ${rec.actual ?? "—"} — ${p.correct === true ? "Correct ✓" : p.correct === false ? "Wrong ✗" : "Upcoming"}`;
+    const resultTxt = rec.isTie ? "TIE" : (rec.actual ?? "—");
+    const title = `${rec.away} @ ${rec.home}\nPick: ${p.team ?? "—"} — ${pctTxt}\nSpread: ${rec.spread ?? "—"}\nResult: ${resultTxt} — ${rec.isTie ? "Tie (ungraded)" : p.correct === true ? "Correct ✓" : p.correct === false ? "Wrong ✗" : "Upcoming"}`;
     // color + glyph carry correctness; the per-cell % lives in the hover title
     // (2,300 tiny numbers were noise — audit 7c)
-    const bg = p.correct === true ? "#DFF5E1" : p.correct === false ? "#FBE4E4" : "#fff";
-    const bc = p.correct === true ? "#cfeacd" : p.correct === false ? "#f2cccc" : "#eee";
+    const bg = rec.isTie ? "#FEF9C3" : p.correct === true ? "#DFF5E1" : p.correct === false ? "#FBE4E4" : "#fff";
+    const bc = rec.isTie ? "#fde68a" : p.correct === true ? "#cfeacd" : p.correct === false ? "#f2cccc" : "#eee";
     return (
       <td
         className="cursor-pointer border p-1.5 text-center align-middle"
@@ -160,6 +164,7 @@ export default function ModelOverviewTab({
           {logo ? <img src={logo} alt={p.team ?? ""} className="h-6" loading="lazy" decoding="async" /> : <div className="text-xs font-bold">{p.team ?? "—"}</div>}
           {p.correct === true && <span className="absolute -right-0.5 -top-1 text-[9px] font-black text-[#2CA25F]">✓</span>}
           {p.correct === false && <span className="absolute -right-0.5 -top-1 text-[9px] font-black text-[#C8102E]">✗</span>}
+          {rec.isTie && <span className="absolute -right-0.5 -top-1 text-[9px] font-black text-[#B58B00]">=</span>}
         </div>
       </td>
     );
@@ -253,7 +258,13 @@ export default function ModelOverviewTab({
         <FilterGroup label="Model — which picks are graded">
           <div className="flex flex-wrap gap-2">
             {modelKeys.map(([k, lbl]) => (
-              <button key={k} onClick={() => setPrimary(k)} className={`rounded-full px-3 py-1.5 text-sm ${primary === k ? "bg-[#002f6c] text-white shadow-sm" : "bg-slate-100 text-slate-600 hover:text-slate-900"}`}>
+              <button
+                key={k}
+                onClick={() => setPrimary(k)}
+                className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm ${primary === k ? "text-white shadow-sm" : "bg-slate-100 text-slate-600 hover:text-slate-900"}`}
+                style={primary === k ? { background: MODEL_COLORS[k] } : undefined}
+              >
+                <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ background: primary === k ? "#fff" : MODEL_COLORS[k] }} />
                 {lbl}
               </button>
             ))}
@@ -341,8 +352,8 @@ export default function ModelOverviewTab({
             </div>
             <div>Spread: {activeRec.spread ?? "—"}</div>
             <div>
-              Result: {activeRec.actual ?? "—"} —{" "}
-              {activeRec.picks[primary].correct === true ? "Correct ✓" : activeRec.picks[primary].correct === false ? "Wrong ✗" : "Upcoming"}
+              Result: {activeRec.isTie ? "TIE" : (activeRec.actual ?? "—")} —{" "}
+              {activeRec.isTie ? "Tie (ungraded)" : activeRec.picks[primary].correct === true ? "Correct ✓" : activeRec.picks[primary].correct === false ? "Wrong ✗" : "Upcoming"}
             </div>
           </div>
           <button
