@@ -75,11 +75,11 @@ export default function WeeklyTab({
     const x = sub.map((r) => Number(r[gradeType]));
     const bins = buildHistogramBins(x, sturgesBinCount(x.length));
     return {
-      grid: { left: 10, right: 10, top: 30, bottom: 44, containLabel: true },
+      grid: { left: 44, right: 10, top: 30, bottom: 44, containLabel: true },
       legend: { top: 0 },
       tooltip: { trigger: "axis" },
       xAxis: { type: "value", min: bins.lo, max: bins.hi, name: "Grade", nameLocation: "middle", nameGap: 26 },
-      yAxis: { type: "value", name: "Teams" },
+      yAxis: { type: "value", name: "Teams", nameLocation: "middle", nameGap: 30, nameRotate: 90 },
       series: [
         histogramBarSeries(bins, "#636EFA", "Teams"),
         {

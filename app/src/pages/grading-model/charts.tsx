@@ -80,9 +80,9 @@ export function offDefScatterOption(points: TeamPoint[], meta: Map<string, TeamM
   // symbols, labels, and margins instead of rendering the desktop layout at
   // a smaller scale.
   const baseOption = {
-    grid: { left: 10, right: 20, top: 20, bottom: 46, containLabel: true },
+    grid: { left: 44, right: 20, top: 20, bottom: 46, containLabel: true },
     xAxis: { type: "value", min: xMin, max: xMax, name: "Offense", nameLocation: "middle", nameGap: 28 },
-    yAxis: { type: "value", min: yMin, max: yMax, name: "Defense" },
+    yAxis: { type: "value", min: yMin, max: yMax, name: "Defense", nameLocation: "middle", nameGap: 30, nameRotate: 90 },
     tooltip: {
       trigger: "item",
       formatter: (params: unknown) => {
@@ -119,9 +119,9 @@ export function offDefScatterOption(points: TeamPoint[], meta: Map<string, TeamM
       {
         query: { maxWidth: 520 },
         option: {
-          grid: { left: 4, right: 12, top: 14, bottom: 34, containLabel: true },
+          grid: { left: 34, right: 12, top: 14, bottom: 34, containLabel: true },
           xAxis: { nameGap: 20, nameTextStyle: { fontSize: 10 } },
-          yAxis: { nameTextStyle: { fontSize: 10 } },
+          yAxis: { nameGap: 22, nameTextStyle: { fontSize: 10 } },
           series: [
             {
               symbolSize: 20,
