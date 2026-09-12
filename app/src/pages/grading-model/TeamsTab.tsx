@@ -109,7 +109,7 @@ export default function TeamsTab({
     const avg = gradeVals.filter(Number.isFinite).reduce((a, b) => a + b, 0) / (gradeVals.filter(Number.isFinite).length || 1);
 
     return {
-      grid: { left: 10, right: 10, top: 20, bottom: 10, containLabel: true },
+      grid: { left: 10, right: 10, top: 20, bottom: 44, containLabel: true },
       tooltip: {
         trigger: "item",
         formatter: (p: unknown) => {
@@ -311,7 +311,7 @@ export default function TeamsTab({
     const opps = rows.map((r) => opponentLabel(String(r.game_id ?? ""), team));
     const title = statLabel(selStat);
     return {
-      grid: { left: 10, right: 15, top: 30, bottom: 10, containLabel: true },
+      grid: { left: 10, right: 15, top: 30, bottom: 44, containLabel: true },
       legend: { top: 0 },
       tooltip: {
         trigger: "axis",
