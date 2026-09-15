@@ -131,6 +131,39 @@ def main():
 
     upcoming_df = pd.DataFrame(rows)
     _write_json("upcoming.json", _compact(upcoming_df))
+
+    # Per-game linear decomposition -- same exact-additive breakdown export_page.py
+    # computes for historical games (predicted_margin == intercept + sum(coef_i *
+    # scaled_feature_i)), reusing the model already fit above. Lets the Matchup
+    # Previews "Predictive" pill show top contributing variables for the live
+    # upcoming game too, not just already-scored ones.
+    imputed = model.named_steps["impute"].transform(X_test)
+    scaled = model.named_steps["scale"].transform(imputed)
+    coef = model.named_steps["reg"].coef_
+    intercept = float(model.named_steps["reg"].intercept_)
+    contributions = scaled * coef  # (n_games, n_features)
+
+    feat_rows = []
+    for i, (_, row) in enumerate(upcoming.iterrows()):
+        feat_row = {
+            "season": int(row["season"]), "week": int(row["week"]),
+            "home_team": row["home_team"], "away_team": row["away_team"],
+            "intercept": intercept,
+        }
+        for j, col in enumerate(FEATURE_COLS):
+            feat_row[col] = None if pd.isna(row[col]) else float(row[col])
+            feat_row[f"{col}_contrib"] = float(contributions[i, j])
+            if col.startswith("diff_"):
+                home_col, away_col = f"home_{col[len('diff_'):]}", f"away_{col[len('diff_'):]}"
+            elif col == "rest_diff":
+                home_col, away_col = "home_rest", "away_rest"
+            else:
+                home_col, away_col = None, None
+            if home_col is not None and home_col in row.index and away_col in row.index:
+                feat_row[f"{col}_home"] = None if pd.isna(row[home_col]) else float(row[home_col])
+                feat_row[f"{col}_away"] = None if pd.isna(row[away_col]) else float(row[away_col])
+        feat_rows.append(feat_row)
+    _write_json("upcoming_features.json", _compact(pd.DataFrame(feat_rows)))
     _write_json("upcoming_meta.json", {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "season": season, "week": week, "n_games": len(upcoming_df),

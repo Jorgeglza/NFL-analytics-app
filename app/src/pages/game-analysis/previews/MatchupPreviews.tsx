@@ -3,9 +3,18 @@
 // trend features and grades for any game.
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useSearchParams } from "react-router-dom";
-import { getSchedule, getGrades, getTeamWeek, getTeamWeekRanks, getMeta, getPredictiveModelGames, getPredictiveModelMeta, getPredictiveModelUpcoming, getPredictiveModelUpcomingMeta, type Row } from "../../../lib/data/loader";
+import {
+  getSchedule, getGrades, getTeamWeek, getTeamWeekRanks, getMeta,
+  getPredictiveModelGames, getPredictiveModelMeta, getPredictiveModelUpcoming, getPredictiveModelUpcomingMeta,
+  getPredictiveModelGameFeatures, getPredictiveModelUpcomingFeatures, getPredictiveModelImportance,
+  type Row,
+} from "../../../lib/data/loader";
 import { getTeamMetaMap, type TeamMeta } from "../../../lib/team/meta";
-import { buildHist, buildGradesIndex, buildTeamWeekIndex, buildScheduleEloIndex, buildPredictiveIndex, type PredictiveIndex, type PredictiveCoverage } from "./engine";
+import {
+  buildHist, buildGradesIndex, buildTeamWeekIndex, buildScheduleEloIndex,
+  buildPredictiveIndex, buildPredictiveFeaturesIndex,
+  type PredictiveIndex, type PredictiveCoverage, type PredictiveFeaturesIndex,
+} from "./engine";
 import { Loading, ErrorRetry } from "../../../components/Loading";
 import { useIsMobileViewport } from "../../../lib/useIsMobileViewport";
 import { TabBar } from "../../../components/TabBar";
@@ -56,6 +65,11 @@ export default function MatchupPreviews() {
   const [predIdx, setPredIdx] = useState<PredictiveIndex | null>(null);
   const [predictiveUnavailable, setPredictiveUnavailable] = useState(false);
   const [predictiveCoverage, setPredictiveCoverage] = useState<PredictiveCoverage | null>(null);
+  // Per-game feature contributions ("what's leading to this prediction") — Matchup tab only.
+  // Loaded alongside predIdx above; a failure here doesn't set predictiveUnavailable since the
+  // pick/probability itself still works fine without a breakdown.
+  const [predFeaturesIdx, setPredFeaturesIdx] = useState<PredictiveFeaturesIndex | null>(null);
+  const [predImportance, setPredImportance] = useState<Row[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [retryTick, setRetryTick] = useState(0);
   const isMobile = useIsMobileViewport();
@@ -139,6 +153,15 @@ export default function MatchupPreviews() {
       .catch(() => {
         if (!cancelled) setPredictiveUnavailable(true);
       });
+    Promise.all([getPredictiveModelGameFeatures(), getPredictiveModelUpcomingFeatures(), getPredictiveModelImportance()])
+      .then(([featureRows, upcomingFeatureRows, importanceRows]) => {
+        if (cancelled) return;
+        setPredFeaturesIdx(buildPredictiveFeaturesIndex([...featureRows, ...upcomingFeatureRows]));
+        setPredImportance(importanceRows);
+      })
+      .catch(() => {
+        // Silent — the pill just falls back to "no breakdown available for this game".
+      });
     return () => {
       cancelled = true;
     };
@@ -203,6 +226,8 @@ export default function MatchupPreviews() {
               predIdx={predIdx ?? undefined}
               predictiveUnavailable={predictiveUnavailable}
               predictiveCoverage={predictiveCoverage}
+              predFeaturesIdx={predFeaturesIdx ?? undefined}
+              predImportance={predImportance}
               initialSelection={matchupSelection}
             />
           )}

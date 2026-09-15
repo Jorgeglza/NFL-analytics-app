@@ -34,7 +34,7 @@ jobs:
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "data: predictive model weekly refresh"
-          file_pattern: "app/public/data/predictive_model/upcoming.json app/public/data/predictive_model/upcoming_meta.json"
+          file_pattern: "app/public/data/predictive_model/upcoming.json app/public/data/predictive_model/upcoming_meta.json app/public/data/predictive_model/upcoming_features.json"
 
       # Commits pushed with GITHUB_TOKEN do not fire push-triggered workflows,
       # so the Pages deploy must be dispatched explicitly.

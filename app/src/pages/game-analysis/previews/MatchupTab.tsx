@@ -28,6 +28,8 @@ import {
   MODEL_COLORS,
   buildScheduleEloHistoryIndex,
   lastNEloRatings,
+  predictiveKey,
+  topPredictiveDrivers,
   type HistAgg,
   type GradesIndex,
   type TeamWeekIndex,
@@ -35,9 +37,13 @@ import {
   type EloHistoryIndex,
   type PredictiveIndex,
   type PredictiveCoverage,
+  type PredictiveFeaturesIndex,
+  type PredictiveDriver,
   predictiveDisclaimer,
 } from "./engine";
 import type { EloRatingPoint } from "../../../lib/logic/elo";
+import { labelFor } from "../../predictive-model/shared";
+import { describeFeature } from "../../predictive-model/featureDescriptions";
 
 const fmtMl = (ml: number | null) => (ml == null ? "—" : ml > 0 ? `+${Math.round(ml)}` : String(Math.round(ml)));
 const pct1 = (p: number | null) => (p == null ? "—" : `${(100 * p).toFixed(1)}%`);
@@ -53,6 +59,35 @@ function ProbBar({ label, p, color, note }: { label: string; p: number | null; c
       </div>
       <span className="w-10 shrink-0 text-right font-bold tabular-nums">{p == null ? "—" : `${Math.round(100 * p)}%`}</span>
       {note != null && <span className="w-20 shrink-0 truncate text-slate-400" title={note}>{note}</span>}
+    </div>
+  );
+}
+
+const fmtVal = (v: number) => (Math.abs(v) >= 10 ? Math.round(v).toString() : v.toFixed(2));
+
+/** One predictive-model variable's row: label, a bar sized to its share of the model's *global*
+ *  reliance among the shown top 5 (permutation importance — stable, unlike a raw per-game linear
+ *  contribution, which this model's collinear feature pairs — e.g. Elo alongside its own
+ *  square/sqrt transform — can make individually huge and even sign-flipped relative to which
+ *  team actually has the better raw number; see `topPredictiveDrivers` in engine.ts), and the
+ *  real per-team values (reliable regardless of collinearity — literal box-score facts). No
+ *  per-feature "favors this team" claim is made, deliberately. Hover for the feature's plain-
+ *  language description plus the exact numbers — see `describeFeature` (predictive-model/
+ *  featureDescriptions). */
+function ContribRow({ r, away, home }: { r: PredictiveDriver; away: string; home: string }) {
+  const actual = r.home != null && r.away != null ? `${away} ${fmtVal(r.away)} · ${home} ${fmtVal(r.home)}` : r.diff != null ? `Δ ${fmtVal(r.diff)}` : "";
+  const detail =
+    `${describeFeature(r.feature)}\n` +
+    (actual ? `${actual}${r.diff != null ? ` (diff ${fmtVal(r.diff)})` : ""}\n` : "") +
+    `${r.pctShare.toFixed(0)}% of the model's reliance among these top 5`;
+  return (
+    <div className="flex items-center gap-2 text-[11px]" title={detail}>
+      <span className="w-24 shrink-0 truncate text-slate-500">{labelFor(r.feature)}</span>
+      <div className="h-3 flex-1 overflow-hidden rounded-full bg-slate-100">
+        <div className="h-full rounded-full" style={{ width: `${Math.max(4, Math.min(100, r.pctShare))}%`, background: MODEL_COLORS.predictive, opacity: 0.85 }} />
+      </div>
+      <span className="w-8 shrink-0 text-right font-bold tabular-nums text-slate-600">{r.pctShare.toFixed(0)}%</span>
+      {actual && <span className="w-28 shrink-0 truncate text-[10px] text-slate-400">{actual}</span>}
     </div>
   );
 }
@@ -266,6 +301,8 @@ export default function MatchupTab({
   predIdx,
   predictiveUnavailable = false,
   predictiveCoverage = null,
+  predFeaturesIdx,
+  predImportance = [],
   initialSelection,
 }: {
   schedule: Row[];
@@ -278,6 +315,8 @@ export default function MatchupTab({
   predIdx?: PredictiveIndex;
   predictiveUnavailable?: boolean;
   predictiveCoverage?: PredictiveCoverage | null;
+  predFeaturesIdx?: PredictiveFeaturesIndex;
+  predImportance?: Row[];
   /** Preselect a game (e.g. jumped here from a Week Preview card) — takes priority over URL params. */
   initialSelection?: { season: string; week: string; game: string } | null;
 }) {
@@ -317,6 +356,18 @@ export default function MatchupTab({
   const eloHistIdx = useMemo<EloHistoryIndex>(() => buildScheduleEloHistoryIndex(schedule), [schedule]);
   const awayEloHist = useMemo(() => lastNEloRatings(eloHistIdx, away, s, w), [eloHistIdx, away, s, w]);
   const homeEloHist = useMemo(() => lastNEloRatings(eloHistIdx, home, s, w), [eloHistIdx, home, s, w]);
+
+  // Predictive model — top 5 inputs by global importance, with this specific game's
+  // real values/direction layered in (see topPredictiveDrivers in engine.ts for why
+  // ranking is global rather than per-game-contribution based).
+  const predFeatureRow = useMemo(
+    () => (selGame ? predFeaturesIdx?.get(predictiveKey(s, w, away, home)) ?? null : null),
+    [predFeaturesIdx, selGame, s, w, away, home],
+  );
+  const predTop5 = useMemo(
+    () => (predFeatureRow && predImportance.length ? topPredictiveDrivers(predImportance, predFeatureRow, 5) : []),
+    [predImportance, predFeatureRow],
+  );
 
   // Keep season/week/game in the URL so "How the models work" (and browser
   // back/forward) can return to the exact matchup being viewed.
@@ -793,10 +844,19 @@ export default function MatchupTab({
             {!predictiveUnavailable && (
               <ModelBlock color={MODEL_COLORS.predictive} title="Predictive (margin reg.)" pick={pickOf(bundle.predictive)} prob={probOf(bundle.predictive)}>
                 <ProbBar label="Predicted home win prob." p={bundle.predictive[1]} color={MODEL_COLORS.predictive} />
+                {predTop5.length > 0 ? (
+                  <>
+                    <div className="pt-0.5 text-[9px] font-medium uppercase tracking-wider text-slate-400">Top drivers of this prediction</div>
+                    {predTop5.map((r) => (
+                      <ContribRow key={r.feature} r={r} away={away} home={home} />
+                    ))}
+                  </>
+                ) : (
+                  <div className="text-[10px] italic text-slate-400">No variable breakdown available for this game.</div>
+                )}
                 <div className="text-[10px] text-slate-400">
-                  Walk-forward margin regression (Elo/EPA/injury/rest/weather diffs) — historical seasons
-                  {predictiveCoverage ? ` ${predictiveCoverage.min}–${predictiveCoverage.max}` : ""}, plus a live prediction for the
-                  single next upcoming week once scored. Research found <b>no confirmed edge over the market</b> (see Models Guide).
+                  Linear regression on pre-game stats predicts the scoring margin.{" "}
+                  <a href="#/game_analysis/models_guide" className="underline decoration-dotted underline-offset-2 hover:text-slate-600">Model details →</a>
                 </div>
               </ModelBlock>
             )}

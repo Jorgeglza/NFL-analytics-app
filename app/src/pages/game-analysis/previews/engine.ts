@@ -297,6 +297,62 @@ export function buildPredictiveIndex(rows: Row[]): PredictiveIndex {
   return idx;
 }
 
+// Per-game feature breakdown, for the Matchup tab's Predictive card ("what's leading to this
+// prediction"). Reuses game_features.json (historical — export_page.py) merged with
+// upcoming_features.json (the live next week — export_upcoming.py's mirror of the same exact
+// linear decomposition, added alongside its prediction so the live pick gets a breakdown too).
+export type PredictiveFeaturesIndex = Map<string, Row>;
+
+export function buildPredictiveFeaturesIndex(rows: Row[]): PredictiveFeaturesIndex {
+  const idx: PredictiveFeaturesIndex = new Map();
+  for (const r of rows) {
+    idx.set(predictiveKey(Number(r.season), Number(r.week), String(r.away_team), String(r.home_team)), r);
+  }
+  return idx;
+}
+
+export interface PredictiveDriver {
+  feature: string;
+  /** Share of the shown drivers' combined *global* permutation importance — a stable percentage
+   *  (never negative, never blows up), unlike a raw per-game coefficient contribution. */
+  pctShare: number;
+  /** Home-minus-away diff value the model actually trains on (null for game-context columns). */
+  diff: number | null;
+  /** Raw per-team values behind the diff, when available (not every feature has a per-team split). */
+  home: number | null;
+  away: number | null;
+}
+
+/** Top `n` model inputs, ranked by *global* permutation importance (`importanceRows`, from
+ *  importance.json) rather than this game's own coefficient contribution or its sign. That's
+ *  deliberate, and not just about magnitude: the 41 features include several near-duplicates of
+ *  each other (Elo alongside its own square/sqrt transform; total EPA diff alongside its
+ *  pass/rush split), so their individual linear contributions — while an exact decomposition that
+ *  sums correctly — can be huge, near-cancelling, and even flip which side an individual
+ *  coefficient's sign nominally "favors" relative to which team simply has the better raw number
+ *  (docs/predictive-model-decision.md's explicit warning that raw coefficients are unstable here,
+ *  observed directly during development: BAL had the clearly better raw L3 EPA diff for a real
+ *  game, yet that feature's own coefficient contribution pointed the other way). So this only
+ *  reports what's actually reliable: global importance (stable ranking) and the real per-team
+ *  values (`featureRow`, from `PredictiveFeaturesIndex`) — never a per-feature "favors X" claim. */
+export function topPredictiveDrivers(importanceRows: Row[], featureRow: Row | null, n = 5): PredictiveDriver[] {
+  const ranked = [...importanceRows].sort((a, b) => Number(b.importance ?? 0) - Number(a.importance ?? 0)).slice(0, n);
+  const totalImp = ranked.reduce((s, r) => s + Math.max(0, Number(r.importance ?? 0)), 0) || 1;
+  return ranked.map((r) => {
+    const feature = String(r.feature);
+    const homeRaw = featureRow?.[`${feature}_home`];
+    const awayRaw = featureRow?.[`${feature}_away`];
+    const diffRaw = featureRow?.[feature];
+    return {
+      feature,
+      pctShare: (Math.max(0, Number(r.importance ?? 0)) / totalImp) * 100,
+      diff: diffRaw == null ? null : Number(diffRaw),
+      home: homeRaw == null ? null : Number(homeRaw),
+      away: awayRaw == null ? null : Number(awayRaw),
+    };
+  });
+}
+
 /** Shared footer disclaimer wording for every tab that surfaces the predictive model. */
 export function predictiveDisclaimer(coverage: PredictiveCoverage | null): string {
   const range = coverage ? `seasons ${coverage.min}–${coverage.max}` : "no seasons";

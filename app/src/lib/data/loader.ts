@@ -129,6 +129,8 @@ export const getPredictiveModelMeta = () => fetchJson<PredictiveModelMeta>("pred
 // ({cols:[],rows:[]}) whenever every configured season is fully played (offseason).
 export const getPredictiveModelUpcoming = async () =>
   toRecords(await fetchJson<CompactFrame>("predictive_model/upcoming.json"));
+export const getPredictiveModelUpcomingFeatures = async () =>
+  toRecords(await fetchJson<CompactFrame>("predictive_model/upcoming_features.json"));
 
 export interface PredictiveModelUpcomingMeta {
   generated_at: string;
