@@ -162,6 +162,23 @@ function EloSpark({
   const resultWord = (w: boolean | null) =>
     w == null ? '<span style="color:#94a3b8">Tie</span>' : w ? `<span style="color:${WIN_DOT}">Win</span>` : `<span style="color:${LOSS_DOT}">Loss</span>`;
   const dotStyle = (p: EloRatingPoint | null) => (p?.win == null ? "#94a3b8" : p.win ? WIN_DOT : LOSS_DOT);
+  // A single-week gap flanked by real games in the *same* season is an ordinary bye — fill it
+  // in (interpolated, no dot) so the line reads through it. Anything else null'd out —
+  // multi-week gaps, or a gap whose neighbors fall in different seasons — is a real break: the
+  // team's season having ended while the other one kept playing (postseason), or is about to
+  // start. This can't be a blanket `connectNulls: true` on the series: a whole postseason run of
+  // nulls for the non-playoff team also has "real values on both sides" once the next season's
+  // games are in view, which would wrongly bridge the entire gap between the two seasons.
+  const eloSeriesData = (pts: (EloRatingPoint | null)[]) =>
+    pts.map((p, i) => {
+      if (p) return { value: +p.rating.toFixed(1), itemStyle: { color: dotStyle(p), opacity: 0.85 } };
+      const prev = pts[i - 1];
+      const next = pts[i + 1];
+      if (prev && next && prev.season === next.season) {
+        return { value: +((prev.rating + next.rating) / 2).toFixed(1), symbol: "none" };
+      }
+      return null;
+    });
   // One team's tooltip line, ordered Elo → week/season → result — kept to a single
   // compact line (incl. the opponent's own rating that game) rather than a block.
   const fmtPoint = (label: string, color: string, pt: EloRatingPoint) => {
@@ -239,18 +256,14 @@ function EloSpark({
         {
           type: "line",
           name: awayLabel,
-          data: awayP.map((p) => (p == null ? null : { value: +p.rating.toFixed(1), itemStyle: { color: dotStyle(p), opacity: 0.85 } })),
+          data: eloSeriesData(awayP),
           lineStyle: { color: awayColor, width: 2 },
           symbol: "circle",
           symbolSize: 3,
-          // true, deliberately, and this is the correct setting for both cases: ECharts
-          // only ever bridges a null that has real values on BOTH sides in the data array
-          // — a mid-season bye week (real game before and after it) connects straight
-          // through with no dot at that slot, exactly as wanted. A trailing run of nulls
-          // (this team's season already over while the other one made the playoffs) has
-          // no later real value to connect to, so the line simply stops — it does NOT
-          // get bridged regardless of this setting. So one flag correctly handles both.
-          connectNulls: true,
+          // false: bye weeks are already filled in with a real (interpolated) value above,
+          // so the line naturally runs through them without needing this — a remaining null
+          // is a genuine break (postseason gap, or a season boundary) and must stay broken.
+          connectNulls: false,
           markLine: dividers.length
             ? { symbol: "none", silent: true, label: { show: false }, lineStyle: { type: "dotted", color: "#cbd5e1", width: 1 }, data: dividers.map((i) => ({ xAxis: i - 0.5 })) }
             : undefined,
@@ -258,11 +271,11 @@ function EloSpark({
         {
           type: "line",
           name: homeLabel,
-          data: homeP.map((p) => (p == null ? null : { value: +p.rating.toFixed(1), itemStyle: { color: dotStyle(p), opacity: 0.85 } })),
+          data: eloSeriesData(homeP),
           lineStyle: { color: homeColor, width: 2 },
           symbol: "circle",
           symbolSize: 3,
-          connectNulls: true,
+          connectNulls: false,
         },
       ],
       // eslint-disable-next-line react-hooks/exhaustive-deps
