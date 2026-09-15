@@ -108,6 +108,8 @@ export interface EloRatingPoint {
   win: boolean | null;
   /** Opponent, for hover/label context (that season's own abbreviation, not alias-mapped). */
   opponent: string;
+  /** Opponent's own pre-game rating for this same matchup — how strong they were when they played. */
+  oppRating: number;
 }
 
 /**
@@ -146,8 +148,8 @@ export function buildEloRatingHistory(games: (EloGame & { week: number })[]): El
     set(g.homeTeam, newHome);
     set(g.awayTeam, newAway);
     const homeWin = margin === 0 ? null : margin > 0;
-    out.push({ team: eloTeamKey(g.homeTeam), season: g.season, week: g.week, rating: newHome, win: homeWin, opponent: g.awayTeam });
-    out.push({ team: eloTeamKey(g.awayTeam), season: g.season, week: g.week, rating: newAway, win: homeWin == null ? null : !homeWin, opponent: g.homeTeam });
+    out.push({ team: eloTeamKey(g.homeTeam), season: g.season, week: g.week, rating: newHome, win: homeWin, opponent: g.awayTeam, oppRating: ea });
+    out.push({ team: eloTeamKey(g.awayTeam), season: g.season, week: g.week, rating: newAway, win: homeWin == null ? null : !homeWin, opponent: g.homeTeam, oppRating: eh });
   }
   return out;
 }

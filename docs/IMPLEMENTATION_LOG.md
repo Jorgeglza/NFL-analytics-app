@@ -557,6 +557,14 @@ Full work list, with per-item checkboxes and severities: **`docs/MOBILE_READINES
   on the default branch.
 - Plan: `C:\Users\Jorge\.claude\plans\need-to-plan-the-cheerful-papert.md`.
 
+### 2026-09-14 (cont. x8) — Matchup Previews: Elo tooltip — opponent's rating, more compact
+User confirmed the hover fix works; asked to add the opposing team's own Elo rating for that game, and make the tooltip more space-efficient.
+- `elo.ts`: `EloRatingPoint` gains `oppRating` — the opponent's pre-game rating for that same matchup (computed inline alongside `win`/`opponent`, from the same `ea`/`eh` already in scope — no extra lookup).
+- `fmtPoint` collapsed from a two-line block to one compact line per team: `● CLE 1380 · Wk11 '24 · Loss vs NO (1443)` — team dot, rating, abbreviated week/season, result, opponent + their rating in parens. Two-digit year (`'24`) and single bullet separators instead of the prior "Week X · Y" / separate line.
+- Tightened the tooltip overall: `padding:[6,8]` (was ECharts' default ~10px) and `textStyle.fontSize:11`; the merge-case divider between two teams' lines shrunk from `margin:6px 0` to `2px 0` since each entry is now a single line.
+- Verified with a real mouse hover + screenshot: `● CLE 1380 · Wk11 '24 · Loss vs NO (1443)`.
+- `npm run build` / `tsc --noEmit` clean.
+
 ### 2026-09-14 (cont. x7) — Matchup Previews: Elo tooltip — found and fixed why content was invisible
 User confirmed (with a screenshot) the actual bug: hovering did show the axisPointer's dashed vertical line, but the info box itself never appeared.
 - Root cause: `formatter` was returning `""` unconditionally (content was written later, in `position`) — but ECharts treats an empty `formatter` result as "nothing to show" and skips displaying the tooltip box entirely (the axisPointer is a separate component, so it still rendered — exactly matching the reported symptom).

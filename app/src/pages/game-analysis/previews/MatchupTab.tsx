@@ -114,11 +114,13 @@ function EloSpark({
   const resultWord = (w: boolean | null) =>
     w == null ? '<span style="color:#94a3b8">Tie</span>' : w ? `<span style="color:${WIN_DOT}">Win</span>` : `<span style="color:${LOSS_DOT}">Loss</span>`;
   const dotStyle = (p: EloRatingPoint | null) => (p?.win == null ? "#94a3b8" : p.win ? WIN_DOT : LOSS_DOT);
-  // One team's tooltip block, ordered Elo → week → season → result (per feedback),
-  // opponent tacked on for context.
-  const fmtPoint = (label: string, color: string, pt: EloRatingPoint) =>
-    `<div style="font-weight:700;color:#0f172a"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${color};margin-right:5px"></span>${label} — Elo <b>${Math.round(pt.rating)}</b></div>` +
-    `<div style="margin-top:2px;color:#64748b">Week ${pt.week} · ${pt.season} · ${resultWord(pt.win)} <span style="color:#94a3b8">vs ${pt.opponent}</span></div>`;
+  // One team's tooltip line, ordered Elo → week/season → result — kept to a single
+  // compact line (incl. the opponent's own rating that game) rather than a block.
+  const fmtPoint = (label: string, color: string, pt: EloRatingPoint) => {
+    const dot = `<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${color};margin-right:4px"></span>`;
+    const bull = '<span style="color:#cbd5e1;margin:0 4px">·</span>';
+    return `<div style="white-space:nowrap">${dot}<b>${label} ${Math.round(pt.rating)}</b>${bull}Wk${pt.week} '${String(pt.season).slice(-2)}${bull}${resultWord(pt.win)} vs ${pt.opponent} <span style="color:#94a3b8">(${Math.round(pt.oppRating)})</span></div>`;
+  };
   const chartRef = useRef<import("echarts").ECharts | null>(null);
   /** Tooltip content for game index `i`. `cursorY` is the real mouse pixel Y when
    *  known (from `position`) — with it, picks whichever line is closer, unless
@@ -132,7 +134,7 @@ function EloSpark({
     if (!a && !h) return "";
     if (!a) return fmtPoint(homeLabel, homeColor, h!);
     if (!h) return fmtPoint(awayLabel, awayColor, a);
-    const sep = '<div style="margin:6px 0;border-top:1px solid #e2e8f0"></div>';
+    const sep = '<div style="margin:2px 0;border-top:1px solid #e2e8f0"></div>';
     const chart = chartRef.current;
     if (chart && cursorY != null) {
       const yA = chart.convertToPixel({ xAxisIndex: 0, yAxisIndex: 0 }, [i, a.rating])[1];
@@ -163,6 +165,8 @@ function EloSpark({
       tooltip: {
         trigger: "axis",
         confine: true,
+        padding: [6, 8],
+        textStyle: { fontSize: 11 },
         axisPointer: { type: "line", label: { show: false }, lineStyle: { color: "#e2e8f0", width: 1 } },
         // formatter must return non-empty content up front — an empty string here
         // makes ECharts treat the hover as "nothing to show" and skip rendering the
