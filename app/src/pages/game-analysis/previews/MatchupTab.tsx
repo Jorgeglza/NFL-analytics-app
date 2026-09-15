@@ -28,6 +28,7 @@ import {
   MODEL_COLORS,
   buildScheduleEloHistoryIndex,
   alignedEloTimeline,
+  alignedMarginTimeline,
   predictiveKey,
   topPredictiveDrivers,
   type HistAgg,
@@ -36,6 +37,7 @@ import {
   type EloIndex,
   type EloHistoryIndex,
   type EloTimelineSlot,
+  type MarginTimelineSlot,
   type PredictiveIndex,
   type PredictiveCoverage,
   type PredictiveFeaturesIndex,
@@ -293,6 +295,83 @@ function EloSpark({
   return <div ref={ref} className="h-24 w-full" />;
 }
 
+/** "W1".."W18" for the regular season, then the round abbreviation for the postseason (weeks
+ *  19-22, same numbering the schedule/Elo timeline already use). */
+function weekLabel(week: number): string {
+  const POST: Record<number, string> = { 19: "WC", 20: "DIV", 21: "CON", 22: "SB" };
+  return POST[week] ?? `W${week}`;
+}
+
+/** Points-margin bar chart for the Pythagorean card — one bar per team per played week this
+ *  season (season-scoped, unlike Elo's rolling multi-season line — see `alignedMarginTimeline`),
+ *  each team's own color, diverging from a zero baseline that a bar chart includes by default (no
+ *  `scale:true` needed the way Elo's line did). A week only one team played (an ordinary bye, or
+ *  a first-round playoff bye) simply has no bar for that side — not a zero-height one. Bars are
+ *  already spatially distinct, so — unlike Elo's dual-line nearest-cursor tooltip — a plain
+ *  axis-trigger tooltip listing whichever team(s) played that week is unambiguous. No separate
+ *  win/loss dot: a bar's own direction already is the result. */
+function MarginBars({
+  slots,
+  awayColor,
+  homeColor,
+  awayLabel,
+  homeLabel,
+}: {
+  slots: MarginTimelineSlot[];
+  awayColor: string;
+  homeColor: string;
+  awayLabel: string;
+  homeLabel: string;
+}) {
+  const resultWord = (w: boolean | null) =>
+    w == null ? '<span style="color:#94a3b8">Tie</span>' : w ? `<span style="color:${WIN_DOT}">Win</span>` : `<span style="color:${LOSS_DOT}">Loss</span>`;
+  const fmtLine = (label: string, color: string, p: NonNullable<MarginTimelineSlot["away"]>) => {
+    const dot = `<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${color};margin-right:4px"></span>`;
+    const sign = p.margin >= 0 ? "+" : "";
+    return `<div style="white-space:nowrap">${dot}<b>${label}</b> ${p.scored}-${p.allowed} (${sign}${p.margin}) vs ${p.opponent} · ${resultWord(p.win)}</div>`;
+  };
+  const option = useMemo<EChartsOption>(
+    () => ({
+      grid: { left: 26, right: 6, top: 8, bottom: 16, containLabel: true },
+      xAxis: { type: "category", data: slots.map((s) => weekLabel(s.week)), axisLabel: { fontSize: 9 }, axisTick: { show: false } },
+      yAxis: { type: "value", name: "Margin", nameTextStyle: { fontSize: 9, color: "#94a3b8" }, axisLabel: { fontSize: 9 }, splitLine: { lineStyle: { color: "#f1f5f9" } } },
+      tooltip: {
+        trigger: "axis",
+        confine: true,
+        padding: [6, 8],
+        textStyle: { fontSize: 11 },
+        axisPointer: { type: "shadow" },
+        formatter: (ps: unknown) => {
+          const i = (ps as { dataIndex: number }[])[0]?.dataIndex ?? 0;
+          const slot = slots[i];
+          const lines: string[] = [];
+          if (slot.away) lines.push(fmtLine(awayLabel, awayColor, slot.away));
+          if (slot.home) lines.push(fmtLine(homeLabel, homeColor, slot.home));
+          return lines.join("");
+        },
+      },
+      series: [
+        {
+          type: "bar",
+          name: awayLabel,
+          data: slots.map((s) => (s.away ? { value: s.away.margin, itemStyle: { color: awayColor, opacity: 0.85 } } : null)),
+        },
+        {
+          type: "bar",
+          name: homeLabel,
+          data: slots.map((s) => (s.home ? { value: s.home.margin, itemStyle: { color: homeColor, opacity: 0.85 } } : null)),
+        },
+      ],
+    }),
+    [slots, awayColor, homeColor, awayLabel, homeLabel],
+  );
+  const ref = useECharts(option);
+  if (slots.length < 2) {
+    return <div className="flex h-8 items-center text-[10px] italic text-slate-400">Not enough games yet</div>;
+  }
+  return <div ref={ref} className="h-24 w-full" />;
+}
+
 /** One model's breakdown card: pick header + how-it-got-there visual. */
 function ModelBlock({
   color,
@@ -389,6 +468,13 @@ export default function MatchupTab({
   const eloTimeline = useMemo(
     () => alignedEloTimeline(eloHistIdx, away, home, s, w),
     [eloHistIdx, away, home, s, w],
+  );
+
+  // Points-margin timeline (for the Pythagorean card's bar chart) — season-scoped, through
+  // wkPlayed, same cutoff every other pre-game-only Pythagorean number on this tab already uses.
+  const marginTimeline = useMemo(
+    () => alignedMarginTimeline(twIdx, away, home, s, wkPlayed),
+    [twIdx, away, home, s, wkPlayed],
   );
 
   // Predictive model — top 5 concepts by this specific game's own |contribution| to the
@@ -940,10 +1026,39 @@ export default function MatchupTab({
             </ModelBlock>
 
             <ModelBlock color={MODEL_COLORS.pyth} title="Pythagorean" pick={pickOf(bundle.pyth)} prob={probOf(bundle.pyth)}>
-              <ProbBar label={`${away} expected win%`} p={keyStats.pythAway} color={MODEL_COLORS.pyth} />
-              <ProbBar label={`${home} expected win%`} p={keyStats.pythHome} color={MODEL_COLORS.pyth} />
-              <ProbBar label="log5 head-to-head" p={bundle.pyth[1]} color={MODEL_COLORS.pyth} />
-              <div className="text-[10px] text-slate-400">From points scored vs allowed through W{wkPlayed} — scoring margin predicts wins.</div>
+              {/* Expected win% KPI row — same team-dot + abbreviation convention as the Elo card. */}
+              <div className="flex items-center justify-center gap-2.5">
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="inline-block h-2 w-2 rounded-full" style={{ background: meta.get(away)?.color ?? MODEL_COLORS.pyth }} />
+                  <span className="text-[11px] font-semibold text-slate-500">{away}</span>
+                  <span className={`text-sm tabular-nums ${keyStats.pythAway != null && keyStats.pythHome != null && keyStats.pythAway > keyStats.pythHome ? "font-bold text-slate-900" : "text-slate-500"}`}>
+                    {keyStats.pythAway == null ? "—" : `${Math.round(100 * keyStats.pythAway)}%`}
+                  </span>
+                </span>
+                <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400">exp. win%</span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className={`text-sm tabular-nums ${keyStats.pythAway != null && keyStats.pythHome != null && keyStats.pythHome > keyStats.pythAway ? "font-bold text-slate-900" : "text-slate-500"}`}>
+                    {keyStats.pythHome == null ? "—" : `${Math.round(100 * keyStats.pythHome)}%`}
+                  </span>
+                  <span className="text-[11px] font-semibold text-slate-500">{home}</span>
+                  <span className="inline-block h-2 w-2 rounded-full" style={{ background: meta.get(home)?.color ?? MODEL_COLORS.pyth }} />
+                </span>
+              </div>
+
+              {/* Points margin per played week this season — one bar per team, diverging from
+                  zero. A week only one team played (bye, or a playoff first-round bye) has no
+                  bar for that side. Hover for that game's actual points scored/allowed. */}
+              <MarginBars
+                slots={marginTimeline}
+                awayColor={meta.get(away)?.color ?? MODEL_COLORS.pyth}
+                homeColor={meta.get(home)?.color ?? MODEL_COLORS.pyth}
+                awayLabel={away}
+                homeLabel={home}
+              />
+
+              <div className="text-[10px] text-slate-400">
+                From points scored vs allowed through W{wkPlayed} — each side's expected win% is combined via log5 into the head-to-head probability above.
+              </div>
             </ModelBlock>
 
             <ModelBlock color={MODEL_COLORS.trend} title="Trend Edge" pick={pickOf(bundle.trend)} prob={probOf(bundle.trend)}>

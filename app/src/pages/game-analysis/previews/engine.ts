@@ -15,6 +15,7 @@ import { impliedProb, fairProbs } from "../../../lib/logic/moneyline";
 import { wilson } from "../../../lib/logic/wilson";
 import { buildEloIndex, buildEloRatingHistory, scheduleToEloGames, eloTeamKey, type EloEntry, type EloRatingPoint } from "../../../lib/logic/elo";
 import { indexEloHistoryByTeam } from "../../../lib/logic/powerRankings";
+import { opponentLabel } from "../../../lib/logic/gameId";
 import { pythWinPct, log5 } from "../../../lib/logic/pythagorean";
 import { WIN_TYPE_COLORS } from "../../../lib/logic/winType";
 
@@ -240,6 +241,62 @@ export function buildTeamWeekIndex(teamWeekBySeason: Map<number, Row[]>): TeamWe
       };
     },
   };
+}
+
+// ---------- Points-margin timeline, for the Pythagorean card's per-game bar chart ----------
+// Season-scoped (Pythagorean's inputs — Σpoints/Σpoints_allowed — reset every season, unlike
+// Elo's rolling multi-season rating), so unlike alignedEloTimeline there's no cross-season union
+// needed: just this one season's played weeks for both teams, up through wkPlayed.
+export interface MarginPoint {
+  team: string;
+  season: number;
+  week: number;
+  margin: number;
+  scored: number;
+  allowed: number;
+  win: boolean | null;
+  /** "@OPP" (away) or "OPP" (home), from opponentLabel(game_id, team). */
+  opponent: string;
+}
+
+export interface MarginTimelineSlot {
+  season: number;
+  week: number;
+  away: MarginPoint | null;
+  home: MarginPoint | null;
+}
+
+/** Builds the shared per-week timeline for `awayTeam`/`homeTeam`'s points-margin bar chart —
+ * the union of both teams' played weeks this season, through `wkPlayed`. A week only one of them
+ * played (an ordinary bye, or — within the postseason — a first-round bye skipping Wild Card
+ * weekend while the other team played) is `null` for the side that didn't, the same "real gap,
+ * not silently stitched" philosophy as `alignedEloTimeline`. */
+export function alignedMarginTimeline(twIdx: TeamWeekIndex, awayTeam: string, homeTeam: string, season: number, wkPlayed: number): MarginTimelineSlot[] {
+  const toPoint = (r: Row, team: string): MarginPoint | null => {
+    if (r.points == null || r.points_allowed == null) return null;
+    return {
+      team,
+      season: Number(r.season),
+      week: Number(r.week),
+      scored: Number(r.points),
+      allowed: Number(r.points_allowed),
+      margin: Number(r.points) - Number(r.points_allowed),
+      win: r.win == null ? null : Number(r.win) === 1,
+      opponent: opponentLabel(r.game_id == null ? null : String(r.game_id), team),
+    };
+  };
+  const forTeam = (team: string): MarginPoint[] =>
+    twIdx
+      .rowsFor(team, season)
+      .filter((r) => Number(r.week) <= wkPlayed)
+      .map((r) => toPoint(r, team))
+      .filter((p): p is MarginPoint => p != null);
+  const awayArr = forTeam(awayTeam);
+  const homeArr = forTeam(homeTeam);
+  const awayByWeek = new Map(awayArr.map((p) => [p.week, p]));
+  const homeByWeek = new Map(homeArr.map((p) => [p.week, p]));
+  const weeks = [...new Set([...awayByWeek.keys(), ...homeByWeek.keys()])].sort((a, b) => a - b);
+  return weeks.map((week) => ({ season, week, away: awayByWeek.get(week) ?? null, home: homeByWeek.get(week) ?? null }));
 }
 
 // ---------- Elo index over the full schedule ----------
