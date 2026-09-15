@@ -26,7 +26,10 @@ jobs:
           pip install pandas==3.0.0 numpy==1.26.4 scikit-learn==1.8.0 nflreadpy==0.1.2 pyarrow joblib scipy
           pip install --no-deps nfl_data_py==0.3.3 appdirs fastparquet
 
-      - name: Run predictive-model export
+      - name: Run predictive-model export (historical backtest)
+        run: python pipeline/predictive_model/export_page.py
+
+      - name: Run predictive-model export (upcoming week)
         run: python pipeline/predictive_model/export_upcoming.py
 
       - name: Commit updated predictions
@@ -34,7 +37,16 @@ jobs:
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "data: predictive model weekly refresh"
-          file_pattern: "app/public/data/predictive_model/upcoming.json app/public/data/predictive_model/upcoming_meta.json app/public/data/predictive_model/upcoming_features.json"
+          file_pattern: >-
+            app/public/data/predictive_model/upcoming.json
+            app/public/data/predictive_model/upcoming_meta.json
+            app/public/data/predictive_model/upcoming_features.json
+            app/public/data/predictive_model/games.json
+            app/public/data/predictive_model/game_features.json
+            app/public/data/predictive_model/season_summary.json
+            app/public/data/predictive_model/importance.json
+            app/public/data/predictive_model/calibration.json
+            app/public/data/predictive_model/meta.json
 
       # Commits pushed with GITHUB_TOKEN do not fire push-triggered workflows,
       # so the Pages deploy must be dispatched explicitly.
