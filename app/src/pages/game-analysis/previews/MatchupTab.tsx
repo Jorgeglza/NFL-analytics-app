@@ -1076,7 +1076,11 @@ export default function MatchupTab({
             </ModelBlock>
 
             <ModelBlock color={MODEL_COLORS.trend} title="Trend Edge" pick={pickOf(bundle.trend)} prob={probOf(bundle.trend)}>
-              <div ref={edgeRef} className="h-40" />
+              {trendEdge.pAway == null ? (
+                <div className="flex h-40 items-center justify-center text-[10px] italic text-slate-400">Not enough recent-form data yet</div>
+              ) : (
+                <div ref={edgeRef} className="h-40" />
+              )}
               <div className="text-[10px] text-slate-400">Weighted recent-form differences (away − home): grade, last-6 margin, EPA, win rate, turnovers. Hover the bars.</div>
             </ModelBlock>
           </div>
