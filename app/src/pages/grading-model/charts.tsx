@@ -119,9 +119,12 @@ export function offDefScatterOption(points: TeamPoint[], meta: Map<string, TeamM
       {
         query: { maxWidth: 520 },
         option: {
-          grid: { left: 34, right: 12, top: 14, bottom: 34, containLabel: true },
-          xAxis: { nameGap: 20, nameTextStyle: { fontSize: 10 } },
-          yAxis: { nameGap: 22, nameTextStyle: { fontSize: 10 } },
+          // Pull the whole grid — axis lines, tick labels and axis names —
+          // in tight against the container edges so the plot square itself
+          // (not the empty margin around it) fills the phone-width card.
+          grid: { left: 4, right: 4, top: 4, bottom: 4, containLabel: true },
+          xAxis: { nameGap: 12, nameTextStyle: { fontSize: 9 }, axisLabel: { fontSize: 9 } },
+          yAxis: { nameGap: 14, nameTextStyle: { fontSize: 9 }, axisLabel: { fontSize: 9 } },
           series: [
             {
               symbolSize: 20,
