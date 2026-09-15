@@ -557,7 +557,32 @@ Full work list, with per-item checkboxes and severities: **`docs/MOBILE_READINES
   on the default branch.
 - Plan: `C:\Users\Jorge\.claude\plans\need-to-plan-the-cheerful-papert.md`.
 
-## Session notes (newest first)
+### 2026-09-14 (cont. x4) — Matchup Previews: Elo sparkline hover is now forgiving
+User asked for the hover hit area to be more forgiving — the visible line is only 2px wide, hard to land a mouse (or finger) on exactly.
+- `EloSpark`: added a second, invisible copy of each team's line (`lineStyle: { opacity: 0, width: 10 }`, `symbol: "none"`, `emphasis: { disabled: true }`, same `name` as the visible line so the existing per-line tooltip formatter treats it identically) layered on top (`z: 10`). This is the standard ECharts technique for widening a line's hover hit-corridor without changing how it looks — the visible 2px line is unaffected, but the mouse now only needs to land within ~5px of it.
+- Verified structurally: `chart.getOption()` (obtained by grabbing the live ECharts instance via `echarts.getInstanceByDom`, since it isn't otherwise exposed) confirms 4 series (2 visible + 2 invisible), and `dispatchAction({type:'showTip', seriesIndex, dataIndex})` against the invisible line reproduces the correct single-team tooltip content. Could not get a clean automated pixel-precision proof of the *widened* hit radius specifically in this session's Browser-pane sandbox (synthetic mouse coordinates didn't reliably map to the canvas in this harness), so this one is worth a quick manual check in the deployed app.
+- `npm run build` / `tsc --noEmit` clean.
+
+### 2026-09-14 (cont. x3) — Matchup Previews: Elo sparkline polish (subtle dots, per-line hover, non-zero axis)
+Follow-up feedback on the combined Elo sparkline: dots too prominent, hover should return only the hovered line's data (not both teams at once), and check mobile — plus a mid-session ask to keep the Elo Y axis off zero so the two ratings' real difference is visible.
+- `EloSpark`: `symbolSize` 5→3 with `opacity: 0.85` on each point — dots now read as a subtle per-game marker rather than a competing visual layer over the 2px line.
+- Tooltip `trigger` changed from `"axis"` to `"item"` — hovering a specific line/point now returns only that team's opponent/season/week/rating/result, not both teams' info at the same x-position. Verified via canvas pixel-targeted synthetic hover: hovering a CLE-orange pixel returned only `"CLE vs WAS · S2024 W5: 1429 L"`; hovering a BAL-purple pixel returned only `"BAL vs KC · S2023 W21: 1699 L"`.
+- Y axis: added `scale: true` (ECharts value axes force a zero baseline by default unless this is set) plus an explicit padded min/max (`floor((min-15)/5)*5` … `ceil((max+15)/5)*5`) — Elo only ever moves in a ~1300–1750 band, so a zero-anchored axis was flattening the visible gap between the two lines.
+- Mobile check (375×812 emulation, same CLE @ BAL matchup): no horizontal overflow at the body or Elo-card level, KPI row and chart both fit at native width, grid already collapses to one column below `lg:` — no changes needed.
+- `npm run build` / `tsc --noEmit` clean.
+
+### 2026-09-14 (cont. x2) — Matchup Previews: Elo card readability + combined sparkline
+User feedback on the Elo card's new sparklines: make it unambiguous which rating belongs to which team, put Elo points on a visible Y axis so the two teams' ratings can be compared directly, and mark each game's result with a small win/loss dot (green/red), shown in the hover tooltip too.
+- `elo.ts`: `EloRatingPoint` now also carries `win: boolean | null` (that team's actual result, null on a tie) and `opponent: string`, computed inline in `buildEloRatingHistory` from the same margin math already in the loop — no external lookup, so it's immune to the SD/OAK/STL→LAC/LV/LA relocation-alias mismatch a team_week join would have hit.
+- `MatchupTab.tsx`: `EloSpark` rewritten from two independent per-team mini-charts into one chart with both teams' lines sharing a real, labeled Elo-points Y axis (right-aligned via left-padding with nulls when histories differ in length, so "now" always lines up). Each line is the team's own color; each point is a small circle colored green (win) / red (loss) / gray (tie), matching the win/loss-dot convention already used by `trendOption` elsewhere in this file. Axis-trigger tooltip lists both teams' opponent/season/week/rating/result at the hovered point.
+- KPI row above the chart: team color dot + abbreviation on both sides of the rating numbers (`● CLE 1345 elo 1713 BAL ●`) so it's unambiguous which number is which team's, plus the existing "+48 home" note.
+- Verified in-browser (CLE @ BAL 2024 Wk18): canvas pixel sampling confirms both team-color lines, green/red dots, dotted season divider, and axis-label pixels all present; a simulated hover produced `"CLE vs NO · S2024 W11: 1380 L / BAL vs CIN · S2024 W10: 1679 W"`. Early-history fallback (2015 Wk2) still renders "Not enough history yet". `npm run build`/`tsc --noEmit` clean.
+
+### 2026-09-14 (cont.) — Matchup Previews: consistent model order everywhere
+User asked for one fixed order across the whole Matchup tab: Average, ML Fair, Market-calibrated, Predictive, Elo, Pythagorean, Trend Edge.
+- Top verdict strip, the home-win-probability dot strip, and the "Average (consensus)" explanation's `ProbBar` list already derive from `MODEL_KEYS`/`modelKeys` (`engine.ts`), which was already in this exact order — no change needed there.
+- The "Model breakdown" pill grid (`MatchupTab.tsx`) was hardcoded in a different, stale order (Market-calibrated, Trend Edge, ML Fair, Elo, Pythagorean, Predictive). Reordered the `ModelBlock` JSX to ML Fair, Market-calibrated, Predictive, Elo, Pythagorean, Trend Edge (Average/consensus stays in its own card above the grid, unchanged).
+- Verified in-browser (DEN @ KC) that all three surfaces now read in the same order; `npm run build`/`tsc --noEmit` clean.
 
 ### 2026-09-14 — Matchup Previews: Elo card sparklines
 User asked to upgrade the Elo model card's per-team KPI (Matchup tab, `MatchupTab.tsx`) from a static rating bar to a historical view: last-17-game sparkline per team, colored in each team's own color, with a subtle dotted season-boundary divider and hover tooltips — while keeping the "+48 home" HFA note.

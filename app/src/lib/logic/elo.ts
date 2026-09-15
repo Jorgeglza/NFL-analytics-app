@@ -104,6 +104,10 @@ export interface EloRatingPoint {
   week: number;
   /** Rating right after this game (post-MOV update, pre next-season regression). */
   rating: number;
+  /** This team's actual result in the game that produced this rating (null on a tie). */
+  win: boolean | null;
+  /** Opponent, for hover/label context (that season's own abbreviation, not alias-mapped). */
+  opponent: string;
 }
 
 /**
@@ -141,8 +145,9 @@ export function buildEloRatingHistory(games: (EloGame & { week: number })[]): El
     const newAway = ea - delta;
     set(g.homeTeam, newHome);
     set(g.awayTeam, newAway);
-    out.push({ team: eloTeamKey(g.homeTeam), season: g.season, week: g.week, rating: newHome });
-    out.push({ team: eloTeamKey(g.awayTeam), season: g.season, week: g.week, rating: newAway });
+    const homeWin = margin === 0 ? null : margin > 0;
+    out.push({ team: eloTeamKey(g.homeTeam), season: g.season, week: g.week, rating: newHome, win: homeWin, opponent: g.awayTeam });
+    out.push({ team: eloTeamKey(g.awayTeam), season: g.season, week: g.week, rating: newAway, win: homeWin == null ? null : !homeWin, opponent: g.homeTeam });
   }
   return out;
 }

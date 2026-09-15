@@ -57,55 +57,143 @@ function ProbBar({ label, p, color, note }: { label: string; p: number | null; c
   );
 }
 
-/** Elo rating sparkline for one team — last N post-game ratings, colored in the
- *  team's own color, with a subtle dotted divider at each season boundary and
- *  a per-point hover tooltip. Mirrors StatSpark's ECharts conventions (Scorecards.tsx). */
-function EloSpark({ pts, color, label }: { pts: EloRatingPoint[]; color: string; label: string }) {
-  const seasonBoundaries = pts.reduce<number[]>((acc, p, i) => {
-    if (i > 0 && p.season !== pts[i - 1].season) acc.push(i);
-    return acc;
-  }, []);
+const WIN_DOT = "#3C9A5F";
+const LOSS_DOT = "#C8102E";
+
+/** One team's Elo history, right-padded with nulls so two histories of different
+ *  lengths still line up on the same "games ago" x-position (today on the right). */
+function padElo(pts: EloRatingPoint[], len: number): (EloRatingPoint | null)[] {
+  return [...Array(Math.max(0, len - pts.length)).fill(null), ...pts];
+}
+
+function seasonBoundaries(padded: (EloRatingPoint | null)[]): number[] {
+  const out: number[] = [];
+  let prevSeason: number | null = null;
+  padded.forEach((p, i) => {
+    if (p) {
+      if (prevSeason != null && p.season !== prevSeason) out.push(i);
+      prevSeason = p.season;
+    }
+  });
+  return out;
+}
+
+/** Both teams' Elo history on one shared, visible Elo-points Y axis — so you can
+ *  see how the two ratings stack up against each other and how each is moving.
+ *  Each line is colored in its team's own color; each game gets a small dot,
+ *  green for a win and red for a loss (subtle, mirrors trendOption's convention
+ *  a few lines below in this file). Dotted divider = a new season. */
+function EloSpark({
+  awayPts,
+  homePts,
+  awayColor,
+  homeColor,
+  awayLabel,
+  homeLabel,
+}: {
+  awayPts: EloRatingPoint[];
+  homePts: EloRatingPoint[];
+  awayColor: string;
+  homeColor: string;
+  awayLabel: string;
+  homeLabel: string;
+}) {
+  const len = Math.max(awayPts.length, homePts.length);
+  const awayP = useMemo(() => padElo(awayPts, len), [awayPts, len]);
+  const homeP = useMemo(() => padElo(homePts, len), [homePts, len]);
+  const dividers = useMemo(
+    () => [...new Set([...seasonBoundaries(awayP), ...seasonBoundaries(homeP)])],
+    [awayP, homeP],
+  );
+  const resultTxt = (w: boolean | null) => (w == null ? "tie" : w ? `<span style="color:${WIN_DOT}">W</span>` : `<span style="color:${LOSS_DOT}">L</span>`);
+  const dotStyle = (p: EloRatingPoint | null) => (p?.win == null ? "#94a3b8" : p.win ? WIN_DOT : LOSS_DOT);
   const option = useMemo<EChartsOption>(
     () => ({
-      grid: { left: 2, right: 2, top: 4, bottom: 4 },
-      xAxis: { type: "category", data: pts.map((_, i) => String(i)), show: false },
-      yAxis: { type: "value", show: false, min: (v: { min: number }) => v.min - 10, max: (v: { max: number }) => v.max + 10 },
+      grid: { left: 30, right: 6, top: 8, bottom: 4, containLabel: true },
+      xAxis: { type: "category", data: awayP.map((_, i) => String(i)), show: false },
+      yAxis: {
+        type: "value",
+        // scale:true (+ explicit padded min/max) keeps the axis off zero — Elo
+        // ratings only ever move in a ~1300-1750 band, so a zero baseline would
+        // flatten every real difference between the two teams' lines.
+        scale: true,
+        min: (v: { min: number }) => Math.floor((v.min - 15) / 5) * 5,
+        max: (v: { max: number }) => Math.ceil((v.max + 15) / 5) * 5,
+        name: "Elo",
+        nameTextStyle: { fontSize: 9, color: "#94a3b8" },
+        axisLabel: { fontSize: 9 },
+        splitLine: { lineStyle: { color: "#f1f5f9" } },
+      },
       tooltip: {
-        trigger: "axis",
+        trigger: "item",
         confine: true,
-        formatter: (ps: unknown) => {
-          const arr = ps as { dataIndex: number }[];
-          const i = arr[0]?.dataIndex ?? 0;
-          const p = pts[i];
-          return `${label} · Season ${p.season} W${p.week}<br/>Elo: <b>${Math.round(p.rating)}</b>`;
+        formatter: (p: unknown) => {
+          const q = p as { seriesName?: string; dataIndex: number };
+          const isAway = q.seriesName === awayLabel;
+          const pt = (isAway ? awayP : homeP)[q.dataIndex];
+          if (!pt) return "";
+          const label = isAway ? awayLabel : homeLabel;
+          return `${label} vs ${pt.opponent} · S${pt.season} W${pt.week}: <b>${Math.round(pt.rating)}</b> ${resultTxt(pt.win)}`;
         },
       },
       series: [
         {
           type: "line",
-          data: pts.map((p) => +p.rating.toFixed(1)),
-          symbol: "none",
-          lineStyle: { color, width: 2 },
-          markLine: seasonBoundaries.length
-            ? {
-                symbol: "none",
-                silent: true,
-                label: { show: false },
-                lineStyle: { type: "dotted", color: "#cbd5e1", width: 1 },
-                data: seasonBoundaries.map((i) => ({ xAxis: i - 0.5 })),
-              }
+          name: awayLabel,
+          data: awayP.map((p) => (p == null ? null : { value: +p.rating.toFixed(1), itemStyle: { color: dotStyle(p), opacity: 0.85 } })),
+          lineStyle: { color: awayColor, width: 2 },
+          symbol: "circle",
+          symbolSize: 3,
+          connectNulls: true,
+          markLine: dividers.length
+            ? { symbol: "none", silent: true, label: { show: false }, lineStyle: { type: "dotted", color: "#cbd5e1", width: 1 }, data: dividers.map((i) => ({ xAxis: i - 0.5 })) }
             : undefined,
+        },
+        {
+          type: "line",
+          name: homeLabel,
+          data: homeP.map((p) => (p == null ? null : { value: +p.rating.toFixed(1), itemStyle: { color: dotStyle(p), opacity: 0.85 } })),
+          lineStyle: { color: homeColor, width: 2 },
+          symbol: "circle",
+          symbolSize: 3,
+          connectNulls: true,
+        },
+        // Invisible, much-thicker copies of each line purely to widen the hover hit
+        // area — a 2px stroke is hard to land on with a mouse (or a finger), so these
+        // sit on top (same name, so the tooltip formatter treats them identically) and
+        // catch anything within ~10px of the real line without changing how it looks.
+        {
+          type: "line",
+          name: awayLabel,
+          data: awayP.map((p) => (p == null ? null : +p.rating.toFixed(1))),
+          lineStyle: { opacity: 0, width: 10 },
+          symbol: "none",
+          connectNulls: true,
+          z: 10,
+          silent: false,
+          emphasis: { disabled: true },
+        },
+        {
+          type: "line",
+          name: homeLabel,
+          data: homeP.map((p) => (p == null ? null : +p.rating.toFixed(1))),
+          lineStyle: { opacity: 0, width: 10 },
+          symbol: "none",
+          connectNulls: true,
+          z: 10,
+          silent: false,
+          emphasis: { disabled: true },
         },
       ],
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }),
-    [pts.map((p) => `${p.season}-${p.week}-${p.rating.toFixed(1)}`).join(","), color, label],
+    [awayP, homeP, dividers, awayColor, homeColor, awayLabel, homeLabel],
   );
-  const ref = useECharts(pts.length >= 2 ? option : null);
-  if (pts.length < 2) {
-    return <div className="flex h-8 flex-1 min-w-0 items-center text-[10px] italic text-slate-400">Not enough history yet</div>;
+  const ref = useECharts(option);
+  if (awayPts.length < 2 && homePts.length < 2) {
+    return <div className="flex h-8 items-center text-[10px] italic text-slate-400">Not enough history yet</div>;
   }
-  return <div ref={ref} className="h-8 min-w-0 flex-1" />;
+  return <div ref={ref} className="h-24 w-full" />;
 }
 
 /** One model's breakdown card: pick header + how-it-got-there visual. */
@@ -657,6 +745,12 @@ export default function MatchupTab({
             <div className="text-[11px] text-slate-400">Bars show the home-side ({home}) probability · tick = 50% · each card explains its own inputs</div>
           </div>
           <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
+            <ModelBlock color={MODEL_COLORS.ml} title="ML Fair" pick={pickOf(bundle.ml)} prob={probOf(bundle.ml)}>
+              <ProbBar label={`Implied — ${home} ${fmtMl(mlHome)}`} p={impliedProb(mlHome)} color={MODEL_COLORS.ml} note={`${away} ${fmtMl(mlAway)}`} />
+              <ProbBar label="Fair (vig removed)" p={homeFair} color={MODEL_COLORS.ml} note={overround == null ? "" : `vig ${(100 * overround).toFixed(1)}%`} />
+              <div className="text-[10px] text-slate-400">The bookmaker's own probability once its margin is stripped out.</div>
+            </ModelBlock>
+
             <ModelBlock color={MODEL_COLORS.blend} title="Market-calibrated" pick={pickOf(bundle.blend)} prob={probOf(bundle.blend)}>
               <ProbBar label={`Bucket history (${engine.bucket ?? "—"})`} p={mktHome} color={MODEL_COLORS.blend} note={`N=${engine.nBucket.toLocaleString()} · weight ${Math.round(MARKET_BUCKET_W * 100)}%`} />
               <ProbBar label="Spread-odds vig lean" p={engine.pVigLeanHome} color={MODEL_COLORS.blend} note={engine.homeCoverFair == null ? "no odds" : `home covers ${pct1(engine.homeCoverFair)}`} />
@@ -665,49 +759,6 @@ export default function MatchupTab({
               {(engine.nBucket < MIN_N_BUCKET || engine.risks.length > 0) && (
                 <div className="text-[10px] text-amber-700">{engine.risks.join(" ") || `Low-N bucket (N=${engine.nBucket}).`}</div>
               )}
-            </ModelBlock>
-
-            <ModelBlock color={MODEL_COLORS.trend} title="Trend Edge" pick={pickOf(bundle.trend)} prob={probOf(bundle.trend)}>
-              <div ref={edgeRef} className="h-40" />
-              <div className="text-[10px] text-slate-400">Weighted recent-form differences (away − home): grade, last-6 margin, EPA, win rate, turnovers. Hover the bars.</div>
-            </ModelBlock>
-
-            <ModelBlock color={MODEL_COLORS.ml} title="ML Fair" pick={pickOf(bundle.ml)} prob={probOf(bundle.ml)}>
-              <ProbBar label={`Implied — ${home} ${fmtMl(mlHome)}`} p={impliedProb(mlHome)} color={MODEL_COLORS.ml} note={`${away} ${fmtMl(mlAway)}`} />
-              <ProbBar label="Fair (vig removed)" p={homeFair} color={MODEL_COLORS.ml} note={overround == null ? "" : `vig ${(100 * overround).toFixed(1)}%`} />
-              <div className="text-[10px] text-slate-400">The bookmaker's own probability once its margin is stripped out.</div>
-            </ModelBlock>
-
-            <ModelBlock color={MODEL_COLORS.elo} title="Elo" pick={pickOf(bundle.elo)} prob={probOf(bundle.elo)}>
-              {/* Current ratings, as a KPI row (replaces the old bar-per-team layout). */}
-              <div className="flex items-center justify-center gap-3">
-                <span className={`text-sm tabular-nums ${keyStats.eloAway != null && keyStats.eloHome != null && keyStats.eloAway > keyStats.eloHome ? "font-bold text-slate-900" : "text-slate-500"}`}>
-                  {away} {keyStats.eloAway == null ? "—" : Math.round(keyStats.eloAway)}
-                </span>
-                <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400">elo</span>
-                <span className={`text-sm tabular-nums ${keyStats.eloAway != null && keyStats.eloHome != null && keyStats.eloHome > keyStats.eloAway ? "font-bold text-slate-900" : "text-slate-500"}`}>
-                  {keyStats.eloHome == null ? "—" : Math.round(keyStats.eloHome)}
-                </span>
-                <span className="text-[10px] text-slate-400" title="Home-field advantage baked into the Elo win-probability formula">+48 home</span>
-              </div>
-
-              {/* Per-team sparklines — last 17 games, team-colored, dotted season divider, hover for detail. */}
-              {([[away, awayEloHist], [home, homeEloHist]] as const).map(([t, hist]) => (
-                <div key={t} className="flex items-center gap-2 text-[11px]">
-                  <span className="w-10 shrink-0 font-semibold text-slate-500">{t}</span>
-                  <EloSpark pts={hist} color={meta.get(t)?.color ?? MODEL_COLORS.elo} label={t} />
-                </div>
-              ))}
-
-              <ProbBar label="Resulting p(home)" p={bundle.elo[1]} color={MODEL_COLORS.elo} />
-              <div className="text-[10px] text-slate-400">Rolling power rating, last 17 games shown (1505 = average) · dotted line marks a new season.</div>
-            </ModelBlock>
-
-            <ModelBlock color={MODEL_COLORS.pyth} title="Pythagorean" pick={pickOf(bundle.pyth)} prob={probOf(bundle.pyth)}>
-              <ProbBar label={`${away} expected win%`} p={keyStats.pythAway} color={MODEL_COLORS.pyth} />
-              <ProbBar label={`${home} expected win%`} p={keyStats.pythHome} color={MODEL_COLORS.pyth} />
-              <ProbBar label="log5 head-to-head" p={bundle.pyth[1]} color={MODEL_COLORS.pyth} />
-              <div className="text-[10px] text-slate-400">From points scored vs allowed through W{wkPlayed} — scoring margin predicts wins.</div>
             </ModelBlock>
 
             {!predictiveUnavailable && (
@@ -720,6 +771,55 @@ export default function MatchupTab({
                 </div>
               </ModelBlock>
             )}
+
+            <ModelBlock color={MODEL_COLORS.elo} title="Elo" pick={pickOf(bundle.elo)} prob={probOf(bundle.elo)}>
+              {/* Current ratings, as a KPI row — team dot + abbreviation on each side so it's
+                  unambiguous which number belongs to which team, plus the HFA note. */}
+              <div className="flex items-center justify-center gap-2.5">
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="inline-block h-2 w-2 rounded-full" style={{ background: meta.get(away)?.color ?? MODEL_COLORS.elo }} />
+                  <span className="text-[11px] font-semibold text-slate-500">{away}</span>
+                  <span className={`text-sm tabular-nums ${keyStats.eloAway != null && keyStats.eloHome != null && keyStats.eloAway > keyStats.eloHome ? "font-bold text-slate-900" : "text-slate-500"}`}>
+                    {keyStats.eloAway == null ? "—" : Math.round(keyStats.eloAway)}
+                  </span>
+                </span>
+                <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400">elo</span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className={`text-sm tabular-nums ${keyStats.eloAway != null && keyStats.eloHome != null && keyStats.eloHome > keyStats.eloAway ? "font-bold text-slate-900" : "text-slate-500"}`}>
+                    {keyStats.eloHome == null ? "—" : Math.round(keyStats.eloHome)}
+                  </span>
+                  <span className="text-[11px] font-semibold text-slate-500">{home}</span>
+                  <span className="inline-block h-2 w-2 rounded-full" style={{ background: meta.get(home)?.color ?? MODEL_COLORS.elo }} />
+                </span>
+                <span className="text-[10px] text-slate-400" title="Home-field advantage baked into the Elo win-probability formula">+48 home</span>
+              </div>
+
+              {/* Both teams' last 17 games on one Elo-points axis — see how they stack up
+                  and how each is trending. Dot = that game's result (green win / red loss). */}
+              <EloSpark
+                awayPts={awayEloHist}
+                homePts={homeEloHist}
+                awayColor={meta.get(away)?.color ?? MODEL_COLORS.elo}
+                homeColor={meta.get(home)?.color ?? MODEL_COLORS.elo}
+                awayLabel={away}
+                homeLabel={home}
+              />
+
+              <ProbBar label="Resulting p(home)" p={bundle.elo[1]} color={MODEL_COLORS.elo} />
+              <div className="text-[10px] text-slate-400">Rolling power rating, last 17 games shown (1505 = average) · dotted line marks a new season · dot color = win/loss.</div>
+            </ModelBlock>
+
+            <ModelBlock color={MODEL_COLORS.pyth} title="Pythagorean" pick={pickOf(bundle.pyth)} prob={probOf(bundle.pyth)}>
+              <ProbBar label={`${away} expected win%`} p={keyStats.pythAway} color={MODEL_COLORS.pyth} />
+              <ProbBar label={`${home} expected win%`} p={keyStats.pythHome} color={MODEL_COLORS.pyth} />
+              <ProbBar label="log5 head-to-head" p={bundle.pyth[1]} color={MODEL_COLORS.pyth} />
+              <div className="text-[10px] text-slate-400">From points scored vs allowed through W{wkPlayed} — scoring margin predicts wins.</div>
+            </ModelBlock>
+
+            <ModelBlock color={MODEL_COLORS.trend} title="Trend Edge" pick={pickOf(bundle.trend)} prob={probOf(bundle.trend)}>
+              <div ref={edgeRef} className="h-40" />
+              <div className="text-[10px] text-slate-400">Weighted recent-form differences (away − home): grade, last-6 margin, EPA, win rate, turnovers. Hover the bars.</div>
+            </ModelBlock>
           </div>
         </div>
       )}
