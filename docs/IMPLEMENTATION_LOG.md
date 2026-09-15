@@ -559,6 +559,12 @@ Full work list, with per-item checkboxes and severities: **`docs/MOBILE_READINES
 
 ## Session notes (newest first)
 
+### 2026-09-14 (cont. x13) — Elo sparkline: bridge bye weeks, still break at playoff divergence
+User feedback on the previous fix: bye weeks should still connect the line straight through (week 6 to week 8, no dot at 7) — only a real "this team's season is over" gap should stay blank.
+- One-line fix: flipped `connectNulls` back from `false` to `true` on both series. Turns out this was the correct setting the whole time — ECharts' `connectNulls` only ever bridges a null that has real values on *both* sides within the data array; a trailing run of nulls (nothing after it) has no later point to connect to, so the line still stops there regardless of the flag. Setting it to `false` last session was an overcorrection that also broke ordinary interior bye-week gaps, which is exactly what got flagged here.
+- Verified at the pixel level (not just the underlying data) with the same DAL @ PHI 2025 Wk1 case: the line visibly bridges through DAL's mid-season bye (3px of DAL's own line color found exactly where the interpolated segment should cross, no dot), while zero DAL-colored pixels appear at any of the 4 trailing playoff-week slots PHI has and DAL doesn't.
+- `npm run build` / `tsc --noEmit` clean.
+
 ### 2026-09-14 (cont. x12) — Elo sparkline: playoff-aware alignment (shared timeline, real gaps)
 User feedback: when one team made the playoffs and the other didn't, the two lines were each independently "last 17 games," so they silently misaligned — the non-playoff team's older regular-season games slid up to sit next to the playoff team's postseason games at the same x-position, implying they happened at the same time when they didn't.
 - `engine.ts`: replaced `lastNEloRatings` (per-team, independent slicing) with `alignedEloTimeline(byTeam, awayTeam, homeTeam, season, week, n=17)` — builds the **union** of both teams' played (season, week) slots strictly before the matchup, sorts chronologically, and keeps the last `n` *distinct weeks* (not `n` games per team). Postseason weeks are already numbered 19–22 in the source data (confirmed directly), sorting naturally after REG's 1–18 within a season — no extra ordering logic needed. Returns `EloTimelineSlot[]` (`{season, week, away: EloRatingPoint | null, home: EloRatingPoint | null}`) — a week either team didn't play in that shared window is `null` for that side.

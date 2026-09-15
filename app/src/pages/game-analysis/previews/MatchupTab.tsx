@@ -243,10 +243,14 @@ function EloSpark({
           lineStyle: { color: awayColor, width: 2 },
           symbol: "circle",
           symbolSize: 3,
-          // false, deliberately: a null here is a real gap (bye week, or the other
-          // team's season already over while this one made the playoffs) — the
-          // line should actually break there, not bridge across it.
-          connectNulls: false,
+          // true, deliberately, and this is the correct setting for both cases: ECharts
+          // only ever bridges a null that has real values on BOTH sides in the data array
+          // — a mid-season bye week (real game before and after it) connects straight
+          // through with no dot at that slot, exactly as wanted. A trailing run of nulls
+          // (this team's season already over while the other one made the playoffs) has
+          // no later real value to connect to, so the line simply stops — it does NOT
+          // get bridged regardless of this setting. So one flag correctly handles both.
+          connectNulls: true,
           markLine: dividers.length
             ? { symbol: "none", silent: true, label: { show: false }, lineStyle: { type: "dotted", color: "#cbd5e1", width: 1 }, data: dividers.map((i) => ({ xAxis: i - 0.5 })) }
             : undefined,
@@ -258,7 +262,7 @@ function EloSpark({
           lineStyle: { color: homeColor, width: 2 },
           symbol: "circle",
           symbolSize: 3,
-          connectNulls: false,
+          connectNulls: true,
         },
       ],
       // eslint-disable-next-line react-hooks/exhaustive-deps
