@@ -1,6 +1,6 @@
 // Port of matchup_previews_tab.py — single-game deep dive: snapshot, moneyline,
 // spread pick engine, trend edge predictor, trends, recent form, H2H.
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import type { EChartsOption } from "echarts";
 import type { Row } from "../../../lib/data/loader";
@@ -82,7 +82,13 @@ function seasonBoundaries(padded: (EloRatingPoint | null)[]): number[] {
  *  see how the two ratings stack up against each other and how each is moving.
  *  Each line is colored in its team's own color; each game gets a small dot,
  *  green for a win and red for a loss (subtle, mirrors trendOption's convention
- *  a few lines below in this file). Dotted divider = a new season. */
+ *  a few lines below in this file). Dotted divider = a new season.
+ *
+ *  Tooltip uses trigger:"axis" (forgiving — any x position across the whole
+ *  chart fires it, unlike trigger:"item" which needs the cursor within a
+ *  couple px of the thin line/dot itself) and picks whichever of the two
+ *  teams' points is vertically closer to the cursor, via a live mouseY
+ *  tracked through the chart's zrender instance and convertToPixel. */
 function EloSpark({
   awayPts,
   homePts,
@@ -105,8 +111,15 @@ function EloSpark({
     () => [...new Set([...seasonBoundaries(awayP), ...seasonBoundaries(homeP)])],
     [awayP, homeP],
   );
-  const resultTxt = (w: boolean | null) => (w == null ? "tie" : w ? `<span style="color:${WIN_DOT}">W</span>` : `<span style="color:${LOSS_DOT}">L</span>`);
+  const resultWord = (w: boolean | null) =>
+    w == null ? '<span style="color:#94a3b8">Tie</span>' : w ? `<span style="color:${WIN_DOT}">Win</span>` : `<span style="color:${LOSS_DOT}">Loss</span>`;
   const dotStyle = (p: EloRatingPoint | null) => (p?.win == null ? "#94a3b8" : p.win ? WIN_DOT : LOSS_DOT);
+  // One team's tooltip block, ordered Elo → week → season → result (per feedback),
+  // opponent tacked on for context.
+  const fmtPoint = (label: string, color: string, pt: EloRatingPoint) =>
+    `<div style="font-weight:700;color:#0f172a"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${color};margin-right:5px"></span>${label} — Elo <b>${Math.round(pt.rating)}</b></div>` +
+    `<div style="margin-top:2px;color:#64748b">Week ${pt.week} · ${pt.season} · ${resultWord(pt.win)} <span style="color:#94a3b8">vs ${pt.opponent}</span></div>`;
+  const chartRef = useRef<import("echarts").ECharts | null>(null);
   const option = useMemo<EChartsOption>(
     () => ({
       grid: { left: 30, right: 6, top: 8, bottom: 4, containLabel: true },
@@ -125,15 +138,42 @@ function EloSpark({
         splitLine: { lineStyle: { color: "#f1f5f9" } },
       },
       tooltip: {
-        trigger: "item",
+        trigger: "axis",
         confine: true,
-        formatter: (p: unknown) => {
-          const q = p as { seriesName?: string; dataIndex: number };
-          const isAway = q.seriesName === awayLabel;
-          const pt = (isAway ? awayP : homeP)[q.dataIndex];
-          if (!pt) return "";
-          const label = isAway ? awayLabel : homeLabel;
-          return `${label} vs ${pt.opponent} · S${pt.season} W${pt.week}: <b>${Math.round(pt.rating)}</b> ${resultTxt(pt.win)}`;
+        axisPointer: { type: "line", label: { show: false }, lineStyle: { color: "#e2e8f0", width: 1 } },
+        // formatter runs first to seed content, but the real mouse Y is only known to
+        // `position` (it receives the true cursor point) — so the nearest-line pick
+        // happens there instead, overwriting `dom`'s content synchronously, in the
+        // same call, with no listener/race involved (an earlier version tried tracking
+        // mouse Y via a separate zr "mousemove" listener, which ran one event late).
+        formatter: () => "",
+        position: (point: unknown, params: unknown, dom: unknown) => {
+          const pt2 = point as [number, number];
+          const arr = params as { dataIndex: number }[];
+          const i = arr[0]?.dataIndex ?? 0;
+          const a = awayP[i];
+          const h = homeP[i];
+          const chart = chartRef.current;
+          let html = "";
+          if (a && h && chart) {
+            const yA = chart.convertToPixel({ xAxisIndex: 0, yAxisIndex: 0 }, [i, a.rating])[1];
+            const yH = chart.convertToPixel({ xAxisIndex: 0, yAxisIndex: 0 }, [i, h.rating])[1];
+            const sep = '<div style="margin:6px 0;border-top:1px solid #e2e8f0"></div>';
+            // The two lines render close enough to touch/overlap at this point — show
+            // both rather than force a pick the cursor can't reliably make.
+            html =
+              Math.abs(yA - yH) <= 6
+                ? fmtPoint(awayLabel, awayColor, a) + sep + fmtPoint(homeLabel, homeColor, h)
+                : Math.abs(yA - pt2[1]) <= Math.abs(yH - pt2[1])
+                  ? fmtPoint(awayLabel, awayColor, a)
+                  : fmtPoint(homeLabel, homeColor, h);
+          } else if (a) {
+            html = fmtPoint(awayLabel, awayColor, a);
+          } else if (h) {
+            html = fmtPoint(homeLabel, homeColor, h);
+          }
+          (dom as HTMLElement).innerHTML = html;
+          return [pt2[0] + 12, pt2[1] - 12];
         },
       },
       series: [
@@ -158,38 +198,16 @@ function EloSpark({
           symbolSize: 3,
           connectNulls: true,
         },
-        // Invisible, much-thicker copies of each line purely to widen the hover hit
-        // area — a 2px stroke is hard to land on with a mouse (or a finger), so these
-        // sit on top (same name, so the tooltip formatter treats them identically) and
-        // catch anything within ~10px of the real line without changing how it looks.
-        {
-          type: "line",
-          name: awayLabel,
-          data: awayP.map((p) => (p == null ? null : +p.rating.toFixed(1))),
-          lineStyle: { opacity: 0, width: 10 },
-          symbol: "none",
-          connectNulls: true,
-          z: 10,
-          silent: false,
-          emphasis: { disabled: true },
-        },
-        {
-          type: "line",
-          name: homeLabel,
-          data: homeP.map((p) => (p == null ? null : +p.rating.toFixed(1))),
-          lineStyle: { opacity: 0, width: 10 },
-          symbol: "none",
-          connectNulls: true,
-          z: 10,
-          silent: false,
-          emphasis: { disabled: true },
-        },
       ],
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }),
     [awayP, homeP, dividers, awayColor, homeColor, awayLabel, homeLabel],
   );
-  const ref = useECharts(option);
+  const ref = useECharts(option, {
+    onInit: (chart) => {
+      chartRef.current = chart;
+    },
+  });
   if (awayPts.length < 2 && homePts.length < 2) {
     return <div className="flex h-8 items-center text-[10px] italic text-slate-400">Not enough history yet</div>;
   }
