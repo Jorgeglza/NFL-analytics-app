@@ -13,7 +13,8 @@ import {
 import { edgeComposite, meanLastN, EDGE_SCALE, type TrendFeatures } from "../../../lib/logic/edgeComposite";
 import { impliedProb, fairProbs } from "../../../lib/logic/moneyline";
 import { wilson } from "../../../lib/logic/wilson";
-import { buildEloIndex, scheduleToEloGames, type EloEntry } from "../../../lib/logic/elo";
+import { buildEloIndex, buildEloRatingHistory, scheduleToEloGames, eloTeamKey, type EloEntry, type EloRatingPoint } from "../../../lib/logic/elo";
+import { indexEloHistoryByTeam } from "../../../lib/logic/powerRankings";
 import { pythWinPct, log5 } from "../../../lib/logic/pythagorean";
 import { WIN_TYPE_COLORS } from "../../../lib/logic/winType";
 
@@ -246,6 +247,21 @@ export type EloIndex = Map<string, EloEntry>;
 
 export function buildScheduleEloIndex(schedule: Row[]): EloIndex {
   return buildEloIndex(scheduleToEloGames(schedule));
+}
+
+// ---------- Elo rating history, for the per-team sparkline on the Elo card ----------
+export type EloHistoryIndex = Map<string, EloRatingPoint[]>;
+
+export function buildScheduleEloHistoryIndex(schedule: Row[]): EloHistoryIndex {
+  return indexEloHistoryByTeam(buildEloRatingHistory(scheduleToEloGames(schedule)));
+}
+
+/** A team's last `n` post-game Elo ratings strictly before (season, week) — the pre-game state
+ * of the previewed matchup, consistent with every other pre-game-only number on this tab. */
+export function lastNEloRatings(byTeam: EloHistoryIndex, team: string, season: number, week: number, n = 17): EloRatingPoint[] {
+  const arr = byTeam.get(eloTeamKey(team)) ?? [];
+  const upToGame = arr.filter((p) => p.season < season || (p.season === season && p.week < week));
+  return upToGame.slice(-n);
 }
 
 // ---------- predictive model (margin regression) — precomputed lookup ----------

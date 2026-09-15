@@ -26,14 +26,18 @@ import {
   pickWinner,
   MODEL_KEYS,
   MODEL_COLORS,
+  buildScheduleEloHistoryIndex,
+  lastNEloRatings,
   type HistAgg,
   type GradesIndex,
   type TeamWeekIndex,
   type EloIndex,
+  type EloHistoryIndex,
   type PredictiveIndex,
   type PredictiveCoverage,
   predictiveDisclaimer,
 } from "./engine";
+import type { EloRatingPoint } from "../../../lib/logic/elo";
 
 const fmtMl = (ml: number | null) => (ml == null ? "—" : ml > 0 ? `+${Math.round(ml)}` : String(Math.round(ml)));
 const pct1 = (p: number | null) => (p == null ? "—" : `${(100 * p).toFixed(1)}%`);
@@ -51,6 +55,57 @@ function ProbBar({ label, p, color, note }: { label: string; p: number | null; c
       {note != null && <span className="w-20 shrink-0 truncate text-slate-400" title={note}>{note}</span>}
     </div>
   );
+}
+
+/** Elo rating sparkline for one team — last N post-game ratings, colored in the
+ *  team's own color, with a subtle dotted divider at each season boundary and
+ *  a per-point hover tooltip. Mirrors StatSpark's ECharts conventions (Scorecards.tsx). */
+function EloSpark({ pts, color, label }: { pts: EloRatingPoint[]; color: string; label: string }) {
+  const seasonBoundaries = pts.reduce<number[]>((acc, p, i) => {
+    if (i > 0 && p.season !== pts[i - 1].season) acc.push(i);
+    return acc;
+  }, []);
+  const option = useMemo<EChartsOption>(
+    () => ({
+      grid: { left: 2, right: 2, top: 4, bottom: 4 },
+      xAxis: { type: "category", data: pts.map((_, i) => String(i)), show: false },
+      yAxis: { type: "value", show: false, min: (v: { min: number }) => v.min - 10, max: (v: { max: number }) => v.max + 10 },
+      tooltip: {
+        trigger: "axis",
+        confine: true,
+        formatter: (ps: unknown) => {
+          const arr = ps as { dataIndex: number }[];
+          const i = arr[0]?.dataIndex ?? 0;
+          const p = pts[i];
+          return `${label} · Season ${p.season} W${p.week}<br/>Elo: <b>${Math.round(p.rating)}</b>`;
+        },
+      },
+      series: [
+        {
+          type: "line",
+          data: pts.map((p) => +p.rating.toFixed(1)),
+          symbol: "none",
+          lineStyle: { color, width: 2 },
+          markLine: seasonBoundaries.length
+            ? {
+                symbol: "none",
+                silent: true,
+                label: { show: false },
+                lineStyle: { type: "dotted", color: "#cbd5e1", width: 1 },
+                data: seasonBoundaries.map((i) => ({ xAxis: i - 0.5 })),
+              }
+            : undefined,
+        },
+      ],
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }),
+    [pts.map((p) => `${p.season}-${p.week}-${p.rating.toFixed(1)}`).join(","), color, label],
+  );
+  const ref = useECharts(pts.length >= 2 ? option : null);
+  if (pts.length < 2) {
+    return <div className="flex h-8 flex-1 min-w-0 items-center text-[10px] italic text-slate-400">Not enough history yet</div>;
+  }
+  return <div ref={ref} className="h-8 min-w-0 flex-1" />;
 }
 
 /** One model's breakdown card: pick header + how-it-got-there visual. */
@@ -138,6 +193,13 @@ export default function MatchupTab({
   const away = selGame ? String(selGame.away_team) : "";
   const home = selGame ? String(selGame.home_team) : "";
   const [stat, setStat] = useState("points_margin");
+
+  // Elo rating history (for the Elo card's per-team sparklines) — built once per
+  // schedule load, then sliced to each team's last 17 games strictly before this
+  // matchup (pre-game only, consistent with wkPlayed/keyStats elsewhere on this tab).
+  const eloHistIdx = useMemo<EloHistoryIndex>(() => buildScheduleEloHistoryIndex(schedule), [schedule]);
+  const awayEloHist = useMemo(() => lastNEloRatings(eloHistIdx, away, s, w), [eloHistIdx, away, s, w]);
+  const homeEloHist = useMemo(() => lastNEloRatings(eloHistIdx, home, s, w), [eloHistIdx, home, s, w]);
 
   // Keep season/week/game in the URL so "How the models work" (and browser
   // back/forward) can return to the exact matchup being viewed.
@@ -617,18 +679,28 @@ export default function MatchupTab({
             </ModelBlock>
 
             <ModelBlock color={MODEL_COLORS.elo} title="Elo" pick={pickOf(bundle.elo)} prob={probOf(bundle.elo)}>
-              {([[away, keyStats.eloAway], [home, keyStats.eloHome]] as const).map(([t, e]) => (
+              {/* Current ratings, as a KPI row (replaces the old bar-per-team layout). */}
+              <div className="flex items-center justify-center gap-3">
+                <span className={`text-sm tabular-nums ${keyStats.eloAway != null && keyStats.eloHome != null && keyStats.eloAway > keyStats.eloHome ? "font-bold text-slate-900" : "text-slate-500"}`}>
+                  {away} {keyStats.eloAway == null ? "—" : Math.round(keyStats.eloAway)}
+                </span>
+                <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400">elo</span>
+                <span className={`text-sm tabular-nums ${keyStats.eloAway != null && keyStats.eloHome != null && keyStats.eloHome > keyStats.eloAway ? "font-bold text-slate-900" : "text-slate-500"}`}>
+                  {keyStats.eloHome == null ? "—" : Math.round(keyStats.eloHome)}
+                </span>
+                <span className="text-[10px] text-slate-400" title="Home-field advantage baked into the Elo win-probability formula">+48 home</span>
+              </div>
+
+              {/* Per-team sparklines — last 17 games, team-colored, dotted season divider, hover for detail. */}
+              {([[away, awayEloHist], [home, homeEloHist]] as const).map(([t, hist]) => (
                 <div key={t} className="flex items-center gap-2 text-[11px]">
-                  <span className="w-32 shrink-0 text-slate-500">{t} rating</span>
-                  <div className="h-3.5 flex-1 overflow-hidden rounded-full bg-slate-100">
-                    {e != null && <div className="h-full rounded-full" style={{ width: `${Math.max(4, Math.min(100, ((e - 1200) / 600) * 100))}%`, background: MODEL_COLORS.elo, opacity: t === home ? 0.85 : 0.55 }} />}
-                  </div>
-                  <span className="w-10 shrink-0 text-right font-bold tabular-nums">{e == null ? "—" : Math.round(e)}</span>
-                  <span className="w-20 shrink-0 text-slate-400">{t === home ? "+48 home" : ""}</span>
+                  <span className="w-10 shrink-0 font-semibold text-slate-500">{t}</span>
+                  <EloSpark pts={hist} color={meta.get(t)?.color ?? MODEL_COLORS.elo} label={t} />
                 </div>
               ))}
+
               <ProbBar label="Resulting p(home)" p={bundle.elo[1]} color={MODEL_COLORS.elo} />
-              <div className="text-[10px] text-slate-400">Rolling power rating from every result since 2015 (1505 = average).</div>
+              <div className="text-[10px] text-slate-400">Rolling power rating, last 17 games shown (1505 = average) · dotted line marks a new season.</div>
             </ModelBlock>
 
             <ModelBlock color={MODEL_COLORS.pyth} title="Pythagorean" pick={pickOf(bundle.pyth)} prob={probOf(bundle.pyth)}>

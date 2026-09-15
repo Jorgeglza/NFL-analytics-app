@@ -559,6 +559,14 @@ Full work list, with per-item checkboxes and severities: **`docs/MOBILE_READINES
 
 ## Session notes (newest first)
 
+### 2026-09-14 — Matchup Previews: Elo card sparklines
+User asked to upgrade the Elo model card's per-team KPI (Matchup tab, `MatchupTab.tsx`) from a static rating bar to a historical view: last-17-game sparkline per team, colored in each team's own color, with a subtle dotted season-boundary divider and hover tooltips — while keeping the "+48 home" HFA note.
+- New `engine.ts` helpers: `buildScheduleEloHistoryIndex` (wraps existing `buildEloRatingHistory`/`indexEloHistoryByTeam` from `elo.ts`/`powerRankings.ts` — no new math, no data-export changes) and `lastNEloRatings(byTeam, team, season, week, n=17)` — pre-game only (strictly before the selected matchup), consistent with `wkPlayed`/`keyStats` elsewhere on this tab.
+- New `EloSpark` component in `MatchupTab.tsx`, following the existing `StatSpark` (Scorecards.tsx) / `useECharts` ECharts convention already used twice in this file — no new charting dependency. Line colored via `meta.get(team)?.color` (real team hex, not the flat model-purple accent); season transitions get a thin `markLine` in slate `#cbd5e1` (dotted, silent, no own tooltip); axis-trigger tooltip shows season/week/rating per point; falls back to a muted "Not enough history yet" label when a team has <2 qualifying games (verified on a 2015 Wk2 matchup).
+- Elo `ModelBlock` layout: replaced the old bar-per-team rows with a centered ratings KPI row (`AWAY ### · elo · ### HOME · +48 home`) plus one `EloSpark` row per team underneath.
+- Verified in-browser (DOM/canvas pixel sampling, since the preview pane screenshot was unavailable mid-session): CLE @ BAL 2024 Wk18 renders CLE `rgb(255,60,0)`/BAL `rgb(36,23,115)` — exact team colors — with the `#cbd5e1` divider pixels present on both; `npm run build` and `tsc --noEmit` clean.
+- **Next:** none queued — user said we'll go through other Matchup Previews KPI pills "one by one" in follow-up requests.
+
 ### 2026-09-02 (cont. x2) — Pick'em Recommendations: mobile pass + coin-flip matchup context
 User feedback: make Story/Recommendations mobile-friendly, and add more representative data to
 coin-flip cards (recent results, game data, ranks) without cluttering — behind a dropdown if needed.
