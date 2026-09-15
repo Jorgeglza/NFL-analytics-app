@@ -557,6 +557,13 @@ Full work list, with per-item checkboxes and severities: **`docs/MOBILE_READINES
   on the default branch.
 - Plan: `C:\Users\Jorge\.claude\plans\need-to-plan-the-cheerful-papert.md`.
 
+### 2026-09-14 (cont. x7) — Matchup Previews: Elo tooltip — found and fixed why content was invisible
+User confirmed (with a screenshot) the actual bug: hovering did show the axisPointer's dashed vertical line, but the info box itself never appeared.
+- Root cause: `formatter` was returning `""` unconditionally (content was written later, in `position`) — but ECharts treats an empty `formatter` result as "nothing to show" and skips displaying the tooltip box entirely (the axisPointer is a separate component, so it still rendered — exactly matching the reported symptom).
+- Fix: extracted the merge/nearest-line logic into a shared `buildEloTip(i, cursorY)` helper. `formatter` now calls it with `cursorY: null`, which falls back to showing **both** teams (a safe, always-non-empty default it can compute without knowing the real mouse position yet) — so ECharts always has content and displays the box. `position` then calls the same helper with the true cursor Y to refine down to a single nearest-line pick when the two lines aren't within the 6px merge threshold, overwriting `dom.innerHTML` exactly as before.
+- Verified with a **real mouse hover** via the browser's `computer` tool (not just synthetic zrender events) and a screenshot: hovering the BAL line rendered `● BAL — Elo 1679 / Week 10 · 2024 · Win vs CIN` in the tooltip box, correctly positioned and styled.
+- `npm run build` / `tsc --noEmit` clean.
+
 ### 2026-09-14 (cont. x6) — Matchup Previews: Elo tooltip content order + merge-both-lines, and finally deployed
 User still couldn't see the hover tooltip at all — turned out the previous session's fix (`tooltip.position`-based, race-free) was never pushed; the live site was still on the broken invisible-overlay-lines commit. Also asked for a nicer content order (Elo, week, season, win/loss) and to show both teams when their lines are close/merging rather than force a pick.
 - `fmtPoint(label, color, pt)` now renders a two-line block per team: bold `● TEAM — Elo <rating>` then `Week <w> · <season> · Win/Loss vs <opponent>` (muted) — matches the requested order, full "Win"/"Loss"/"Tie" words instead of the terser "W"/"L".

@@ -120,6 +120,29 @@ function EloSpark({
     `<div style="font-weight:700;color:#0f172a"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${color};margin-right:5px"></span>${label} — Elo <b>${Math.round(pt.rating)}</b></div>` +
     `<div style="margin-top:2px;color:#64748b">Week ${pt.week} · ${pt.season} · ${resultWord(pt.win)} <span style="color:#94a3b8">vs ${pt.opponent}</span></div>`;
   const chartRef = useRef<import("echarts").ECharts | null>(null);
+  /** Tooltip content for game index `i`. `cursorY` is the real mouse pixel Y when
+   *  known (from `position`) — with it, picks whichever line is closer, unless
+   *  they're within 6px (visually merging), in which case both are shown. Without
+   *  it (the `formatter` call, which runs before `position` and needs *some*
+   *  non-empty content or ECharts skips showing the tooltip entirely), both teams
+   *  are shown as the safe default. */
+  const buildEloTip = (i: number, cursorY: number | null): string => {
+    const a = awayP[i];
+    const h = homeP[i];
+    if (!a && !h) return "";
+    if (!a) return fmtPoint(homeLabel, homeColor, h!);
+    if (!h) return fmtPoint(awayLabel, awayColor, a);
+    const sep = '<div style="margin:6px 0;border-top:1px solid #e2e8f0"></div>';
+    const chart = chartRef.current;
+    if (chart && cursorY != null) {
+      const yA = chart.convertToPixel({ xAxisIndex: 0, yAxisIndex: 0 }, [i, a.rating])[1];
+      const yH = chart.convertToPixel({ xAxisIndex: 0, yAxisIndex: 0 }, [i, h.rating])[1];
+      if (Math.abs(yA - yH) > 6) {
+        return Math.abs(yA - cursorY) <= Math.abs(yH - cursorY) ? fmtPoint(awayLabel, awayColor, a) : fmtPoint(homeLabel, homeColor, h);
+      }
+    }
+    return fmtPoint(awayLabel, awayColor, a) + sep + fmtPoint(homeLabel, homeColor, h);
+  };
   const option = useMemo<EChartsOption>(
     () => ({
       grid: { left: 30, right: 6, top: 8, bottom: 4, containLabel: true },
@@ -141,38 +164,22 @@ function EloSpark({
         trigger: "axis",
         confine: true,
         axisPointer: { type: "line", label: { show: false }, lineStyle: { color: "#e2e8f0", width: 1 } },
-        // formatter runs first to seed content, but the real mouse Y is only known to
-        // `position` (it receives the true cursor point) — so the nearest-line pick
-        // happens there instead, overwriting `dom`'s content synchronously, in the
-        // same call, with no listener/race involved (an earlier version tried tracking
-        // mouse Y via a separate zr "mousemove" listener, which ran one event late).
-        formatter: () => "",
+        // formatter must return non-empty content up front — an empty string here
+        // makes ECharts treat the hover as "nothing to show" and skip rendering the
+        // tooltip box entirely (the axisPointer line still appears since that's a
+        // separate component, which is exactly the "hover works, no info shown" bug).
+        // So formatter renders a safe default (both teams, since it doesn't yet know
+        // the real cursor Y), and `position` — which DOES receive the true cursor
+        // point, synchronously, with no listener/race — refines it to a single
+        // nearest-line pick when the two lines aren't close enough to merge.
+        formatter: (ps: unknown) => {
+          const i = (ps as { dataIndex: number }[])[0]?.dataIndex ?? 0;
+          return buildEloTip(i, null);
+        },
         position: (point: unknown, params: unknown, dom: unknown) => {
           const pt2 = point as [number, number];
-          const arr = params as { dataIndex: number }[];
-          const i = arr[0]?.dataIndex ?? 0;
-          const a = awayP[i];
-          const h = homeP[i];
-          const chart = chartRef.current;
-          let html = "";
-          if (a && h && chart) {
-            const yA = chart.convertToPixel({ xAxisIndex: 0, yAxisIndex: 0 }, [i, a.rating])[1];
-            const yH = chart.convertToPixel({ xAxisIndex: 0, yAxisIndex: 0 }, [i, h.rating])[1];
-            const sep = '<div style="margin:6px 0;border-top:1px solid #e2e8f0"></div>';
-            // The two lines render close enough to touch/overlap at this point — show
-            // both rather than force a pick the cursor can't reliably make.
-            html =
-              Math.abs(yA - yH) <= 6
-                ? fmtPoint(awayLabel, awayColor, a) + sep + fmtPoint(homeLabel, homeColor, h)
-                : Math.abs(yA - pt2[1]) <= Math.abs(yH - pt2[1])
-                  ? fmtPoint(awayLabel, awayColor, a)
-                  : fmtPoint(homeLabel, homeColor, h);
-          } else if (a) {
-            html = fmtPoint(awayLabel, awayColor, a);
-          } else if (h) {
-            html = fmtPoint(homeLabel, homeColor, h);
-          }
-          (dom as HTMLElement).innerHTML = html;
+          const i = (params as { dataIndex: number }[])[0]?.dataIndex ?? 0;
+          (dom as HTMLElement).innerHTML = buildEloTip(i, pt2[1]);
           return [pt2[0] + 12, pt2[1] - 12];
         },
       },
