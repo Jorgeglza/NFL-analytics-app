@@ -27,7 +27,7 @@ import {
   MODEL_KEYS,
   MODEL_COLORS,
   buildScheduleEloHistoryIndex,
-  lastNEloRatings,
+  alignedEloTimeline,
   predictiveKey,
   topPredictiveDrivers,
   type HistAgg,
@@ -35,6 +35,7 @@ import {
   type TeamWeekIndex,
   type EloIndex,
   type EloHistoryIndex,
+  type EloTimelineSlot,
   type PredictiveIndex,
   type PredictiveCoverage,
   type PredictiveFeaturesIndex,
@@ -117,29 +118,25 @@ function ContribRow({
 const WIN_DOT = "#3C9A5F";
 const LOSS_DOT = "#C8102E";
 
-/** One team's Elo history, right-padded with nulls so two histories of different
- *  lengths still line up on the same "games ago" x-position (today on the right). */
-function padElo(pts: EloRatingPoint[], len: number): (EloRatingPoint | null)[] {
-  return [...Array(Math.max(0, len - pts.length)).fill(null), ...pts];
-}
-
-function seasonBoundaries(padded: (EloRatingPoint | null)[]): number[] {
+function seasonBoundaries(slots: EloTimelineSlot[]): number[] {
   const out: number[] = [];
-  let prevSeason: number | null = null;
-  padded.forEach((p, i) => {
-    if (p) {
-      if (prevSeason != null && p.season !== prevSeason) out.push(i);
-      prevSeason = p.season;
-    }
-  });
+  for (let i = 1; i < slots.length; i++) {
+    if (slots[i].season !== slots[i - 1].season) out.push(i);
+  }
   return out;
 }
 
 /** Both teams' Elo history on one shared, visible Elo-points Y axis — so you can
  *  see how the two ratings stack up against each other and how each is moving.
- *  Each line is colored in its team's own color; each game gets a small dot,
- *  green for a win and red for a loss (subtle, mirrors trendOption's convention
- *  a few lines below in this file). Dotted divider = a new season.
+ *  `slots` is a shared timeline (see `alignedEloTimeline` in engine.ts): each
+ *  entry is a (season, week) at least one team played, so a week only one of
+ *  them played (most commonly the other team's season having already ended
+ *  while this one made the playoffs, or a plain bye week) correctly shows as a
+ *  gap in the other team's line rather than silently sliding an older game up
+ *  next to it. Each line is colored in its team's own color; each game gets a
+ *  small dot, green for a win and red for a loss (subtle, mirrors
+ *  trendOption's convention a few lines below in this file). Dotted divider =
+ *  a new season.
  *
  *  Tooltip uses trigger:"axis" (forgiving — any x position across the whole
  *  chart fires it, unlike trigger:"item" which needs the cursor within a
@@ -147,27 +144,21 @@ function seasonBoundaries(padded: (EloRatingPoint | null)[]): number[] {
  *  teams' points is vertically closer to the cursor, via a live mouseY
  *  tracked through the chart's zrender instance and convertToPixel. */
 function EloSpark({
-  awayPts,
-  homePts,
+  slots,
   awayColor,
   homeColor,
   awayLabel,
   homeLabel,
 }: {
-  awayPts: EloRatingPoint[];
-  homePts: EloRatingPoint[];
+  slots: EloTimelineSlot[];
   awayColor: string;
   homeColor: string;
   awayLabel: string;
   homeLabel: string;
 }) {
-  const len = Math.max(awayPts.length, homePts.length);
-  const awayP = useMemo(() => padElo(awayPts, len), [awayPts, len]);
-  const homeP = useMemo(() => padElo(homePts, len), [homePts, len]);
-  const dividers = useMemo(
-    () => [...new Set([...seasonBoundaries(awayP), ...seasonBoundaries(homeP)])],
-    [awayP, homeP],
-  );
+  const awayP = useMemo(() => slots.map((s) => s.away), [slots]);
+  const homeP = useMemo(() => slots.map((s) => s.home), [slots]);
+  const dividers = useMemo(() => seasonBoundaries(slots), [slots]);
   const resultWord = (w: boolean | null) =>
     w == null ? '<span style="color:#94a3b8">Tie</span>' : w ? `<span style="color:${WIN_DOT}">Win</span>` : `<span style="color:${LOSS_DOT}">Loss</span>`;
   const dotStyle = (p: EloRatingPoint | null) => (p?.win == null ? "#94a3b8" : p.win ? WIN_DOT : LOSS_DOT);
@@ -252,7 +243,10 @@ function EloSpark({
           lineStyle: { color: awayColor, width: 2 },
           symbol: "circle",
           symbolSize: 3,
-          connectNulls: true,
+          // false, deliberately: a null here is a real gap (bye week, or the other
+          // team's season already over while this one made the playoffs) — the
+          // line should actually break there, not bridge across it.
+          connectNulls: false,
           markLine: dividers.length
             ? { symbol: "none", silent: true, label: { show: false }, lineStyle: { type: "dotted", color: "#cbd5e1", width: 1 }, data: dividers.map((i) => ({ xAxis: i - 0.5 })) }
             : undefined,
@@ -264,7 +258,7 @@ function EloSpark({
           lineStyle: { color: homeColor, width: 2 },
           symbol: "circle",
           symbolSize: 3,
-          connectNulls: true,
+          connectNulls: false,
         },
       ],
       // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -276,7 +270,7 @@ function EloSpark({
       chartRef.current = chart;
     },
   });
-  if (awayPts.length < 2 && homePts.length < 2) {
+  if (slots.length < 2) {
     return <div className="flex h-8 items-center text-[10px] italic text-slate-400">Not enough history yet</div>;
   }
   return <div ref={ref} className="h-24 w-full" />;
@@ -370,12 +364,15 @@ export default function MatchupTab({
   const home = selGame ? String(selGame.home_team) : "";
   const [stat, setStat] = useState("points_margin");
 
-  // Elo rating history (for the Elo card's per-team sparklines) — built once per
-  // schedule load, then sliced to each team's last 17 games strictly before this
-  // matchup (pre-game only, consistent with wkPlayed/keyStats elsewhere on this tab).
+  // Elo rating history (for the Elo card's sparkline) — built once per schedule load, then
+  // aligned to a shared last-17-weeks timeline strictly before this matchup (pre-game only,
+  // consistent with wkPlayed/keyStats elsewhere on this tab) — see alignedEloTimeline in
+  // engine.ts for why it's a shared timeline rather than each team's own last 17 games.
   const eloHistIdx = useMemo<EloHistoryIndex>(() => buildScheduleEloHistoryIndex(schedule), [schedule]);
-  const awayEloHist = useMemo(() => lastNEloRatings(eloHistIdx, away, s, w), [eloHistIdx, away, s, w]);
-  const homeEloHist = useMemo(() => lastNEloRatings(eloHistIdx, home, s, w), [eloHistIdx, home, s, w]);
+  const eloTimeline = useMemo(
+    () => alignedEloTimeline(eloHistIdx, away, home, s, w),
+    [eloHistIdx, away, home, s, w],
+  );
 
   // Predictive model — top 5 concepts by this specific game's own |contribution| to the
   // predicted margin (collinear families collapsed first — see topPredictiveDrivers in
@@ -908,11 +905,13 @@ export default function MatchupTab({
                 <span className="text-[10px] text-slate-400" title="Home-field advantage baked into the Elo win-probability formula">+48 home</span>
               </div>
 
-              {/* Both teams' last 17 games on one Elo-points axis — see how they stack up
-                  and how each is trending. Dot = that game's result (green win / red loss). */}
+              {/* Both teams' last 17 weeks on one shared Elo-points axis — see how they stack up
+                  and how each is trending. A week only one team played (a bye, or one team's
+                  season having ended while the other made the playoffs) is a real gap in the
+                  other team's line, not silently backfilled with an older game. Dot = that
+                  game's result (green win / red loss). */}
               <EloSpark
-                awayPts={awayEloHist}
-                homePts={homeEloHist}
+                slots={eloTimeline}
                 awayColor={meta.get(away)?.color ?? MODEL_COLORS.elo}
                 homeColor={meta.get(home)?.color ?? MODEL_COLORS.elo}
                 awayLabel={away}

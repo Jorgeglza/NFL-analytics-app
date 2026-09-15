@@ -256,12 +256,48 @@ export function buildScheduleEloHistoryIndex(schedule: Row[]): EloHistoryIndex {
   return indexEloHistoryByTeam(buildEloRatingHistory(scheduleToEloGames(schedule)));
 }
 
-/** A team's last `n` post-game Elo ratings strictly before (season, week) — the pre-game state
- * of the previewed matchup, consistent with every other pre-game-only number on this tab. */
-export function lastNEloRatings(byTeam: EloHistoryIndex, team: string, season: number, week: number, n = 17): EloRatingPoint[] {
-  const arr = byTeam.get(eloTeamKey(team)) ?? [];
-  const upToGame = arr.filter((p) => p.season < season || (p.season === season && p.week < week));
-  return upToGame.slice(-n);
+/** One "slot" on the shared Elo timeline both teams' sparklines share — a (season, week) that at
+ * least one of the two teams actually played, strictly before the previewed matchup. Whichever
+ * team didn't play that week (a bye, or — the case that actually prompted this — one team made
+ * the playoffs and the other's season simply ended) has `null` there: a real gap in that team's
+ * line, not a game that never happened silently stitched next to an unrelated one. */
+export interface EloTimelineSlot {
+  season: number;
+  week: number;
+  away: EloRatingPoint | null;
+  home: EloRatingPoint | null;
+}
+
+/** Builds the shared timeline for `awayTeam`/`homeTeam`'s Elo sparklines: the union of both
+ * teams' played weeks strictly before (season, week), trimmed to the last `n` distinct weeks —
+ * "distinct weeks", not "n games per team", so a team with fewer games in that window (again,
+ * most commonly the non-playoff team next to one that made a run) is genuinely shown with gaps
+ * rather than its older games sliding up to fill the count and silently misaligning against the
+ * other team's more recent ones. Postseason weeks (WC/DIV/CON/SB) are numbered 19-22 in the
+ * source data, sorting naturally after REG's 1-18 within the same season — no separate handling
+ * needed for season-boundary ordering. */
+export function alignedEloTimeline(
+  byTeam: EloHistoryIndex,
+  awayTeam: string,
+  homeTeam: string,
+  season: number,
+  week: number,
+  n = 17,
+): EloTimelineSlot[] {
+  const before = (p: EloRatingPoint) => p.season < season || (p.season === season && p.week < week);
+  const awayArr = (byTeam.get(eloTeamKey(awayTeam)) ?? []).filter(before);
+  const homeArr = (byTeam.get(eloTeamKey(homeTeam)) ?? []).filter(before);
+  const slotKey = (p: { season: number; week: number }) => `${p.season}-${p.week}`;
+  const awayBySlot = new Map(awayArr.map((p) => [slotKey(p), p]));
+  const homeBySlot = new Map(homeArr.map((p) => [slotKey(p), p]));
+  const allSlots = new Map<string, { season: number; week: number }>();
+  for (const p of [...awayArr, ...homeArr]) allSlots.set(slotKey(p), { season: p.season, week: p.week });
+  const sorted = [...allSlots.values()].sort((a, b) => a.season - b.season || a.week - b.week);
+  return sorted.slice(-n).map((slot) => ({
+    ...slot,
+    away: awayBySlot.get(slotKey(slot)) ?? null,
+    home: homeBySlot.get(slotKey(slot)) ?? null,
+  }));
 }
 
 // ---------- predictive model (margin regression) — precomputed lookup ----------
