@@ -6,7 +6,7 @@ import { useLocation, useSearchParams } from "react-router-dom";
 import {
   getSchedule, getGrades, getTeamWeek, getTeamWeekRanks, getMeta,
   getPredictiveModelGames, getPredictiveModelMeta, getPredictiveModelUpcoming, getPredictiveModelUpcomingMeta,
-  getPredictiveModelGameFeatures, getPredictiveModelUpcomingFeatures, getPredictiveModelImportance,
+  getPredictiveModelGameFeatures, getPredictiveModelUpcomingFeatures,
   type Row,
 } from "../../../lib/data/loader";
 import { getTeamMetaMap, type TeamMeta } from "../../../lib/team/meta";
@@ -69,7 +69,6 @@ export default function MatchupPreviews() {
   // Loaded alongside predIdx above; a failure here doesn't set predictiveUnavailable since the
   // pick/probability itself still works fine without a breakdown.
   const [predFeaturesIdx, setPredFeaturesIdx] = useState<PredictiveFeaturesIndex | null>(null);
-  const [predImportance, setPredImportance] = useState<Row[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [retryTick, setRetryTick] = useState(0);
   const isMobile = useIsMobileViewport();
@@ -153,11 +152,10 @@ export default function MatchupPreviews() {
       .catch(() => {
         if (!cancelled) setPredictiveUnavailable(true);
       });
-    Promise.all([getPredictiveModelGameFeatures(), getPredictiveModelUpcomingFeatures(), getPredictiveModelImportance()])
-      .then(([featureRows, upcomingFeatureRows, importanceRows]) => {
+    Promise.all([getPredictiveModelGameFeatures(), getPredictiveModelUpcomingFeatures()])
+      .then(([featureRows, upcomingFeatureRows]) => {
         if (cancelled) return;
         setPredFeaturesIdx(buildPredictiveFeaturesIndex([...featureRows, ...upcomingFeatureRows]));
-        setPredImportance(importanceRows);
       })
       .catch(() => {
         // Silent — the pill just falls back to "no breakdown available for this game".
@@ -227,7 +225,6 @@ export default function MatchupPreviews() {
               predictiveUnavailable={predictiveUnavailable}
               predictiveCoverage={predictiveCoverage}
               predFeaturesIdx={predFeaturesIdx ?? undefined}
-              predImportance={predImportance}
               initialSelection={matchupSelection}
             />
           )}

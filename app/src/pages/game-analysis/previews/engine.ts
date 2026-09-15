@@ -312,10 +312,14 @@ export function buildPredictiveFeaturesIndex(rows: Row[]): PredictiveFeaturesInd
 }
 
 export interface PredictiveDriver {
+  /** Representative feature name (for `labelFor`/`describeFeature`) — the plainest member of its family. */
   feature: string;
-  /** Share of the shown drivers' combined *global* permutation importance — a stable percentage
-   *  (never negative, never blows up), unlike a raw per-game coefficient contribution. */
-  pctShare: number;
+  /** This concept's exact contribution to the predicted margin, in points, for THIS game —
+   *  summed across every collinear family member (see `topPredictiveDrivers`), so it varies
+   *  game to game and is safe to read as a real point value, unlike a lone raw coefficient. */
+  contrib: number;
+  /** How many raw model columns were combined into `contrib` (>1 means transforms/splits folded in). */
+  familySize: number;
   /** Home-minus-away diff value the model actually trains on (null for game-context columns). */
   diff: number | null;
   /** Raw per-team values behind the diff, when available (not every feature has a per-team split). */
@@ -323,34 +327,73 @@ export interface PredictiveDriver {
   away: number | null;
 }
 
-/** Top `n` model inputs, ranked by *global* permutation importance (`importanceRows`, from
- *  importance.json) rather than this game's own coefficient contribution or its sign. That's
- *  deliberate, and not just about magnitude: the 41 features include several near-duplicates of
- *  each other (Elo alongside its own square/sqrt transform; total EPA diff alongside its
- *  pass/rush split), so their individual linear contributions — while an exact decomposition that
- *  sums correctly — can be huge, near-cancelling, and even flip which side an individual
- *  coefficient's sign nominally "favors" relative to which team simply has the better raw number
- *  (docs/predictive-model-decision.md's explicit warning that raw coefficients are unstable here,
- *  observed directly during development: BAL had the clearly better raw L3 EPA diff for a real
- *  game, yet that feature's own coefficient contribution pointed the other way). So this only
- *  reports what's actually reliable: global importance (stable ranking) and the real per-team
- *  values (`featureRow`, from `PredictiveFeaturesIndex`) — never a per-feature "favors X" claim. */
-export function topPredictiveDrivers(importanceRows: Row[], featureRow: Row | null, n = 5): PredictiveDriver[] {
-  const ranked = [...importanceRows].sort((a, b) => Number(b.importance ?? 0) - Number(a.importance ?? 0)).slice(0, n);
-  const totalImp = ranked.reduce((s, r) => s + Math.max(0, Number(r.importance ?? 0)), 0) || 1;
-  return ranked.map((r) => {
-    const feature = String(r.feature);
-    const homeRaw = featureRow?.[`${feature}_home`];
-    const awayRaw = featureRow?.[`${feature}_away`];
-    const diffRaw = featureRow?.[feature];
-    return {
-      feature,
-      pctShare: (Math.max(0, Number(r.importance ?? 0)) / totalImp) * 100,
-      diff: diffRaw == null ? null : Number(diffRaw),
-      home: homeRaw == null ? null : Number(homeRaw),
-      away: awayRaw == null ? null : Number(awayRaw),
-    };
-  });
+// A handful of the model's 41 columns are the same underlying signal split several ways (a
+// feature alongside its own signed-square/signed-sqrt transform; total EPA diff alongside its
+// pass/rush split; overall grade alongside offense/defense and its own transforms). Individually
+// their linear coefficients can be huge and near-cancelling (docs/predictive-model-decision.md's
+// explicit warning — observed directly during development: BAL had the clearly better raw L3 EPA
+// diff for a real game, yet that one column's own coefficient contribution pointed the other
+// way). Summed together, a family's contribution reconstructs the concept's real net effect on
+// the prediction — the redundant split is exactly what cancels, not the signal — so this is safe
+// to show as a real, per-game point value. Listed member names are the *plain* diff_ suffix
+// (i.e. with the shared "diff_" and, for context columns, nothing stripped); the first member in
+// each list is the representative shown to the user (plainest / most encompassing).
+const FEATURE_FAMILIES: { key: string; members: string[] }[] = [
+  { key: "elo", members: ["elo", "sq_elo", "sqrt_elo"] },
+  { key: "l3_start_field_pos", members: ["l3_start_field_pos", "sq_l3_start_field_pos", "sqrt_l3_start_field_pos"] },
+  { key: "l3_start_ep", members: ["l3_start_ep", "sq_l3_start_ep", "sqrt_l3_start_ep"] },
+  { key: "cum_overall_grade", members: ["cum_overall_grade", "sq_cum_overall_grade", "sqrt_cum_overall_grade", "cum_offense_grade", "cum_defense_grade"] },
+  { key: "l3_epa_diff", members: ["l3_epa_diff", "l3_pass_epa_diff", "l3_rush_epa_diff"] },
+];
+
+/** Family key + representative display feature for one raw model column (e.g. "diff_sqrt_elo"
+ *  and "diff_elo" both resolve to family key "elo", represented by "diff_elo"). */
+function featureFamily(feature: string): { key: string; repr: string } {
+  const hadDiff = feature.startsWith("diff_");
+  const base = hadDiff ? feature.slice(5) : feature;
+  const fam = FEATURE_FAMILIES.find((f) => f.members.includes(base));
+  if (!fam) return { key: base, repr: feature };
+  return { key: fam.key, repr: hadDiff ? `diff_${fam.key}` : fam.key };
+}
+
+/** Top `n` concepts by |contribution| **for this specific game**, families collapsed (see
+ *  `FEATURE_FAMILIES`) so the ranking and point values are safe to read at face value and
+ *  actually vary per game — unlike ranking by global importance, which is the same fixed list
+ *  and percentages for every single matchup. `featureRow` comes from `PredictiveFeaturesIndex`;
+ *  the feature-column list is read directly off its own keys (every `..._contrib` column), no
+ *  separate feature-list input needed. */
+export function topPredictiveDrivers(featureRow: Row | null, n = 5): PredictiveDriver[] {
+  if (!featureRow) return [];
+  const byFamily = new Map<string, { repr: string; contrib: number; size: number }>();
+  for (const col of Object.keys(featureRow)) {
+    if (!col.endsWith("_contrib")) continue;
+    const feature = col.slice(0, -"_contrib".length);
+    const { key, repr } = featureFamily(feature);
+    const c = Number(featureRow[col] ?? 0);
+    const cur = byFamily.get(key);
+    if (cur) {
+      cur.contrib += c;
+      cur.size += 1;
+    } else {
+      byFamily.set(key, { repr, contrib: c, size: 1 });
+    }
+  }
+  return [...byFamily.values()]
+    .sort((a, b) => Math.abs(b.contrib) - Math.abs(a.contrib))
+    .slice(0, n)
+    .map(({ repr, contrib, size }) => {
+      const homeRaw = featureRow[`${repr}_home`];
+      const awayRaw = featureRow[`${repr}_away`];
+      const diffRaw = featureRow[repr];
+      return {
+        feature: repr,
+        contrib,
+        familySize: size,
+        diff: diffRaw == null ? null : Number(diffRaw),
+        home: homeRaw == null ? null : Number(homeRaw),
+        away: awayRaw == null ? null : Number(awayRaw),
+      };
+    });
 }
 
 /** Shared footer disclaimer wording for every tab that surfaces the predictive model. */
