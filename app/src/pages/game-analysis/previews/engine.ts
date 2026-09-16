@@ -5,6 +5,8 @@ import type { Row } from "../../../lib/data/loader";
 import {
   BIN_SIZE_DEFAULT,
   ATS_WINDOW,
+  MIN_N_BUCKET,
+  MAX_BUCKET_WIDEN,
   homeCoverFairProb,
   vigLeanProbHome,
   atsTrendProbHome,
@@ -140,16 +142,46 @@ export function atsRate(hist: HistAgg, team: string, season: number, wk: number,
   return v.reduce((a, b) => a + b, 0) / v.length;
 }
 
-/** Wilson-centered p̂ + N for a bucket/side, excluding one season-week. */
-export function marketRate(hist: HistAgg, bucket: string, favSide: string, exclSeason: number, exclWeek: number): { pHat: number; n: number } | null {
-  const key = `${bucket}|${favSide}`;
-  const c = hist.counts.get(key);
-  if (!c) return null;
-  const ex = hist.perWeek.get(`${exclSeason}|${exclWeek}`)?.get(key);
-  const n = c.n - (ex?.n ?? 0);
-  const wins = c.wins - (ex?.wins ?? 0);
-  if (n <= 0) return null;
-  return { pHat: wilson(wins / n, n).center, n };
+/** Wilson-centered p̂ + N for a bucket/side, excluding one season-week. A
+ * bucket short of MIN_N_BUCKET games widens outward one bucket-width at a
+ * time (±1, then ±2, …binSize), pooling the nearest spread sizes first
+ * since favorite win rate moves fairly smoothly with spread — this used to
+ * just return null on a thin/empty bucket (silently dropping the whole
+ * Market-calibrated blend for it); `widened` flags when neighbors were
+ * pooled in, for surfacing low-confidence bucket reads in the UI. */
+export function marketRate(
+  hist: HistAgg,
+  bucket: string,
+  favSide: string,
+  exclSeason: number,
+  exclWeek: number,
+  binSize = BIN_SIZE_DEFAULT,
+): { pHat: number; n: number; widened: boolean } | null {
+  const lo = parseFloat(bucket);
+  if (!Number.isFinite(lo)) return null;
+
+  const wkKey = `${exclSeason}|${exclWeek}`;
+  const acc = { n: 0, wins: 0 };
+  const add = (label: string) => {
+    const key = `${label}|${favSide}`;
+    const c = hist.counts.get(key);
+    if (!c) return;
+    const ex = hist.perWeek.get(wkKey)?.get(key);
+    acc.n += c.n - (ex?.n ?? 0);
+    acc.wins += c.wins - (ex?.wins ?? 0);
+  };
+
+  add(bucket);
+  let widened = false;
+  for (let k = 1; acc.n < MIN_N_BUCKET && k <= MAX_BUCKET_WIDEN; k++) {
+    const before = acc.n;
+    add(bucketLabel(lo - k * binSize, binSize));
+    add(bucketLabel(lo + k * binSize, binSize));
+    if (acc.n > before) widened = true;
+  }
+
+  if (acc.n <= 0) return null;
+  return { pHat: wilson(acc.wins / acc.n, acc.n).center, n: acc.n, widened };
 }
 
 // ---------- grades ----------

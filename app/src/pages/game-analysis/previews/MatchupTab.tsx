@@ -583,11 +583,15 @@ export default function MatchupTab({
     const spread = selGame.spread_line == null ? null : Number(selGame.spread_line);
     const fav = favoriteSide(spread);
     let nBucket = 0;
+    let bucketWidened = false;
     let bucket: string | null = null;
     if (spread != null && fav != null) {
       bucket = bucketLabel(spread);
       const m = marketRate(hist, bucket, fav, s, w);
-      if (m) nBucket = m.n;
+      if (m) {
+        nBucket = m.n;
+        bucketWidened = m.widened;
+      }
     }
     // bucket details both sides
     const bucketRows = (["home", "away"] as const).map((side) => {
@@ -605,8 +609,9 @@ export default function MatchupTab({
     const risks: string[] = [];
     if (spread == null) risks.push("No spread for this game (no market prior).");
     if (bucket == null) risks.push("Bucket undefined.");
-    if (nBucket < MIN_N_BUCKET) risks.push(`Low-N bucket (N=${nBucket}, min ${MIN_N_BUCKET}).`);
-    return { spread, fav, bucket, nBucket, bucketRows, homeCoverFair, pVigLeanHome, atsHome, atsAway, pAtsTrendHome, risks };
+    if (nBucket < MIN_N_BUCKET) risks.push(`Low-N bucket even after widening to nearby spreads (N=${nBucket}, min ${MIN_N_BUCKET}).`);
+    else if (bucketWidened) risks.push(`Bucket history widened to include nearby spreads (exact bucket was thin).`);
+    return { spread, fav, bucket, nBucket, bucketWidened, bucketRows, homeCoverFair, pVigLeanHome, atsHome, atsAway, pAtsTrendHome, risks };
   }, [selGame, hist, away, home, s, w, wkPlayed]);
 
   // ---- all-model bundle for the verdict strip ----

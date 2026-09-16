@@ -28,6 +28,10 @@ import { fairProbs } from "./moneyline";
 export const BIN_SIZE_DEFAULT = 1.0;
 export const SIGNED_SPREAD = true;
 export const MIN_N_BUCKET = 25;
+/** Cap on how many bucket-widths a thin bucket widens outward (each side) before
+ * giving up and falling back to the side-wide rate — comfortably covers the
+ * realistic spread range (~±30) so real games always resolve via widening. */
+export const MAX_BUCKET_WIDEN = 30;
 
 /** How much a bucket's sample size N earns toward full confidence (1 at N>=MIN_N_BUCKET). */
 export function nFactor(n: number): number {

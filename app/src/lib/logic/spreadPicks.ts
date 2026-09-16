@@ -7,6 +7,7 @@
 import type { Row } from "../data/loader";
 import { wilson } from "./wilson";
 import type { WinType } from "./winType";
+import { MIN_N_BUCKET, MAX_BUCKET_WIDEN } from "./probBlend";
 
 export const WIN_TYPE_CATS: WinType[] = ["Favorite home", "Favorite away", "Underdog home", "Underdog away"];
 
@@ -71,8 +72,12 @@ const rateKey = (b: string, side: string) => `${b}|${side}`;
  * (season, week) — extracted from computeWeekPicks so other callers (the
  * Weekly Breakdown tab's upset-candidate scoring) can get the identical
  * historic rate without re-deriving it or duplicating the target week's
- * history-exclusion rule. Falls back to the side-wide rate when a bucket has
- * no history of its own. */
+ * history-exclusion rule. A bucket short of MIN_N_BUCKET games widens
+ * outward one bucket-width at a time (±1, then ±2, …), pooling the nearest
+ * spread sizes first since favorite win rate moves fairly smoothly with
+ * spread — a much closer read than jumping straight to the side-wide rate,
+ * which is now only a last resort if widening the full realistic range
+ * still comes up empty. */
 export function historicFavRate(reg: Game[], excludeSeason: number, excludeWeek: number, binSize: number, signed: boolean) {
   const histPlayed = reg.filter((g) => !(g.season === excludeSeason && g.week === excludeWeek) && g.played && g.winType != null);
 
@@ -92,8 +97,23 @@ export function historicFavRate(reg: Game[], excludeSeason: number, excludeWeek:
     if (g.favWin) sr.wins++;
   }
   return (b: string, side: string): number | null => {
-    const r = rateAgg.get(rateKey(b, side));
-    if (r && r.n > 0) return wilson(r.wins / r.n, r.n).center;
+    const lo = parseFloat(b);
+    const acc = { n: 0, wins: 0 };
+    const add = (label: string) => {
+      const r = rateAgg.get(rateKey(label, side));
+      if (r) {
+        acc.n += r.n;
+        acc.wins += r.wins;
+      }
+    };
+    if (Number.isFinite(lo)) {
+      add(b);
+      for (let k = 1; acc.n < MIN_N_BUCKET && k <= MAX_BUCKET_WIDEN; k++) {
+        add(bucketOf(lo - k * binSize, binSize, signed).label);
+        add(bucketOf(lo + k * binSize, binSize, signed).label);
+      }
+    }
+    if (acc.n > 0) return wilson(acc.wins / acc.n, acc.n).center;
     const sr = sideAgg.get(side);
     if (sr && sr.n > 0) return wilson(sr.wins / sr.n, sr.n).center;
     return null;
