@@ -94,57 +94,87 @@ function ProbBar({
   );
 }
 
-/** Compact bar sparkline of favorite win rate by nearby 1-point spread
- * bucket — shows *why* the bucket-history read did or didn't need widening
- * (see marketRate/bucketProfile in engine.ts), without growing the card:
- * fixed height, hover-only detail (no per-bar labels). Full color = the
- * game's own bucket, mid tone = neighbors actually pooled into the widened
- * estimate, faint = shown for context only. A bucket with no history
- * renders as a small flat neutral nub rather than a 0-height bar, so
+const fmtPt = (lo: number) => `${lo >= 0 ? "+" : ""}${lo}`;
+
+/** Bar chart of favorite win rate by nearby 1-point spread bucket — shows
+ * *why* the bucket-history read did or didn't need widening (see
+ * marketRate/bucketProfile in engine.ts). Unlike a bare sparkline this
+ * labels itself: the game's own bucket gets a direct % label, the x-axis
+ * shows the spread range it spans, a 50% reference line is called out, and
+ * a 3-state legend (this bucket / pooled in / shown for context) explains
+ * the shading instead of relying on hover alone. A bucket with no history
+ * renders as a short flat neutral nub rather than a 0-height bar, so
  * "no data" never reads as "favorites always lose here". */
 function BucketProfileChart({ points, color }: { points: BucketProfilePoint[]; color: string }) {
-  const BAR_MAX = 30;
+  const BAR_MAX = 26;
+  const target = points.find((p) => p.isTarget);
+  const targetPct = target?.pHat != null ? Math.round(100 * target.pHat) : null;
   return (
-    <div
-      className="relative flex h-9 items-end gap-[3px] border-b border-slate-100"
-      title="Favorite win rate by nearby 1-point spread bucket · darker bars were pooled into the bucket-history read · hover a bar for its exact rate"
-    >
-      <div className="pointer-events-none absolute inset-x-0 border-t border-dashed border-slate-300" style={{ bottom: BAR_MAX / 2 }} />
-      {points.map((p) => {
-        const hasData = p.pHat != null && p.n > 0;
-        const h = hasData ? Math.max(4, Math.round((p.pHat as number) * BAR_MAX)) : 3;
-        return (
-          <div
-            key={p.label}
-            className="relative flex-1"
-            style={{ height: BAR_MAX }}
-            title={`${p.label}${p.isTarget ? " (this game)" : ""}: ${hasData ? `${Math.round(100 * (p.pHat as number))}% favorite win rate, N=${p.n}` : "no history"}`}
-          >
+    <div>
+      <div className="relative flex h-9 items-end gap-[3px] pt-3.5">
+        <div className="pointer-events-none absolute inset-x-0 flex items-center gap-1" style={{ bottom: BAR_MAX / 2 }}>
+          <span className="text-[8px] leading-none text-slate-300">50%</span>
+          <div className="h-px flex-1 border-t border-dashed border-slate-300" />
+        </div>
+        {points.map((p) => {
+          const hasData = p.pHat != null && p.n > 0;
+          const h = hasData ? Math.max(4, Math.round((p.pHat as number) * BAR_MAX)) : 3;
+          return (
             <div
-              className="absolute bottom-0 w-full rounded-t-sm"
-              style={{
-                height: h,
-                background: hasData ? color : "#cbd5e1",
-                opacity: p.isTarget ? 1 : p.pooled ? 0.5 : 0.18,
-              }}
-            />
-          </div>
-        );
-      })}
+              key={p.label}
+              className="relative flex-1"
+              style={{ height: BAR_MAX }}
+              title={`${p.label}${p.isTarget ? " — this game's bucket" : p.pooled ? " — pooled into the estimate" : " — shown for context only"}: ${hasData ? `${Math.round(100 * (p.pHat as number))}% favorite win rate, N=${p.n}` : "no history"}`}
+            >
+              {p.isTarget && targetPct != null && (
+                <span className="absolute -top-3.5 left-1/2 -translate-x-1/2 whitespace-nowrap text-[9px] font-bold" style={{ color }}>
+                  {targetPct}%
+                </span>
+              )}
+              <div
+                className="absolute bottom-0 w-full rounded-t-sm"
+                style={{
+                  height: h,
+                  background: hasData ? color : "#cbd5e1",
+                  opacity: p.isTarget ? 1 : p.pooled ? 0.55 : 0.18,
+                }}
+              />
+            </div>
+          );
+        })}
+      </div>
+      <div className="mt-0.5 flex items-center justify-between text-[8px] text-slate-400">
+        <span>{fmtPt(points[0].lo)}pt</span>
+        <span className="uppercase tracking-wide">spread size</span>
+        <span>{fmtPt(points[points.length - 1].lo + 1)}pt</span>
+      </div>
+      <div className="mt-1 flex items-center gap-2.5 text-[8px] text-slate-400">
+        <span className="inline-flex items-center gap-1"><span className="inline-block h-1.5 w-1.5 rounded-[1px]" style={{ background: color }} />this bucket</span>
+        <span className="inline-flex items-center gap-1"><span className="inline-block h-1.5 w-1.5 rounded-[1px]" style={{ background: color, opacity: 0.55 }} />pooled in</span>
+        <span className="inline-flex items-center gap-1"><span className="inline-block h-1.5 w-1.5 rounded-[1px] bg-slate-300" />context only</span>
+      </div>
     </div>
   );
 }
 
 /** Small stat tile for a secondary signal (vig lean / ATS trend) — a
- * headline probability plus a one-line "how we got there" detail, used in
- * place of a full-width ProbBar where two signals need to sit side by side
- * without doubling the card's height. */
-function SignalKPI({ label, p, detail }: { label: string; p: number | null; detail: string }) {
+ * headline probability, its actual weight in the final blend (the two
+ * signals split whatever's left after bucket history's 85%, so weight
+ * varies with which are available for this game — see probBlend.ts), and a
+ * one-line "how we got there" detail. Kept deliberately tiny: these are
+ * minor, low-standalone-accuracy inputs (see ModelsGuide) so they shouldn't
+ * visually compete with bucket history above. */
+function SignalKPI({ label, p, weightPct, detail }: { label: string; p: number | null; weightPct: number; detail: string }) {
   return (
-    <div className="min-w-0 rounded-lg bg-slate-50 px-2.5 py-2">
-      <div className="truncate text-[10px] font-semibold uppercase tracking-wide text-slate-400">{label}</div>
-      <div className="mt-0.5 text-lg font-bold text-slate-800">{p == null ? "—" : `${Math.round(100 * p)}%`}</div>
-      <div className="truncate text-[10px] text-slate-400" title={detail}>{detail}</div>
+    <div className="min-w-0 rounded-md bg-slate-50 px-1.5 py-1">
+      <div className="flex items-center justify-between gap-1">
+        <span className="truncate text-[8px] font-semibold uppercase tracking-wide text-slate-400">{label}</span>
+        <span className="shrink-0 text-[8px] font-medium text-slate-400">{weightPct}% wt</span>
+      </div>
+      <div className="flex items-baseline gap-1">
+        <span className="text-xs font-bold text-slate-700">{p == null ? "—" : `${Math.round(100 * p)}%`}</span>
+        <span className="min-w-0 truncate text-[8px] text-slate-400" title={detail}>{detail}</span>
+      </div>
     </div>
   );
 }
@@ -1147,17 +1177,27 @@ export default function MatchupTab({
                   ? `Exact bucket was thin (N below ${MIN_N_BUCKET}), so history pooled in ±${engine.bucketHalfWidthPts}pt of nearby spreads (darker bars above).`
                   : "This exact 1-point spread bucket alone — no widening needed."}
               </div>
-              <div className="grid grid-cols-2 gap-2 pt-0.5">
-                <SignalKPI
-                  label="Vig lean"
-                  p={engine.pVigLeanHome}
-                  detail={engine.homeCoverFair == null ? "no spread odds" : `home covers ${pct1(engine.homeCoverFair)}`}
-                />
-                <SignalKPI
-                  label={`ATS trend (L${ATS_WINDOW})`}
-                  p={engine.pAtsTrendHome}
-                  detail={engine.atsHome == null || engine.atsAway == null ? "insufficient history" : `${home} ${pct1(engine.atsHome)} vs ${away} ${pct1(engine.atsAway)}`}
-                />
+              <div className="grid grid-cols-2 gap-1.5 pt-0.5">
+                {(() => {
+                  const extrasN = [engine.pVigLeanHome, engine.pAtsTrendHome].filter((x) => x != null).length;
+                  const extraWeightPct = extrasN > 0 ? Math.round(((1 - MARKET_BUCKET_W) * 100) / extrasN) : 0;
+                  return (
+                    <>
+                      <SignalKPI
+                        label="Vig lean"
+                        p={engine.pVigLeanHome}
+                        weightPct={engine.pVigLeanHome == null ? 0 : extraWeightPct}
+                        detail={engine.homeCoverFair == null ? "no spread odds" : `home covers ${pct1(engine.homeCoverFair)}`}
+                      />
+                      <SignalKPI
+                        label={`ATS trend (L${ATS_WINDOW})`}
+                        p={engine.pAtsTrendHome}
+                        weightPct={engine.pAtsTrendHome == null ? 0 : extraWeightPct}
+                        detail={engine.atsHome == null || engine.atsAway == null ? "insufficient history" : `${home} ${pct1(engine.atsHome)} vs ${away} ${pct1(engine.atsAway)}`}
+                      />
+                    </>
+                  );
+                })()}
               </div>
               <div className="text-[10px] text-slate-400">Mostly bucket history, plus a {Math.round((1 - MARKET_BUCKET_W) * 100)}% dose of two signals ML Fair doesn't see: the spread's own vig lean and each team's recent against-the-spread trend.</div>
               {(engine.nBucket < MIN_N_BUCKET || engine.risks.length > 0) && (
