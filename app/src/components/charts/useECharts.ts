@@ -6,9 +6,27 @@ import * as echarts from "echarts";
 // `{ baseOption, media }` responsive form some charts already use).
 type OptionLike = Record<string, unknown>;
 
+// Shared tooltip look: rounded card, soft shadow, readable padding/type —
+// applied under whatever the option sets, same as the other normalize
+// defaults below.
+const TOOLTIP_DEFAULTS = {
+  confine: true,
+  backgroundColor: "rgba(15, 23, 42, 0.94)", // slate-900
+  borderWidth: 0,
+  borderRadius: 10,
+  padding: [8, 12],
+  extraCssText: "box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18); line-height: 1.5;",
+  textStyle: { color: "#f1f5f9", fontSize: 12 }, // slate-100
+};
+
 function normalizeLayer(layer: OptionLike) {
   if (layer.tooltip && typeof layer.tooltip === "object") {
-    layer.tooltip = { confine: true, ...layer.tooltip };
+    const t = layer.tooltip as OptionLike;
+    layer.tooltip = {
+      ...TOOLTIP_DEFAULTS,
+      ...t,
+      textStyle: { ...TOOLTIP_DEFAULTS.textStyle, ...(t.textStyle as OptionLike | undefined) },
+    };
   }
   if (layer.legend) {
     const legends = Array.isArray(layer.legend) ? layer.legend : [layer.legend];
@@ -56,6 +74,7 @@ export function useECharts(
 ) {
   const chartRef = useRef<echarts.ECharts | null>(null);
   const roRef = useRef<ResizeObserver | null>(null);
+  const touchCleanupRef = useRef<(() => void) | null>(null);
   const optionRef = useRef(option);
   optionRef.current = option;
   const onInitRef = useRef(opts?.onInit);
@@ -89,9 +108,25 @@ export function useECharts(
       const ro = new ResizeObserver(() => chart.resize());
       ro.observe(node);
       roRef.current = ro;
+
+      // Touch devices have no "mouse left" analog: ECharts' default tooltip
+      // triggering leaves a tapped tooltip stuck on screen until another
+      // data point is tapped. Hide it on (a) a tap on empty chart canvas and
+      // (b) a tap anywhere outside the chart entirely.
+      const hideTip = () => chart.dispatchAction({ type: "hideTip" });
+      chart.getZr().on("click", (e: { target?: unknown }) => {
+        if (!e.target) hideTip();
+      });
+      const onDocumentTouch = (e: TouchEvent) => {
+        if (!node.contains(e.target as Node)) hideTip();
+      };
+      document.addEventListener("touchstart", onDocumentTouch, { passive: true });
+      touchCleanupRef.current = () => document.removeEventListener("touchstart", onDocumentTouch);
     } else {
       roRef.current?.disconnect();
       roRef.current = null;
+      touchCleanupRef.current?.();
+      touchCleanupRef.current = null;
       chartRef.current?.dispose();
       chartRef.current = null;
     }
