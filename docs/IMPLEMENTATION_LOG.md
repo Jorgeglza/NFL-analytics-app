@@ -559,6 +559,19 @@ Full work list, with per-item checkboxes and severities: **`docs/MOBILE_READINES
 
 ## Session notes (newest first)
 
+### 2026-09-16 (cont. x9) — Predictive margin row: drop the hint text, add a KPI header to the popout
+Small follow-up per user request: remove "· tap for all inputs" from the row's center label (just "predicted margin" now — the row's cursor/hover state already signals it's clickable), and show each team's signed margin as a prominent KPI at the top of the full-breakdown modal, not just implied by scrolling through the ranked list.
+- `MatchupTab.tsx`: the modal now opens with a centered, larger (`text-lg`), team-colored KPI row — dot + abbreviation + signed margin per side — mirroring the card's own row, before the ranked `ContribRow` list.
+- Verified: clicking the row on 2026 wk2 DET@BUF opens the modal with `DET -6.3` / `BUF +6.3` at the top in each team's color, followed by the 29 ranked concepts.
+- `tsc --noEmit` and `npm run build` clean.
+
+### 2026-09-16 (cont. x8) — Fix: Model breakdown cards forced ~50px too wide on mobile
+User asked to make sure every card is mobile-friendly; testing at 375px width surfaced a real bug (not present at desktop widths).
+- **Root cause**: the "Model breakdown" cards (ML Fair, Market-calibrated, Predictive, Elo, Pythagorean, Trend Edge) sit in a single-column CSS grid below `lg`. Grid items default to `min-width: auto`, and a `<canvas>` (Elo's/Pythagorean's ECharts charts) doesn't shrink below whatever pixel width ECharts last set on it — a classic grid/flexbox "replaced element" sizing gotcha. Once any one card's canvas set itself wider than the viewport, the whole shared grid column (and therefore *every* card in it, canvas or not) was forced to that same width, clipping content ~50px off the right edge of the actual 375px viewport.
+- **Fix**: added `min-w-0` to `ModelBlock`'s root div (the card every one of these six models renders into) and to the `EloSpark`/`MarginBars`/Trend Edge chart-container divs — standard fix for this class of bug, lets the grid item (and its canvas) actually shrink to the available column width instead of imposing its own.
+- Verified at 375px: all 6 "Model breakdown" cards plus the "Key stats"/"Average (consensus)" cards now measure a consistent 351px (matching the page's other cards), canvases render at their real container width (325px/317px, not a leftover 375px/634px), and `document.body.scrollWidth` matches `window.innerWidth` exactly (no horizontal overflow anywhere in `<main>`). Confirmed via `get_page_text` that no content is actually clipped (grade boxes, ML boxes, etc. all present in full) — the page renders correctly at mobile width end to end.
+- `tsc --noEmit` and `npm run build` clean.
+
 ### 2026-09-16 (cont. x7) — Predictive margin row: drop redundant win% badge, add full-breakdown popout
 User feedback on the new margin row: the center "TB 60.8%* win" badge duplicated the card's own top-right pick/prob corner (which "should always stay there as it's in line with the rest" of the model cards), while the point-margin numbers were the actually-needed, non-redundant info. Also asked for a click-to-expand on that row (only that row) showing the full ranked list of model inputs, not just the top 5.
 - Removed the center win% pill from the row; replaced it with a neutral centered label ("predicted margin · tap for all inputs"). The corner badge is untouched and remains the single place the win% lives.

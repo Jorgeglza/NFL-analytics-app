@@ -311,7 +311,7 @@ function EloSpark({
   if (slots.length < 2) {
     return <div className="flex h-8 items-center text-[10px] italic text-slate-400">Not enough history yet</div>;
   }
-  return <div ref={ref} className="h-24 w-full" />;
+  return <div ref={ref} className="h-24 w-full min-w-0" />;
 }
 
 /** "W1".."W18" for the regular season, then the round abbreviation for the postseason (weeks
@@ -416,7 +416,7 @@ function MarginBars({
   if (slots.length < 1) {
     return <div className="flex h-8 items-center text-[10px] italic text-slate-400">Not enough games yet</div>;
   }
-  return <div ref={ref} className="h-24 w-full" />;
+  return <div ref={ref} className="h-24 w-full min-w-0" />;
 }
 
 /** One model's breakdown card: pick header + how-it-got-there visual. */
@@ -434,7 +434,7 @@ function ModelBlock({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm" style={{ borderTop: `3px solid ${color}` }}>
+    <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm" style={{ borderTop: `3px solid ${color}` }}>
       <div className="mb-2 flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
           <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: color }} />
@@ -1078,9 +1078,7 @@ export default function MatchupTab({
                       {predictedMargin == null ? "—" : fmtSigned(-predictedMargin)}
                     </span>
                   </span>
-                  <span className="flex-1 truncate text-center text-[9px] font-medium uppercase tracking-wider text-slate-400">
-                    predicted margin{predAllDrivers.length > 0 && " · tap for all inputs"}
-                  </span>
+                  <span className="flex-1 truncate text-center text-[9px] font-medium uppercase tracking-wider text-slate-400">predicted margin</span>
                   <span className="flex shrink-0 items-baseline gap-1.5">
                     <span className="text-sm font-bold tabular-nums" style={{ color: meta.get(home)?.color ?? MODEL_COLORS.predictive }}>
                       {predictedMargin == null ? "—" : fmtSigned(predictedMargin)}
@@ -1123,6 +1121,22 @@ export default function MatchupTab({
                 subtitle={`All ${predAllDrivers.length} concepts behind this prediction, ranked by contribution to the ${Math.abs(predictedMargin ?? 0).toFixed(1)}-point margin`}
                 onClose={() => setPredDetailOpen(false)}
               >
+                <div className="mb-3 flex items-center justify-center gap-6 rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-2.5">
+                  <span className="flex items-baseline gap-1.5">
+                    <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: meta.get(away)?.color ?? MODEL_COLORS.predictive }} />
+                    <span className="text-xs font-semibold text-slate-500">{away}</span>
+                    <span className="text-lg font-bold tabular-nums" style={{ color: meta.get(away)?.color ?? MODEL_COLORS.predictive }}>
+                      {predictedMargin == null ? "—" : fmtSigned(-predictedMargin)}
+                    </span>
+                  </span>
+                  <span className="flex items-baseline gap-1.5">
+                    <span className="text-lg font-bold tabular-nums" style={{ color: meta.get(home)?.color ?? MODEL_COLORS.predictive }}>
+                      {predictedMargin == null ? "—" : fmtSigned(predictedMargin)}
+                    </span>
+                    <span className="text-xs font-semibold text-slate-500">{home}</span>
+                    <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: meta.get(home)?.color ?? MODEL_COLORS.predictive }} />
+                  </span>
+                </div>
                 <div className="space-y-1.5">
                   {predAllDrivers.map((r) => (
                     <ContribRow
@@ -1270,7 +1284,7 @@ export default function MatchupTab({
               {trendEdge.pAway == null ? (
                 <div className="flex h-40 items-center justify-center text-[10px] italic text-slate-400">Not enough recent-form data yet</div>
               ) : (
-                <div ref={edgeRef} className="h-40" />
+                <div ref={edgeRef} className="h-40 min-w-0" />
               )}
               <div className="text-[10px] text-slate-400">Weighted recent-form differences (away − home): grade, last-6 margin, EPA, win rate, turnovers. Hover the bars.</div>
             </ModelBlock>
