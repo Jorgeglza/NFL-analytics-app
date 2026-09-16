@@ -31,6 +31,7 @@ import {
   alignedMarginTimeline,
   predictiveKey,
   topPredictiveDrivers,
+  predictiveWindowFull,
   type HistAgg,
   type GradesIndex,
   type TeamWeekIndex,
@@ -52,7 +53,22 @@ const fmtMl = (ml: number | null) => (ml == null ? "—" : ml > 0 ? `+${Math.rou
 const pct1 = (p: number | null) => (p == null ? "—" : `${(100 * p).toFixed(1)}%`);
 
 /** Horizontal probability bar (home-side share by convention) with a 50% tick. */
-function ProbBar({ label, p, color, note }: { label: string; p: number | null; color: string; note?: string }) {
+function ProbBar({
+  label,
+  p,
+  color,
+  note,
+  partialWindow = false,
+}: {
+  label: string;
+  p: number | null;
+  color: string;
+  note?: string;
+  /** Marks the % with a "*" — used only by the Predictive model's own probability, only on this
+   *  (Matchup) tab, when this specific matchup's L3 rolling-window features didn't have a full
+   *  3-game window on both sides yet (see `predictiveWindowFull` in engine.ts). */
+  partialWindow?: boolean;
+}) {
   return (
     <div className="flex items-center gap-2 text-[11px]">
       <span className="w-32 shrink-0 truncate text-slate-500" title={label}>{label}</span>
@@ -60,7 +76,7 @@ function ProbBar({ label, p, color, note }: { label: string; p: number | null; c
         <div className="absolute inset-y-0 left-1/2 z-10 w-px bg-slate-300" />
         {p != null && <div className="h-full rounded-full" style={{ width: `${Math.max(0, Math.min(100, 100 * p))}%`, background: color, opacity: 0.85 }} />}
       </div>
-      <span className="w-10 shrink-0 text-right font-bold tabular-nums">{p == null ? "—" : `${Math.round(100 * p)}%`}</span>
+      <span className="w-10 shrink-0 text-right font-bold tabular-nums">{p == null ? "—" : `${Math.round(100 * p)}%${partialWindow ? "*" : ""}`}</span>
       {note != null && <span className="w-20 shrink-0 truncate text-slate-400" title={note}>{note}</span>}
     </div>
   );
@@ -485,6 +501,10 @@ export default function MatchupTab({
     [predFeaturesIdx, selGame, s, w, away, home],
   );
   const predTop5 = useMemo(() => topPredictiveDrivers(predFeatureRow, 5), [predFeatureRow]);
+  // Whether this specific matchup's L3 rolling-window features had a full 3-game window on both
+  // sides — false in either team's first 3 played weeks of the season. Only ever shown here (the
+  // Matchup tab, this one game) — see predictiveWindowFull's docstring in engine.ts.
+  const predWindowFull = useMemo(() => (selGame ? predictiveWindowFull(twIdx, away, home, s, w) : true), [selGame, twIdx, away, home, s, w]);
 
   // Keep season/week/game in the URL so "How the models work" (and browser
   // back/forward) can return to the exact matchup being viewed.
@@ -960,7 +980,7 @@ export default function MatchupTab({
 
             {!predictiveUnavailable && (
               <ModelBlock color={MODEL_COLORS.predictive} title="Predictive (margin reg.)" pick={pickOf(bundle.predictive)} prob={probOf(bundle.predictive)}>
-                <ProbBar label="Predicted home win prob." p={bundle.predictive[1]} color={MODEL_COLORS.predictive} />
+                <ProbBar label="Predicted home win prob." p={bundle.predictive[1]} color={MODEL_COLORS.predictive} partialWindow={bundle.predictive[1] != null && !predWindowFull} />
                 {predTop5.length > 0 ? (
                   <>
                     <div className="pt-0.5 text-[9px] font-medium uppercase tracking-wider text-slate-400">Biggest movers for this game (margin points)</div>
@@ -980,7 +1000,10 @@ export default function MatchupTab({
                   <div className="text-[10px] italic text-slate-400">No variable breakdown available for this game.</div>
                 )}
                 <div className="text-[10px] text-slate-400">
-                  Linear regression on pre-game stats predicts the scoring margin — the +/− values above are points of that margin.{" "}
+                  Linear regression on pre-game stats predicts the scoring margin — the +/− values above are points of that margin.
+                  {bundle.predictive[1] != null && !predWindowFull && (
+                    <> {"* "}fewer than 3 prior played weeks for at least one team this season — the model's rolling-window inputs (L3 points margin, EPA, success rate, etc.) average over however many games have been played so far instead of the intended 3.</>
+                  )}{" "}
                   <a href="#/game_analysis/models_guide" className="underline decoration-dotted underline-offset-2 hover:text-slate-600">Model details →</a>
                 </div>
               </ModelBlock>

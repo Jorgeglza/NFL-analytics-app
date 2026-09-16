@@ -390,6 +390,21 @@ export function buildPredictiveIndex(rows: Row[]): PredictiveIndex {
   return idx;
 }
 
+/** Whether the predictive model's L3 rolling-window features (points margin,
+ * EPA, success/explosive rate, etc. — pipeline/predictive_model/features.py)
+ * had a full 3-game window on *both* sides for this game. False whenever
+ * either team is within its first 3 played weeks of the season — those
+ * features still compute (shift(1).rolling(3, min_periods=1)), they just
+ * average over however many prior games are actually available (1 or 2)
+ * instead of the intended 3. Matchup tab uses this to flag the predicted
+ * home win probability with a "*" for exactly this game/matchup, nowhere
+ * else — every other page reads the same precomputed prediction without
+ * this caveat attached. */
+export function predictiveWindowFull(twIdx: TeamWeekIndex, awayTeam: string, homeTeam: string, season: number, week: number): boolean {
+  const priorPlayedCount = (team: string) => twIdx.rowsFor(team, season).filter((r) => Number(r.week) < week).length;
+  return priorPlayedCount(awayTeam) >= 3 && priorPlayedCount(homeTeam) >= 3;
+}
+
 // Per-game feature breakdown, for the Matchup tab's Predictive card ("what's leading to this
 // prediction"). Reuses game_features.json (historical — export_page.py) merged with
 // upcoming_features.json (the live next week — export_upcoming.py's mirror of the same exact

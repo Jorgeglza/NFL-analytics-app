@@ -559,6 +559,27 @@ Full work list, with per-item checkboxes and severities: **`docs/MOBILE_READINES
 
 ## Session notes (newest first)
 
+### 2026-09-16 (cont.) — Matchup tab: flag the predictive pick when its rolling window is partial
+Follow-up to the fix above, per direct user request: make sure a partial L3 window (still correctly
+carried forward by the earlier fix, just averaging over fewer than 3 games early in a team's season) is
+visibly flagged, and only on the Matchup tab for that specific matchup — nowhere else.
+
+- New `predictiveWindowFull(twIdx, awayTeam, homeTeam, season, week)` (engine.ts): true only when both
+  teams have ≥3 played weeks (from `twIdx`, already loaded) strictly before the game's week — i.e. the
+  model's L3 rolling-window features (points margin, EPA, success/explosive rate, etc.) had a full 3-game
+  window on both sides, not a partial 1- or 2-game average.
+- `MatchupTab.tsx`: `ProbBar` gains an optional `partialWindow` prop that appends "*" to its % text —
+  wired only into the Predictive model's own "Predicted home win prob." bar (`partialWindow={... &&
+  !predWindowFull}`), not any other model's bar on this tab, and not the Predictive `ModelBlock`'s header
+  pill (same probability shown a second way) — exactly one place shows the mark. Its existing footnote
+  paragraph ("Linear regression on pre-game stats predicts the scoring margin...") gains one more sentence,
+  shown only when the asterisk is showing, explaining what it means.
+- Verified against real data: BUF@DET (2026 wk2) — both teams have exactly 1 played week
+  (`team_week/2026.json` only has week 1 so far) — `predictiveWindowFull` correctly returns false, so
+  the "*" and its footnote sentence both render for this matchup. `tsc -b --noEmit` / `npm run build` /
+  62-test suite all green.
+- Not committed/pushed at time of writing this entry — committing separately, see below.
+
 ### 2026-09-16 — Fix: live predictive predictions null from week 2 onward; Matchup Previews default-week bug
 User reported the predictive model "not working for week 2" (2026 season) and asked to confirm Matchup
 Previews defaults to the current week. Both turned out to be real, previously-undiscovered bugs.
