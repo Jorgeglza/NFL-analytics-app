@@ -55,12 +55,36 @@ def load_grades() -> pd.DataFrame:
     )
 
 
-def _rolling_trend(team_week: pd.DataFrame) -> pd.DataFrame:
+def _append_asof_week(df: pd.DataFrame, season: int, week: int) -> pd.DataFrame:
+    """Appends one all-NaN "phantom" row per team already present in `season`,
+    dated at `week`, before a shift(1)-based rolling/expanding computation
+    runs. Used only for scoring an unplayed week (build_upcoming_game_table):
+    every l3_*/cum_* feature is computed at the row for the week it describes
+    -- since that row simply doesn't exist yet for an unplayed week (no
+    team_week/grades/pbp data), the shift(1) never fires and the feature
+    silently comes back null. Appending a placeholder row at the target week
+    gives shift(1) a slot to land in; sorted last within its (team, season)
+    group, shift(1) pulls in the true previous week's real value exactly the
+    same way it would for any already-played week, so the resulting l3_/cum_
+    value at that row is the correct "entering this week" figure -- no
+    separate formula needed, just one more row for the existing formula to
+    run on. The phantom row's own (non-key) columns are irrelevant: nothing
+    ever reads them, only what shift(1)/expanding() carries into it."""
+    teams = df.loc[df["season"] == season, "team"].unique()
+    if len(teams) == 0:
+        return df
+    phantom = pd.DataFrame({"team": teams, "season": season, "week": week})
+    return pd.concat([df, phantom], ignore_index=True)
+
+
+def _rolling_trend(team_week: pd.DataFrame, asof: tuple[int, int] | None = None) -> pd.DataFrame:
     """L3 (last-3-games) trailing means, computed *before* the current week —
     shift(1) so the current week's own row never leaks into its own feature."""
     df = team_week.sort_values(["team", "season", "week"]).copy()
     df["pass_epa_diff"] = df["passing_epa"] - df["passing_epa_allowed"]
     df["rush_epa_diff"] = df["rushing_epa"] - df["rushing_epa_allowed"]
+    if asof is not None:
+        df = _append_asof_week(df, *asof).sort_values(["team", "season", "week"])
     grp = df.groupby(["team", "season"], group_keys=False)
     src_cols = ["points_margin", "epa_diff", "turnover_margin", "pass_epa_diff", "rush_epa_diff"]
     for col in src_cols:
@@ -68,7 +92,7 @@ def _rolling_trend(team_week: pd.DataFrame) -> pd.DataFrame:
     return df[["team", "season", "week"] + [f"l3_{c}" for c in src_cols]]
 
 
-def _surprise_rolling(team_week: pd.DataFrame) -> pd.DataFrame:
+def _surprise_rolling(team_week: pd.DataFrame, asof: tuple[int, int] | None = None) -> pd.DataFrame:
     """"Overreaction" feature (Vergin, 2001, cited in the Stekler survey): the
     betting market is documented to overreact to a team's most recent
     large-margin result — overrating a team after a big win, underrating
@@ -79,6 +103,8 @@ def _surprise_rolling(team_week: pd.DataFrame) -> pd.DataFrame:
     never touches week W-1's or later data — the "surprise" game itself is
     excluded from its own baseline, not just from the current week)."""
     df = team_week.sort_values(["team", "season", "week"]).copy()
+    if asof is not None:
+        df = _append_asof_week(df, *asof).sort_values(["team", "season", "week"])
     grp = df.groupby(["team", "season"], group_keys=False)
     for col in ["points_margin", "epa_diff"]:
         last_week = grp[col].shift(1)
@@ -87,17 +113,19 @@ def _surprise_rolling(team_week: pd.DataFrame) -> pd.DataFrame:
     return df[["team", "season", "week", "surprise_points_margin", "surprise_epa_diff"]]
 
 
-def _cumulative_grades(grades: pd.DataFrame) -> pd.DataFrame:
+def _cumulative_grades(grades: pd.DataFrame, asof: tuple[int, int] | None = None) -> pd.DataFrame:
     """Expanding (all prior weeks) mean, shifted so the current week's own
     grade — which encodes that week's own result — never leaks in."""
     df = grades.sort_values(["team", "season", "week"]).copy()
+    if asof is not None:
+        df = _append_asof_week(df, *asof).sort_values(["team", "season", "week"])
     grp = df.groupby(["team", "season"], group_keys=False)
     for col in ["overall_grade", "offense_grade", "defense_grade"]:
         df[f"cum_{col}"] = grp[col].apply(lambda s: s.shift(1).expanding().mean())
     return df[["team", "season", "week", "cum_overall_grade", "cum_offense_grade", "cum_defense_grade"]]
 
 
-def _pbp_rolling(seasons) -> pd.DataFrame:
+def _pbp_rolling(seasons, asof: tuple[int, int] | None = None) -> pd.DataFrame:
     """Season-to-date L3 success rate / explosive-play rate per team-week,
     aggregated from play-by-play (independent of team_week's box-score epa_diff
     — a richer per-play signal instead of a per-game aggregate)."""
@@ -112,6 +140,8 @@ def _pbp_rolling(seasons) -> pd.DataFrame:
         .reset_index()
         .rename(columns={"posteam": "team"})
     )
+    if asof is not None:
+        agg = _append_asof_week(agg, *asof)
     agg = agg.sort_values(["team", "season", "week"])
     grp = agg.groupby(["team", "season"], group_keys=False)
     agg["l3_success_rate"] = grp["success_rate"].apply(lambda s: s.shift(1).rolling(3, min_periods=1).mean())
@@ -119,18 +149,20 @@ def _pbp_rolling(seasons) -> pd.DataFrame:
     return agg[["team", "season", "week", "l3_success_rate", "l3_explosive_rate"]]
 
 
-def _roll_l3(df: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
+def _roll_l3(df: pd.DataFrame, cols: list[str], asof: tuple[int, int] | None = None) -> pd.DataFrame:
     """Shared L3-rolling helper: shift(1).rolling(3, min_periods=1).mean() per
     (team, season), applied to every column in `cols`. Same no-leakage pattern
     as _rolling_trend/_pbp_rolling, factored out once NGS/FTN needed it too."""
     df = df.sort_values(["team", "season", "week"]).copy()
+    if asof is not None:
+        df = _append_asof_week(df, *asof).sort_values(["team", "season", "week"])
     grp = df.groupby(["team", "season"], group_keys=False)
     for col in cols:
         df[f"l3_{col}"] = grp[col].apply(lambda s: s.shift(1).rolling(3, min_periods=1).mean())
     return df[["team", "season", "week"] + [f"l3_{c}" for c in cols]]
 
 
-def _ngs_rolling(seasons) -> pd.DataFrame:
+def _ngs_rolling(seasons, asof: tuple[int, int] | None = None) -> pd.DataFrame:
     """Next Gen Stats (tracking-derived) team-week aggregates, L3-rolled:
     - passing: the leading passer's (max attempts that week) time-to-throw,
       completion% above expectation, aggressiveness (into tight windows).
@@ -184,10 +216,10 @@ def _ngs_rolling(seasons) -> pd.DataFrame:
 
     merged = lead_passer.merge(rush_agg, on=["team", "season", "week"], how="outer")
     merged = merged.merge(rec_agg, on=["team", "season", "week"], how="outer")
-    return _roll_l3(merged, cols)
+    return _roll_l3(merged, cols, asof=asof)
 
 
-def _ftn_rolling(seasons) -> pd.DataFrame:
+def _ftn_rolling(seasons, asof: tuple[int, int] | None = None) -> pd.DataFrame:
     """FTN charting (pre-snap/scheme context), joined onto play-by-play to
     recover which team had the ball (FTN itself carries no team column),
     aggregated to team-week and L3-rolled: motion/play-action/RPO rate,
@@ -224,7 +256,7 @@ def _ftn_rolling(seasons) -> pd.DataFrame:
         contested_rate=("is_contested_ball", "mean"),
     ).reset_index()
     agg = agg.merge(drop_agg, on=["posteam", "season", "week"], how="left").rename(columns={"posteam": "team"})
-    return _roll_l3(agg, cols)
+    return _roll_l3(agg, cols, asof=asof)
 
 
 def _qb_continuity(schedule: pd.DataFrame) -> pd.DataFrame:
@@ -318,7 +350,7 @@ def _snap_weighted_injury_severity(seasons) -> pd.DataFrame:
     return out
 
 
-def _field_position_situational(seasons) -> pd.DataFrame:
+def _field_position_situational(seasons, asof: tuple[int, int] | None = None) -> pd.DataFrame:
     """Starting-field-position and situational context, all from pbp:
     - start_field_pos: avg distance to the opponent's goal line at the start
       of each of the team's drives (higher = better starting position,
@@ -373,7 +405,7 @@ def _field_position_situational(seasons) -> pd.DataFrame:
     merged = merged.merge(third_agg, on=["posteam", "season", "week"], how="left")
     merged = merged.merge(pressure_agg, on=["posteam", "season", "week"], how="left")
     merged = merged.rename(columns={"posteam": "team"})
-    return _roll_l3(merged, cols)
+    return _roll_l3(merged, cols, asof=asof)
 
 
 # Signed transforms (sign(x)*x**2, sign(x)*sqrt(|x|)) preserve direction —
@@ -416,10 +448,20 @@ def _add_nonlinear_transforms(feats: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def build_team_features(seasons) -> pd.DataFrame:
+def build_team_features(seasons, asof: tuple[int, int] | None = None) -> pd.DataFrame:
     """One row per (team, season, week): every pregame feature this spike
     uses, keyed the same way as team_week/grades so it can be merged onto
-    both the home and away side of a schedule row."""
+    both the home and away side of a schedule row.
+
+    `asof`, if given, is the (season, week) of an *unplayed* week being
+    scored (build_upcoming_game_table's use case): every rolling/cumulative
+    feature helper gets a phantom placeholder row for that week per team (see
+    `_append_asof_week`), so its existing shift(1)-based formula produces a
+    real "entering this week" value from actual prior-week data instead of
+    finding no row to attach to. Historical/backtest callers (build_game_table)
+    never pass this, so their output is unchanged -- the exact-week join they
+    rely on for already-played games still behaves exactly as before.
+    """
     schedule = load_schedule()
     team_week = load_team_week()
     grades = load_grades()
@@ -435,16 +477,16 @@ def build_team_features(seasons) -> pd.DataFrame:
         ignore_index=True,
     ).merge(schedule[["game_id", "season", "week"]], on="game_id")[["team", "season", "week", "game_id", "elo"]]
 
-    trend = _rolling_trend(team_week)
-    surprise = _surprise_rolling(team_week)
-    cum_grades = _cumulative_grades(grades)
-    pbp_roll = _pbp_rolling(seasons)
+    trend = _rolling_trend(team_week, asof=asof)
+    surprise = _surprise_rolling(team_week, asof=asof)
+    cum_grades = _cumulative_grades(grades, asof=asof)
+    pbp_roll = _pbp_rolling(seasons, asof=asof)
     qb_cont = _qb_continuity(schedule)
     injuries = _injury_severity(seasons)
     snap_injury = _snap_weighted_injury_severity(seasons)
-    ngs_roll = _ngs_rolling(seasons)
-    ftn_roll = _ftn_rolling(seasons)
-    field_pos = _field_position_situational(seasons)
+    ngs_roll = _ngs_rolling(seasons, asof=asof)
+    ftn_roll = _ftn_rolling(seasons, asof=asof)
+    field_pos = _field_position_situational(seasons, asof=asof)
 
     feats = qb_cont.merge(elo_by_team, on=["team", "season", "week", "game_id"], how="left")
     feats = feats.merge(trend, on=["team", "season", "week"], how="left")
@@ -610,10 +652,16 @@ def build_upcoming_game_table(season: int, week: int) -> pd.DataFrame:
     completed ones. No home_margin/home_win/home_covers targets -- those
     require a final score, which by definition doesn't exist yet.
 
-    Reuses build_team_features() unchanged: every per-team feature already
-    excludes the current week's own result (shift(1) throughout), so scoring
-    an unplayed week is a filter change here, not a feature-engineering
-    change -- the same leakage-safety guarantees apply.
+    Every per-team feature already excludes the current week's own result
+    (shift(1) throughout), so scoring an unplayed week is mostly a filter
+    change here, not a feature-engineering change -- the same leakage-safety
+    guarantees apply. The one real difference: build_team_features is called
+    with asof=(season, week) so its rolling/cumulative frames (which only
+    ever have rows for already-played weeks) get a synthesized row for this
+    unplayed week, carrying each team's latest known value forward -- without
+    it, every rolling feature comes back null for any week beyond the first
+    of the season (there's simply no team_week/grades/pbp row yet at an
+    unplayed week to join against).
     """
     schedule = load_schedule()
     games = schedule[
@@ -625,7 +673,7 @@ def build_upcoming_game_table(season: int, week: int) -> pd.DataFrame:
     if games.empty:
         return games
 
-    team_feats = build_team_features([season])
+    team_feats = build_team_features([season], asof=(season, week))
     hf = team_feats.rename(columns={c: f"home_{c}" for c in ALL_FEATURE_COLS}).rename(columns={"team": "home_team"})
     af = team_feats.rename(columns={c: f"away_{c}" for c in ALL_FEATURE_COLS}).rename(columns={"team": "away_team"})
 

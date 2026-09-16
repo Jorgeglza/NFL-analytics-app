@@ -632,31 +632,22 @@ export function pickBgColor(conf01: number): string {
   return `#${s.map((v, i) => Math.round(v + (e[i] - v) * t).toString(16).padStart(2, "0")).join("")}`;
 }
 
-/** week whose median gameday is closest to today (REG only). */
+/** Earliest REG week in `season` with an unplayed game, else the last
+ * completed REG week (or 1 if none has been played yet) — same "current
+ * week" definition as lib/logic/defaultWeek.ts's currentWeek(), just scoped
+ * to a caller-given season instead of always the schedule's latest one.
+ * Previously picked the week whose median gameday was closest to *right
+ * now*, which put it on the week that had just finished (rather than the
+ * upcoming one) for the multi-day gap between one week ending and the next
+ * kicking off — exactly the Tue-Thu window this app's own weekly-refresh
+ * cron runs in. */
 export function defaultWeekNearToday(schedule: Row[], season: number): number | null {
-  const byWeek = new Map<number, number[]>();
-  for (const g of schedule) {
-    if (Number(g.season) !== season || g.game_type !== "REG" || g.gameday == null) continue;
-    const t = Date.parse(String(g.gameday));
-    if (Number.isNaN(t)) continue;
-    const w = Number(g.week);
-    if (!byWeek.has(w)) byWeek.set(w, []);
-    byWeek.get(w)!.push(t);
-  }
-  if (!byWeek.size) return null;
-  const today = Date.now();
-  let best: number | null = null;
-  let bestDist = Infinity;
-  for (const [w, ts] of byWeek) {
-    ts.sort((a, b) => a - b);
-    const med = ts.length % 2 ? ts[(ts.length - 1) / 2] : (ts[ts.length / 2 - 1] + ts[ts.length / 2]) / 2;
-    const d = Math.abs(med - today);
-    if (d < bestDist) {
-      bestDist = d;
-      best = w;
-    }
-  }
-  return best;
+  const reg = schedule.filter((g) => Number(g.season) === season && g.game_type === "REG");
+  if (!reg.length) return null;
+  const unplayed = reg.filter((g) => g.home_score == null).map((g) => Number(g.week));
+  if (unplayed.length) return Math.min(...unplayed);
+  const played = reg.filter((g) => g.home_score != null).map((g) => Number(g.week));
+  return played.length ? Math.max(...played) : 1;
 }
 
 export function kickoffMs(g: Row): number {

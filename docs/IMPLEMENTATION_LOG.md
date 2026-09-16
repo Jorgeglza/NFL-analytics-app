@@ -559,6 +559,59 @@ Full work list, with per-item checkboxes and severities: **`docs/MOBILE_READINES
 
 ## Session notes (newest first)
 
+### 2026-09-16 — Fix: live predictive predictions null from week 2 onward; Matchup Previews default-week bug
+User reported the predictive model "not working for week 2" (2026 season) and asked to confirm Matchup
+Previews defaults to the current week. Both turned out to be real, previously-undiscovered bugs.
+
+- **Root cause (pipeline)**: `pipeline/predictive_model/features.py`'s rolling/cumulative feature helpers
+  (`_rolling_trend`, `_surprise_rolling`, `_cumulative_grades`, `_pbp_rolling`, `_ngs_rolling`, `_ftn_rolling`,
+  `_field_position_situational`) each compute their `l3_*`/`cum_*` value *at the row of the week it
+  describes*, sourced from `team_week`/`grades`/`pbp` — which only ever have a row for weeks that have
+  actually been played. `build_upcoming_game_table()` merges these onto the target unplayed week by exact
+  `(team, season, week)` match; since that week never has a row in the source tables, the merge finds
+  nothing and every one of these ~30 features silently comes back `null` — regardless of whether the prior
+  week's real data exists to compute from. Invisible for week 1 (no rolling history exists yet regardless,
+  documented/expected), so this was never caught until 2026's week 2 became the first live-prediction week
+  with real prior-week history to draw on. Verified directly: `data/nfl.sqlite`'s `team_week`/`grades` had
+  real 2026 week-1 rows (BUF `points_margin=5.0`, `Overall Grade=60.7`), but the committed
+  `upcoming_features.json` showed `diff_l3_points_margin`/`diff_cum_overall_grade`/etc. as `None` for every
+  week-2 game — only schedule-derived features (Elo, QB continuity, injuries, weather/rest/dome/div_game)
+  were populated.
+- **Fix**: `build_team_features()` gains an optional `asof: (season, week)` param, threaded through to each
+  rolling helper. New `_append_asof_week()` appends one all-NaN phantom row per team at the target unplayed
+  week *before* each helper's existing `shift(1)`-based computation runs — sorted last within its
+  `(team, season)` group, `shift(1)` naturally pulls in the true previous week's real value, so the same
+  formula that's always been used for played weeks now also produces a correct "entering this unplayed week"
+  figure, with zero new formula logic. `build_upcoming_game_table()` now calls
+  `build_team_features([season], asof=(season, week))`; `build_game_table()` (historical/backtest path)
+  never passes `asof`, so its output is provably unchanged (`asof=None` default, verified byte-identical via
+  `pd.testing.assert_frame_equal` against the pre-fix output).
+- **Verified against real production data** (no network — `fetch_pbp`/`fetch_ngs`/`fetch_ftn`/`fetch_injuries`/
+  `fetch_snap_counts` stubbed to empty, isolating this fix from the unrelated absence of a cached
+  `data/raw_cache_predictive/` in this sandbox): `build_upcoming_game_table(2026, 2)` against the real
+  `data/nfl.sqlite` now returns real, non-null `diff_l3_points_margin`/`diff_l3_epa_diff`/
+  `diff_cum_overall_grade` for every week-2 game (e.g. BUF@DET: `4.0`/`-0.92`/`3.3` instead of `None`/`None`/
+  `None`); `build_team_features([2026])` (no `asof`, the historical path) is confirmed identical before/after
+  the change. Not yet re-run against live network data / re-exported to `app/public/data/predictive_model/`
+  in this session (would need the real `nflreadpy` fetch across 2015-2026, not available in this sandbox) —
+  the next `predictive-refresh.yml` cron (Fri 18:00 UTC) or a manual `export_upcoming.py` run will pick up
+  the fix and regenerate `upcoming_features.json`/`upcoming.json` with real values.
+- **Second bug (frontend, found while checking the "does it default to this week" ask)**:
+  `defaultWeekNearToday()` (`app/src/pages/game-analysis/previews/engine.ts`, shared by Matchup Previews'
+  Week Preview/Matchup tabs, Models Guide, and `MatchupBets.tsx`) picked the week whose *median gameday* is
+  closest to the current instant. For 2026 as of today (Wed, week 1 finished Mon, week 2 starts Thu): week
+  1's median gameday is 3 days in the past, week 2's is 4 days in the future — week 1 numerically wins, so
+  the page was defaulting to the week that just ended instead of the upcoming one. This reproduces every
+  week during the Tue-Thu gap between one week ending and the next kicking off. Confirmed live by re-running
+  the exact median-gameday computation against the real `schedule.json`. Fixed by replacing it with the same
+  "earliest unplayed REG week, else the last completed one" rule `lib/logic/defaultWeek.ts`'s `currentWeek()`
+  already uses elsewhere in the app, scoped to the given season instead of always the latest one — same
+  function signature, so no caller needed to change. Re-verified against real `schedule.json`: now resolves
+  to week 2.
+- `npm run build` / `tsc -b --noEmit` / 62-test Vitest suite all green (no test pinned the old
+  median-gameday behavior).
+- Not committed/pushed at time of writing this entry — committing separately, see below.
+
 ### 2026-09-14 (cont. x15) — Pythagorean pill redesigned: expected-win KPI + per-game margin bars
 User wanted the Pythagorean card rebuilt: expected win% as a top KPI (not a full-width bar), the log5 head-to-head bar replaced by a short text note (its number is already in the card's header pill), and a real per-game view of points margin with hover detail — "complex," asked for options first.
 - Explored, then presented two design options (plan mode) with a recommendation: **grouped diverging bars** (points margin is a discrete per-game event, not a continuously-evolving state like Elo — better suited to bars than a line) vs. a line chart mirroring `EloSpark` exactly. User confirmed the bar option, plus two follow-on decisions: skip win/loss dot coloring (a bar's own direction already is the result, unlike Elo where rating alone doesn't imply it) and include postseason games with the same gap-handling philosophy as the Elo card.
