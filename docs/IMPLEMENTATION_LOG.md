@@ -559,6 +559,23 @@ Full work list, with per-item checkboxes and severities: **`docs/MOBILE_READINES
 
 ## Session notes (newest first)
 
+### 2026-09-16 (cont. x4) — Matchup Snapshot: projected final score under each ML box
+Direct user request: under DET ML / BUF ML in the Matchup Snapshot section (the box with
+Implied/Fair moneyline reads), add a small projected-score line per team.
+- New `predictedMarginFromFeatures(featureRow)` (engine.ts) reconstructs the predictive model's
+  exact predicted margin from a `PredictiveFeaturesIndex` row — `intercept` + every `_contrib`
+  column, the same linear decomposition `topPredictiveDrivers` already ranks a slice of, just
+  summed in full. Reuses `predFeatureRow` already loaded for the "Biggest movers" panel — no new
+  fetch, no new index.
+- `MatchupTab.tsx`: `predictedScores` splits that margin across the market's `total_line`
+  (`away = (total − margin) / 2`, `home = (total + margin) / 2`), rendered as one more small line
+  ("Predicted: 23.6") under each ML box's existing Implied/Fair line — null (hidden) whenever
+  there's no prediction for this game or no total line posted. Title tooltip explains the source.
+- Verified against real production data: DET@BUF 2026 wk2 (total 53.5) → predicted margin 6.29
+  (matches `upcoming.json`'s own `predicted_margin` exactly) → DET 23.6 / BUF 29.9, summing back
+  to the total line.
+- `tsc -b --noEmit` / `npm run build` / 62-test suite all green.
+
 ### 2026-09-16 (cont. x3) — Manually re-ran the predictive export to apply the fix to production data
 Per user request, actually ran `pipeline/predictive_model/export_page.py` + `export_upcoming.py`
 locally (pinned venv: pandas==3.0.0/numpy==1.26.4/scikit-learn==1.8.0/nflreadpy==0.1.2, matching

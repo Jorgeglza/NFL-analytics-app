@@ -32,6 +32,7 @@ import {
   predictiveKey,
   topPredictiveDrivers,
   predictiveWindowFull,
+  predictedMarginFromFeatures,
   type HistAgg,
   type GradesIndex,
   type TeamWeekIndex,
@@ -505,6 +506,16 @@ export default function MatchupTab({
   // sides — false in either team's first 3 played weeks of the season. Only ever shown here (the
   // Matchup tab, this one game) — see predictiveWindowFull's docstring in engine.ts.
   const predWindowFull = useMemo(() => (selGame ? predictiveWindowFull(twIdx, away, home, s, w) : true), [selGame, twIdx, away, home, s, w]);
+  // Projected final score for the Matchup Snapshot's ML boxes: the predictive model's margin
+  // (reconstructed from its own linear decomposition, same source as "Biggest movers" above)
+  // split across the market's total line. Null (hidden) whenever either input is missing —
+  // no prediction for this game, or no total line posted yet.
+  const predictedMargin = useMemo(() => predictedMarginFromFeatures(predFeatureRow), [predFeatureRow]);
+  const predictedScores = useMemo(() => {
+    if (predictedMargin == null || selGame?.total_line == null) return null;
+    const total = Number(selGame.total_line);
+    return { away: (total - predictedMargin) / 2, home: (total + predictedMargin) / 2 };
+  }, [predictedMargin, selGame]);
 
   // Keep season/week/game in the URL so "How the models work" (and browser
   // back/forward) can return to the exact matchup being viewed.
@@ -888,14 +899,19 @@ export default function MatchupTab({
           </div>
           <div className="mt-2 grid grid-cols-1 gap-2 rounded-2xl border border-slate-200 bg-white shadow-sm p-3 sm:grid-cols-3">
             {[
-              [`${away} ML`, fmtMl(mlAway), `Implied: ${pct1(impliedProb(mlAway))} | Fair: ${pct1(awayFair)}`],
-              ["Market Overround", overround == null ? "—" : `${(100 * overround).toFixed(1)}%`, "(vig)"],
-              [`${home} ML`, fmtMl(mlHome), `Implied: ${pct1(impliedProb(mlHome))} | Fair: ${pct1(homeFair)}`],
-            ].map(([t, big, sub]) => (
+              [`${away} ML`, fmtMl(mlAway), `Implied: ${pct1(impliedProb(mlAway))} | Fair: ${pct1(awayFair)}`, predictedScores ? `Predicted: ${predictedScores.away.toFixed(1)}` : null],
+              ["Market Overround", overround == null ? "—" : `${(100 * overround).toFixed(1)}%`, "(vig)", null],
+              [`${home} ML`, fmtMl(mlHome), `Implied: ${pct1(impliedProb(mlHome))} | Fair: ${pct1(homeFair)}`, predictedScores ? `Predicted: ${predictedScores.home.toFixed(1)}` : null],
+            ].map(([t, big, sub, extra]) => (
               <div key={String(t)} className="rounded-lg border border-slate-200 p-2 text-center">
                 <div className="text-[0.75rem] text-slate-500">{t}</div>
                 <div className="text-lg font-bold">{big}</div>
                 <div className="text-[0.7rem] text-slate-500">{sub}</div>
+                {extra != null && (
+                  <div className="text-[0.7rem] text-slate-400" title="Projected final score — the predictive (margin regression) model's margin split across the market's total line">
+                    {extra}
+                  </div>
+                )}
               </div>
             ))}
           </div>

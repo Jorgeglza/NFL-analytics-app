@@ -464,6 +464,21 @@ function featureFamily(feature: string): { key: string; repr: string } {
   return { key: fam.key, repr: hadDiff ? `diff_${fam.key}` : fam.key };
 }
 
+/** Reconstructs the predictive model's exact predicted margin (home − away)
+ *  from a `PredictiveFeaturesIndex` row: `intercept` plus every feature's own
+ *  `_contrib` value sums to exactly the predicted margin (the same linear
+ *  decomposition `topPredictiveDrivers` ranks a top-N slice of — this just
+ *  sums all of them instead). Used to turn the model's margin, combined with
+ *  the market's total line, into a projected final score. */
+export function predictedMarginFromFeatures(featureRow: Row | null): number | null {
+  if (!featureRow) return null;
+  let total = Number(featureRow.intercept ?? 0);
+  for (const col of Object.keys(featureRow)) {
+    if (col.endsWith("_contrib")) total += Number(featureRow[col] ?? 0);
+  }
+  return total;
+}
+
 /** Top `n` concepts by |contribution| **for this specific game**, families collapsed (see
  *  `FEATURE_FAMILIES`) so the ranking and point values are safe to read at face value and
  *  actually vary per game — unlike ranking by global importance, which is the same fixed list
