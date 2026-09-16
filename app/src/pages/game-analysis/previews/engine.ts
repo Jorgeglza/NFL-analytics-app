@@ -78,8 +78,10 @@ export const resultWinner = (g: Row): "home" | "away" | null => {
   return hs > as_ ? "home" : as_ > hs ? "away" : null;
 };
 
+export const bucketLo = (spread: number, binSize = BIN_SIZE_DEFAULT): number => Math.floor(spread / binSize + 1e-9) * binSize;
+
 export const bucketLabel = (spread: number, binSize = BIN_SIZE_DEFAULT): string => {
-  const lo = Math.floor(spread / binSize + 1e-9) * binSize;
+  const lo = bucketLo(spread, binSize);
   return `${lo.toFixed(1)} to ${(lo + binSize).toFixed(1)}`;
 };
 
@@ -142,13 +144,31 @@ export function atsRate(hist: HistAgg, team: string, season: number, wk: number,
   return v.reduce((a, b) => a + b, 0) / v.length;
 }
 
+/** Raw single-bucket p̂ + N for a bucket/side, excluding one season-week —
+ * no widening, just what actually happened in that exact 1-point bucket.
+ * Shared by `marketRate` (which widens) and `bucketProfile` (which shows
+ * the unwidened per-bucket picture that justifies widening in the UI). */
+function singleBucketRate(
+  hist: HistAgg,
+  label: string,
+  favSide: string,
+  exclSeason: number,
+  exclWeek: number,
+): { n: number; wins: number } {
+  const key = `${label}|${favSide}`;
+  const c = hist.counts.get(key);
+  if (!c) return { n: 0, wins: 0 };
+  const ex = hist.perWeek.get(`${exclSeason}|${exclWeek}`)?.get(key);
+  return { n: c.n - (ex?.n ?? 0), wins: c.wins - (ex?.wins ?? 0) };
+}
+
 /** Wilson-centered p̂ + N for a bucket/side, excluding one season-week. A
  * bucket short of MIN_N_BUCKET games widens outward one bucket-width at a
  * time (±1, then ±2, …binSize), pooling the nearest spread sizes first
  * since favorite win rate moves fairly smoothly with spread — this used to
  * just return null on a thin/empty bucket (silently dropping the whole
- * Market-calibrated blend for it); `widened` flags when neighbors were
- * pooled in, for surfacing low-confidence bucket reads in the UI. */
+ * Market-calibrated blend for it). `widened`/`halfWidthPts` say whether and
+ * how far it had to reach, for surfacing low-confidence bucket reads in the UI. */
 export function marketRate(
   hist: HistAgg,
   bucket: string,
@@ -156,32 +176,74 @@ export function marketRate(
   exclSeason: number,
   exclWeek: number,
   binSize = BIN_SIZE_DEFAULT,
-): { pHat: number; n: number; widened: boolean } | null {
+): { pHat: number; n: number; widened: boolean; halfWidthPts: number } | null {
   const lo = parseFloat(bucket);
   if (!Number.isFinite(lo)) return null;
 
-  const wkKey = `${exclSeason}|${exclWeek}`;
   const acc = { n: 0, wins: 0 };
   const add = (label: string) => {
-    const key = `${label}|${favSide}`;
-    const c = hist.counts.get(key);
-    if (!c) return;
-    const ex = hist.perWeek.get(wkKey)?.get(key);
-    acc.n += c.n - (ex?.n ?? 0);
-    acc.wins += c.wins - (ex?.wins ?? 0);
+    const r = singleBucketRate(hist, label, favSide, exclSeason, exclWeek);
+    acc.n += r.n;
+    acc.wins += r.wins;
   };
 
   add(bucket);
-  let widened = false;
+  let halfWidthPts = 0;
   for (let k = 1; acc.n < MIN_N_BUCKET && k <= MAX_BUCKET_WIDEN; k++) {
     const before = acc.n;
     add(bucketLabel(lo - k * binSize, binSize));
     add(bucketLabel(lo + k * binSize, binSize));
-    if (acc.n > before) widened = true;
+    if (acc.n > before) halfWidthPts = k * binSize;
   }
 
   if (acc.n <= 0) return null;
-  return { pHat: wilson(acc.wins / acc.n, acc.n).center, n: acc.n, widened };
+  return { pHat: wilson(acc.wins / acc.n, acc.n).center, n: acc.n, widened: halfWidthPts > 0, halfWidthPts };
+}
+
+export interface BucketProfilePoint {
+  lo: number;
+  label: string;
+  n: number;
+  pHat: number | null;
+  /** true for the game's own bucket (k=0). */
+  isTarget: boolean;
+  /** true for a neighbor bucket actually pooled into marketRate's widened estimate. */
+  pooled: boolean;
+}
+
+/** Unwidened per-bucket win rates around a target spread, for a compact
+ * "how does this bucket actually hit, and why did/didn't it need
+ * widening" chart — halfWindow buckets on each side of the target,
+ * always including at least `halfWidthPts` (marketRate's actual pooled
+ * range) so every bucket that fed the estimate is shown and marked. */
+export function bucketProfile(
+  hist: HistAgg,
+  targetSpread: number,
+  favSide: string,
+  exclSeason: number,
+  exclWeek: number,
+  halfWidthPts: number,
+  binSize = BIN_SIZE_DEFAULT,
+  minHalfWindow = 4,
+  maxHalfWindow = 6,
+): BucketProfilePoint[] {
+  const targetLo = bucketLo(targetSpread, binSize);
+  const halfWindow = Math.min(maxHalfWindow, Math.max(minHalfWindow, Math.round(halfWidthPts / binSize)));
+  const pts: BucketProfilePoint[] = [];
+  for (let k = -halfWindow; k <= halfWindow; k++) {
+    const lo = targetLo + k * binSize;
+    const label = bucketLabel(lo, binSize);
+    const r = singleBucketRate(hist, label, favSide, exclSeason, exclWeek);
+    pts.push({
+      lo,
+      label,
+      n: r.n,
+      pHat: r.n > 0 ? wilson(r.wins / r.n, r.n).center : null,
+      isTarget: k === 0,
+      pooled: Math.abs(k) * binSize <= halfWidthPts,
+    });
+  }
+  return pts;
 }
 
 // ---------- grades ----------
