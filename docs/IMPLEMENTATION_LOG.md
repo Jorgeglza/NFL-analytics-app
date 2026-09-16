@@ -559,6 +559,14 @@ Full work list, with per-item checkboxes and severities: **`docs/MOBILE_READINES
 
 ## Session notes (newest first)
 
+### 2026-09-15 — Pythagorean pill: replace confusing % KPI with PF/PA/margin, add game/cumulative toggle
+User found the expected-win% KPI row confusing ("these % are confusing, remove them"); asked for cumulative points for/against/margin instead, made attractive, plus a small subtle toggle between the per-game and a cumulative view.
+- `keyStats` (`MatchupTab.tsx`) now exposes raw `pfAway/paAway/pfHome/paHome` (cumulative points for/against through `wkPlayed`) alongside the existing `pythAway/pythHome` win%s — computed from the same `twIdx` rows `pythExp` already summed, just also returning the sums instead of only the win% derived from them.
+- Replaced the dot+abbreviation+% KPI row with a compact 3-row **Points for / Points allowed / Point margin** block — same away|label|home, bold-on-better-side convention as the existing "Key stats" card — under a small team-dot header. Verified: BAL (2024 Wk18 vs CLE) correctly bolded on all three (483 PF, 351 PA, +132 margin vs CLE's 264/416/−152).
+- Added a small, subtle **"Per game | Cumulative"** text toggle (plain buttons, active one bold-slate, inactive muted-gray, no borders/pills) above the chart. `MarginBars` now takes a `mode` prop: `"game"` keeps the existing diverging bar chart; `"cumulative"` switches to a two-line chart of each team's *running* point margin (`cumulativeMarginSeries` — forward-fills through bye weeks, since a bye doesn't change the running total, rather than breaking the line).
+- Verified the two views are consistent: the cumulative line's final value exactly matches the new KPI row's "Point margin" figures (−152 / +132), and a bye week (BAL's, week 14) shows as a flat, unchanged segment in the cumulative line, corresponding to the week that has no bar at all in the per-game view.
+- `npm run build` / `tsc --noEmit` clean.
+
 ### 2026-09-14 (cont. x15) — Pythagorean pill redesigned: expected-win KPI + per-game margin bars
 User wanted the Pythagorean card rebuilt: expected win% as a top KPI (not a full-width bar), the log5 head-to-head bar replaced by a short text note (its number is already in the card's header pill), and a real per-game view of points margin with hover detail — "complex," asked for options first.
 - Explored, then presented two design options (plan mode) with a recommendation: **grouped diverging bars** (points margin is a discrete per-game event, not a continuously-evolving state like Elo — better suited to bars than a line) vs. a line chart mirroring `EloSpark` exactly. User confirmed the bar option, plus two follow-on decisions: skip win/loss dot coloring (a bar's own direction already is the result, unlike Elo where rating alone doesn't imply it) and include postseason games with the same gap-handling philosophy as the Elo card.
