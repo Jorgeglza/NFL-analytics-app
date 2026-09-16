@@ -52,6 +52,7 @@ import { describeFeature } from "../../predictive-model/featureDescriptions";
 
 const fmtMl = (ml: number | null) => (ml == null ? "—" : ml > 0 ? `+${Math.round(ml)}` : String(Math.round(ml)));
 const pct1 = (p: number | null) => (p == null ? "—" : `${(100 * p).toFixed(1)}%`);
+const fmtSigned = (v: number) => (v >= 0 ? `+${v.toFixed(1)}` : v.toFixed(1));
 
 /** Horizontal probability bar (home-side share by convention) with a 50% tick. */
 function ProbBar({
@@ -404,14 +405,14 @@ function MarginBars({
               { type: "bar", name: homeLabel, data: slots.map((s) => (s.home ? { value: s.home.margin, itemStyle: { color: homeColor, opacity: 0.85 } } : null)) },
             ]
           : [
-              { type: "line", name: awayLabel, data: awayCum.map((c) => +c.margin.toFixed(0)), lineStyle: { color: awayColor, width: 2 }, symbol: "none" },
-              { type: "line", name: homeLabel, data: homeCum.map((c) => +c.margin.toFixed(0)), lineStyle: { color: homeColor, width: 2 }, symbol: "none" },
+              { type: "line", name: awayLabel, data: awayCum.map((c) => +c.margin.toFixed(0)), lineStyle: { color: awayColor, width: 2 }, itemStyle: { color: awayColor }, symbol: slots.length > 1 ? "none" : "circle", symbolSize: 5 },
+              { type: "line", name: homeLabel, data: homeCum.map((c) => +c.margin.toFixed(0)), lineStyle: { color: homeColor, width: 2 }, itemStyle: { color: homeColor }, symbol: slots.length > 1 ? "none" : "circle", symbolSize: 5 },
             ],
     }),
     [slots, awayColor, homeColor, awayLabel, homeLabel, mode, awayCum, homeCum],
   );
   const ref = useECharts(option);
-  if (slots.length < 2) {
+  if (slots.length < 1) {
     return <div className="flex h-8 items-center text-[10px] italic text-slate-400">Not enough games yet</div>;
   }
   return <div ref={ref} className="h-24 w-full" />;
@@ -1052,7 +1053,26 @@ export default function MatchupTab({
 
             {!predictiveUnavailable && (
               <ModelBlock color={MODEL_COLORS.predictive} title="Predictive (margin reg.)" pick={pickOf(bundle.predictive)} prob={probOf(bundle.predictive)}>
-                <ProbBar label="Predicted home win prob." p={bundle.predictive[1]} color={MODEL_COLORS.predictive} partialWindow={bundle.predictive[1] != null && !predWindowFull} />
+                <div className="flex items-center justify-between gap-2 rounded-lg border border-slate-100 bg-slate-50/80 px-2.5 py-1.5">
+                  <span className="flex items-baseline gap-1.5">
+                    <span className="inline-block h-2 w-2 rounded-full" style={{ background: meta.get(away)?.color ?? MODEL_COLORS.predictive }} />
+                    <span className="text-[11px] font-semibold text-slate-500">{away}</span>
+                    <span className="text-sm font-bold tabular-nums" style={{ color: meta.get(away)?.color ?? MODEL_COLORS.predictive }}>
+                      {predictedMargin == null ? "—" : fmtSigned(-predictedMargin)}
+                    </span>
+                  </span>
+                  <span className="whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-bold text-white shadow-sm" style={{ background: MODEL_COLORS.predictive }}>
+                    {home} {pct1(bundle.predictive[1])}
+                    {bundle.predictive[1] != null && !predWindowFull ? "*" : ""} win
+                  </span>
+                  <span className="flex items-baseline gap-1.5">
+                    <span className="text-sm font-bold tabular-nums" style={{ color: meta.get(home)?.color ?? MODEL_COLORS.predictive }}>
+                      {predictedMargin == null ? "—" : fmtSigned(predictedMargin)}
+                    </span>
+                    <span className="text-[11px] font-semibold text-slate-500">{home}</span>
+                    <span className="inline-block h-2 w-2 rounded-full" style={{ background: meta.get(home)?.color ?? MODEL_COLORS.predictive }} />
+                  </span>
+                </div>
                 {predTop5.length > 0 ? (
                   <>
                     <div className="pt-0.5 text-[9px] font-medium uppercase tracking-wider text-slate-400">Biggest movers for this game (margin points)</div>

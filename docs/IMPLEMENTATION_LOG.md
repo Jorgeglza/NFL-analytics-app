@@ -559,6 +559,20 @@ Full work list, with per-item checkboxes and severities: **`docs/MOBILE_READINES
 
 ## Session notes (newest first)
 
+### 2026-09-16 (cont. x6) — Predictive pill: replace win-prob bar with a 3-part team-colored KPI line
+User asked for the "Predicted home win prob." `ProbBar` line to instead show, all on one line: the away team's signed predicted-margin points, the home team's signed predicted-margin points, and a home-win% KPI — visually attractive, using team colors.
+- Reused `predictedMarginFromFeatures` (engine.ts, added just below by the "projected final score" work) rather than adding a second near-duplicate reconstruction — same `intercept + every "..._contrib" column` sum, already computed as `predictedMargin` for the Matchup Snapshot's ML boxes.
+- Replaced the `ProbBar` with a single compact row: away team dot + abbreviation + signed margin (team color) on the left, a center pill badge showing the home team's win% (predictive model's own color), home team's signed margin + abbreviation + dot (team color) on the right. Preserved the existing "*" partial-L3-window flag (see the entry below) by appending it to the badge's % text instead of `ProbBar`'s own marker.
+- Verified 2025 PHI@NYG week 6 (PHI away, favored): row renders `PHI +8.3` (PHI's own color) / badge `NYG 26.6% win` / `NYG -8.3` (NYG's own color) — signs and the win% match the card's own header pick (PHI · 73%).
+- `tsc --noEmit` and `npm run build` clean.
+
+### 2026-09-16 (cont. x5) — Fix Pythagorean chart's premature "not enough games yet" fallback
+User reported the Pythagorean margin chart showing "Not enough games yet" for early-season games even though a game had been played and a probability was already computed.
+- Root cause: `MarginBars` (`MatchupTab.tsx`) gated on `slots.length < 2`, a guard copied from `EloSpark`'s line chart (which genuinely needs 2 points to draw a line). But `MarginBars`' bar mode is meaningful with a single week's data, and `probBundle`/`keyStats` already compute a Pythagorean probability off just 1 game (`pythOf` only requires `rows.length >= 1`) — so the fallback fired precisely when there was exactly 1 played week, contradicting the probability already shown in the card's header pill.
+- Fix: guard now only fires on `slots.length < 1` (truly zero games). Also gave the cumulative-mode line series a visible `circle` symbol when there's only one point (was `symbol:"none"`, invisible with nothing to connect to).
+- Verified: 2025 WAS@GB week 2 (wkPlayed=1, one game each) now renders a single W1 bar in game mode and a visible single dot per team in cumulative mode, matching the already-shown 78/22% probability; 2025 PHI@NYG week 6 (multi-week case) unaffected, no fallback text.
+- `tsc --noEmit` clean.
+
 ### 2026-09-16 (cont. x4) — Matchup Snapshot: projected final score under each ML box
 Direct user request: under DET ML / BUF ML in the Matchup Snapshot section (the box with
 Implied/Fair moneyline reads), add a small projected-score line per team.
