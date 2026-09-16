@@ -603,6 +603,10 @@ export default function MatchupTab({
   const edgeBarOption = useMemo<EChartsOption | null>(() => {
     if (!trendEdge) return null;
     const names = ["Grade Δ", "Last6 PM Δ", "Last6 EPA Δ", "Last6 Win% Δ", "Last6 TO margin Δ"];
+    // Short forms for the on-chart x-axis labels — the full names above are kept for the
+    // tooltip. Five multi-word labels don't fit across a mobile-width chart without the
+    // outermost one overhanging the plot's edge and getting clipped by the canvas.
+    const shortNames = ["Grade Δ", "PM Δ", "EPA Δ", "Win% Δ", "TO marg Δ"];
     const vals = [trendEdge.parts.gradeD, trendEdge.parts.pmL6D, trendEdge.parts.epaL6D, trendEdge.parts.winL6D, trendEdge.parts.tomL6D];
     const detail = [
       [trendEdge.gA, trendEdge.gH, EDGE_WEIGHTS.grade],
@@ -613,9 +617,10 @@ export default function MatchupTab({
     ];
     const f2 = (x: number | null, signed = false) => (x == null || !Number.isFinite(x) ? "—" : `${signed && x >= 0 ? "+" : ""}${x.toFixed(2)}`);
     return {
-      grid: { left: 10, right: 10, top: 20, bottom: 10, containLabel: true },
+      grid: { left: 6, right: 6, top: 20, bottom: 4, containLabel: true },
       tooltip: {
         trigger: "item",
+        confine: true,
         formatter: (p: unknown) => {
           const q = p as { dataIndex: number; name: string };
           const [a, h, wt] = detail[q.dataIndex];
@@ -623,8 +628,17 @@ export default function MatchupTab({
           return `${q.name}<br/>Away: ${f2(a)} | Home: ${f2(h)}<br/>Diff (Away − Home): ${f2(d, true)}<br/>Weight: ${f2(wt)}<br/><b>Contribution:</b> ${f2(vals[q.dataIndex], true)}`;
         },
       },
-      xAxis: { type: "category", data: names, name: "Components (Δ away − home, weighted)", nameLocation: "middle", nameGap: 30, axisLabel: { fontSize: 10 } },
-      yAxis: { type: "value", name: "Edge contribution" },
+      // No axis titles here — "Components (Δ away − home, weighted)" and "Edge contribution"
+      // were pushing this chart's height past its h-40 container on narrow screens (name +
+      // nameGap has nowhere to go once the plot area itself needs the full height), clipping
+      // both names and the rightmost category label. The card's own description line below the
+      // chart, plus the tooltip, already say what the axes mean, so the titles were redundant.
+      xAxis: {
+        type: "category",
+        data: names,
+        axisLabel: { fontSize: 9, interval: 0, formatter: (_v: string, i: number) => shortNames[i] },
+      },
+      yAxis: { type: "value", axisLabel: { fontSize: 9 } },
       series: [
         {
           type: "bar",
@@ -1062,7 +1076,11 @@ export default function MatchupTab({
             </ModelBlock>
 
             <ModelBlock color={MODEL_COLORS.trend} title="Trend Edge" pick={pickOf(bundle.trend)} prob={probOf(bundle.trend)}>
-              <div ref={edgeRef} className="h-40" />
+              {trendEdge.pAway == null ? (
+                <div className="flex h-40 items-center justify-center text-[10px] italic text-slate-400">Not enough recent-form data yet</div>
+              ) : (
+                <div ref={edgeRef} className="h-40" />
+              )}
               <div className="text-[10px] text-slate-400">Weighted recent-form differences (away − home): grade, last-6 margin, EPA, win rate, turnovers. Hover the bars.</div>
             </ModelBlock>
           </div>
