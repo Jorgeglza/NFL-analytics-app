@@ -430,6 +430,7 @@ function Block({ title, rows, xKey }: { title: string; rows: Row[]; xKey: "week"
               label: { show: true, position: "top" as const, fontSize: 7, formatter: `×${grp.length}` },
               tooltip: {
                 formatter: () =>
+                  `<div style="font-weight:600;margin-bottom:4px;">${xLabel} ${grp[0].x} · Spread ${grp[0].spread}</div>` +
                   grp
                     .map(
                       (g) =>
