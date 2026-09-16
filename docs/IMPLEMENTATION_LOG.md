@@ -559,6 +559,14 @@ Full work list, with per-item checkboxes and severities: **`docs/MOBILE_READINES
 
 ## Session notes (newest first)
 
+### 2026-09-16 (cont. x7) — Predictive margin row: drop redundant win% badge, add full-breakdown popout
+User feedback on the new margin row: the center "TB 60.8%* win" badge duplicated the card's own top-right pick/prob corner (which "should always stay there as it's in line with the rest" of the model cards), while the point-margin numbers were the actually-needed, non-redundant info. Also asked for a click-to-expand on that row (only that row) showing the full ranked list of model inputs, not just the top 5.
+- Removed the center win% pill from the row; replaced it with a neutral centered label ("predicted margin · tap for all inputs"). The corner badge is untouched and remains the single place the win% lives.
+- The "*" partial-L3-window flag (previously appended to the row's win% text) now appends directly to the corner pick's team abbreviation instead (e.g. "BUF\* · 68%") — same information, same single spot, no second marker needed.
+- The margin row is now a `<button>`: clicking it opens a `Modal` (reused shared component) listing **every** predictive concept for this game — not just the top 5 shown inline — via `topPredictiveDrivers(predFeatureRow, Infinity)`, same family-collapsed ranking, sorted by |contribution| descending, reusing the existing `ContribRow` renderer. Title/subtitle state the matchup and the total concept count; disabled (no click, no hover) when there's no breakdown for this game.
+- Verified: 2026 wk2 DET@BUF (partial L3 window) — corner shows "BUF\* · 68%", row shows "DET -6.3 / predicted margin · tap for all inputs / BUF +6.3", clicking it opens a modal with all 29 ranked concepts (elo +1.8 first, descending correctly).
+- `tsc --noEmit` and `npm run build` clean.
+
 ### 2026-09-16 (cont. x6) — Predictive pill: replace win-prob bar with a 3-part team-colored KPI line
 User asked for the "Predicted home win prob." `ProbBar` line to instead show, all on one line: the away team's signed predicted-margin points, the home team's signed predicted-margin points, and a home-win% KPI — visually attractive, using team colors.
 - Reused `predictedMarginFromFeatures` (engine.ts, added just below by the "projected final score" work) rather than adding a second near-duplicate reconstruction — same `intercept + every "..._contrib" column` sum, already computed as `predictedMargin` for the Matchup Snapshot's ML boxes.

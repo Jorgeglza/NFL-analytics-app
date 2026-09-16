@@ -8,6 +8,7 @@ import type { TeamMeta } from "../../../lib/team/meta";
 import { Select } from "../../../components/filters/Select";
 import { FilterGroup } from "../../../components/ui";
 import { TeamLogoLink } from "../../../components/team/TeamLogoLink";
+import { Modal } from "../../../components/Modal";
 import { pythWinPct } from "../../../lib/logic/pythagorean";
 import { useECharts } from "../../../components/charts/useECharts";
 import { MIN_N_BUCKET, MARKET_BUCKET_W, ATS_WINDOW, homeCoverFairProb, vigLeanProbHome, atsTrendProbHome } from "../../../lib/logic/probBlend";
@@ -532,6 +533,11 @@ export default function MatchupTab({
     [predFeaturesIdx, selGame, s, w, away, home],
   );
   const predTop5 = useMemo(() => topPredictiveDrivers(predFeatureRow, 5), [predFeatureRow]);
+  // Every concept, same ranking as predTop5 but uncapped — backs the "full breakdown" popout
+  // opened by clicking the Predictive card's margin row, as opposed to the top-5 slice shown
+  // inline in the card itself.
+  const predAllDrivers = useMemo(() => topPredictiveDrivers(predFeatureRow, Infinity), [predFeatureRow]);
+  const [predDetailOpen, setPredDetailOpen] = useState(false);
   // Whether this specific matchup's L3 rolling-window features had a full 3-game window on both
   // sides — false in either team's first 3 played weeks of the season. Only ever shown here (the
   // Matchup tab, this one game) — see predictiveWindowFull's docstring in engine.ts.
@@ -1052,27 +1058,37 @@ export default function MatchupTab({
             </ModelBlock>
 
             {!predictiveUnavailable && (
-              <ModelBlock color={MODEL_COLORS.predictive} title="Predictive (margin reg.)" pick={pickOf(bundle.predictive)} prob={probOf(bundle.predictive)}>
-                <div className="flex items-center justify-between gap-2 rounded-lg border border-slate-100 bg-slate-50/80 px-2.5 py-1.5">
-                  <span className="flex items-baseline gap-1.5">
+              <ModelBlock
+                color={MODEL_COLORS.predictive}
+                title="Predictive (margin reg.)"
+                pick={pickOf(bundle.predictive) == null ? null : `${pickOf(bundle.predictive)}${bundle.predictive[1] != null && !predWindowFull ? "*" : ""}`}
+                prob={probOf(bundle.predictive)}
+              >
+                <button
+                  type="button"
+                  onClick={() => setPredDetailOpen(true)}
+                  disabled={predAllDrivers.length === 0}
+                  className="flex w-full items-center justify-between gap-3 rounded-lg border border-slate-100 bg-slate-50/80 px-2.5 py-1.5 text-left transition-colors enabled:hover:border-slate-200 enabled:hover:bg-slate-100 disabled:cursor-default"
+                  title={predAllDrivers.length > 0 ? "See every model input for this game, ranked by importance" : undefined}
+                >
+                  <span className="flex shrink-0 items-baseline gap-1.5">
                     <span className="inline-block h-2 w-2 rounded-full" style={{ background: meta.get(away)?.color ?? MODEL_COLORS.predictive }} />
                     <span className="text-[11px] font-semibold text-slate-500">{away}</span>
                     <span className="text-sm font-bold tabular-nums" style={{ color: meta.get(away)?.color ?? MODEL_COLORS.predictive }}>
                       {predictedMargin == null ? "—" : fmtSigned(-predictedMargin)}
                     </span>
                   </span>
-                  <span className="whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-bold text-white shadow-sm" style={{ background: MODEL_COLORS.predictive }}>
-                    {home} {pct1(bundle.predictive[1])}
-                    {bundle.predictive[1] != null && !predWindowFull ? "*" : ""} win
+                  <span className="flex-1 truncate text-center text-[9px] font-medium uppercase tracking-wider text-slate-400">
+                    predicted margin{predAllDrivers.length > 0 && " · tap for all inputs"}
                   </span>
-                  <span className="flex items-baseline gap-1.5">
+                  <span className="flex shrink-0 items-baseline gap-1.5">
                     <span className="text-sm font-bold tabular-nums" style={{ color: meta.get(home)?.color ?? MODEL_COLORS.predictive }}>
                       {predictedMargin == null ? "—" : fmtSigned(predictedMargin)}
                     </span>
                     <span className="text-[11px] font-semibold text-slate-500">{home}</span>
                     <span className="inline-block h-2 w-2 rounded-full" style={{ background: meta.get(home)?.color ?? MODEL_COLORS.predictive }} />
                   </span>
-                </div>
+                </button>
                 {predTop5.length > 0 ? (
                   <>
                     <div className="pt-0.5 text-[9px] font-medium uppercase tracking-wider text-slate-400">Biggest movers for this game (margin points)</div>
@@ -1099,6 +1115,32 @@ export default function MatchupTab({
                   <a href="#/game_analysis/models_guide" className="underline decoration-dotted underline-offset-2 hover:text-slate-600">Model details →</a>
                 </div>
               </ModelBlock>
+            )}
+
+            {predDetailOpen && (
+              <Modal
+                title={`${away} @ ${home} — Predictive model inputs`}
+                subtitle={`All ${predAllDrivers.length} concepts behind this prediction, ranked by contribution to the ${Math.abs(predictedMargin ?? 0).toFixed(1)}-point margin`}
+                onClose={() => setPredDetailOpen(false)}
+              >
+                <div className="space-y-1.5">
+                  {predAllDrivers.map((r) => (
+                    <ContribRow
+                      key={r.feature}
+                      r={r}
+                      away={away}
+                      home={home}
+                      awayColor={meta.get(away)?.color ?? MODEL_COLORS.predictive}
+                      homeColor={meta.get(home)?.color ?? MODEL_COLORS.predictive}
+                      maxAbsContrib={Math.abs(predAllDrivers[0]?.contrib ?? 1)}
+                    />
+                  ))}
+                </div>
+                <div className="mt-3 text-[10px] text-slate-400">
+                  Linear regression on pre-game stats predicts the scoring margin — the +/− values are points of that margin, net of every other factor in the model.{" "}
+                  <a href="#/game_analysis/models_guide" className="underline decoration-dotted underline-offset-2 hover:text-slate-600">Model details →</a>
+                </div>
+              </Modal>
             )}
 
             <ModelBlock color={MODEL_COLORS.elo} title="Elo" pick={pickOf(bundle.elo)} prob={probOf(bundle.elo)}>
