@@ -246,8 +246,12 @@ function MixChart({
           const g = groups[ps[0]?.dataIndex ?? 0];
           const lines = ps
             .filter((p) => Number(p.value) > 0)
-            .map((p) => `${p.seriesName}: ${g.counts.get(p.seriesName as Category) ?? 0} (${Number(p.value).toFixed(1)}%)`);
-          return `${xLabel} ${ps[0]?.name} — ${g.total} games<br/>${lines.join("<br/>")}`;
+            .map((p) => {
+              const cat = p.seriesName as Category;
+              const dot = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${CATEGORY_COLORS[cat]};margin-right:6px;"></span>`;
+              return `<div style="display:flex;justify-content:space-between;gap:14px;"><span>${dot}${cat}</span><span style="font-weight:600;">${g.counts.get(cat) ?? 0} · ${Number(p.value).toFixed(1)}%</span></div>`;
+            });
+          return `<div style="font-weight:600;margin-bottom:4px;">${xLabel} ${ps[0]?.name} — ${g.total} games</div>${lines.join("")}`;
         },
       },
       xAxis: {
@@ -383,7 +387,11 @@ function Block({ title, rows, xKey }: { title: string; rows: Row[]; xKey: "week"
             itemStyle: { color: CATEGORY_COLORS[g.category], opacity: 0.7 },
             tooltip: {
               formatter: () =>
-                `Game ID: ${g.gameId}<br/>Category: ${g.category}<br/>${xLabel}: ${g.x} | Spread: ${g.spread}`,
+                `<div style="font-weight:600;">${g.awayTeam} @ ${g.homeTeam}</div>` +
+                `<div style="display:flex;align-items:center;gap:6px;margin-top:2px;">` +
+                `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${CATEGORY_COLORS[g.category]};"></span>` +
+                `${g.category}</div>` +
+                `<div style="color:#94a3b8;margin-top:2px;">${xLabel} ${g.x} · Spread ${g.spread}</div>`,
             },
           })),
         },
@@ -399,8 +407,14 @@ function Block({ title, rows, xKey }: { title: string; rows: Row[]; xKey: "week"
               tooltip: {
                 formatter: () =>
                   grp
-                    .map((g) => `${g.gameId} | Winner: ${g.winnerTeam ?? "None"} | Win Type: ${g.category} | Spread: ${g.spread}`)
-                    .join("<br/>"),
+                    .map(
+                      (g) =>
+                        `<div style="margin-bottom:4px;"><div style="font-weight:600;">${g.awayTeam} @ ${g.homeTeam}</div>` +
+                        `<div style="display:flex;align-items:center;gap:6px;">` +
+                        `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${CATEGORY_COLORS[g.category]};"></span>` +
+                        `${g.category} — Winner: ${g.winnerTeam ?? "None"}</div></div>`,
+                    )
+                    .join(""),
               },
             };
           }),
