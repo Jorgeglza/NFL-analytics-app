@@ -559,6 +559,33 @@ Full work list, with per-item checkboxes and severities: **`docs/MOBILE_READINES
 
 ## Session notes (newest first)
 
+### 2026-09-16 (cont. x3) — Manually re-ran the predictive export to apply the fix to production data
+Per user request, actually ran `pipeline/predictive_model/export_page.py` + `export_upcoming.py`
+locally (pinned venv: pandas==3.0.0/numpy==1.26.4/scikit-learn==1.8.0/nflreadpy==0.1.2, matching
+`predictive-refresh.yml`) instead of waiting for Friday's cron — real network fetch this time
+(previous verification in this session stubbed `fetch_pbp`/`fetch_ngs`/`fetch_ftn`/etc. to avoid
+needing network/cache, which this run didn't need to do).
+- **Result matches the fix's own guarantee exactly**: `games.json`/`game_features.json`/
+  `season_summary.json`/`importance.json`/`calibration.json` came back **byte-identical** to what
+  was already committed (only `meta.json`'s `generated_at` timestamp differs) — confirms
+  `build_game_table`'s `asof=None` default path is untouched by the fix, as already proven via
+  `pd.testing.assert_frame_equal` earlier this session, now confirmed against a real full-history
+  network fetch too. **Pooled straight-up accuracy: 64.16%, unchanged from the pre-fix 64.16%**
+  baseline the user was tracking (was reported as "64.1%").
+- The only real content change is in the live upcoming-week files: `upcoming_features.json`'s
+  week-2 rows now have real, non-null `l3_*`/`cum_*` values (e.g. BUF's `diff_l3_points_margin`
+  now `4.0`, `diff_cum_overall_grade` now `3.3`, `diff_l3_success_rate` now populated from real
+  play-by-play — all previously `null`), and `upcoming.json`'s predictions shifted accordingly
+  (BUF@DET: predicted margin 3.80→6.29, home win prob 61.4%→68.5%, reflecting real week-1 signal
+  instead of ~30 features silently imputed to 0).
+- Committed pre-export commit hash (`382cee6`) noted as the easy revert point per user's request
+  to keep this reversible, though given the byte-identical historical result there is nothing to
+  revert on the accuracy side — reverting would only be needed to undo the live week-2 prediction
+  numbers themselves, not any backtest metric.
+- Committed as `data: predictive model weekly refresh (manual, applies the window-carry-forward
+  fix)` — only `meta.json`/`upcoming.json`/`upcoming_features.json`/`upcoming_meta.json` changed
+  (4 files, 4 lines).
+
 ### 2026-09-16 (cont. x2) — Model notes: state the needed window explicitly
 User asked what window the full predictive model needs, and to make sure it's answered in the model
 notes. Answer: 3 prior played games per team (L3) — the same window every rolling feature
