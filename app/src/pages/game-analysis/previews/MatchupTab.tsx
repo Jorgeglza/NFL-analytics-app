@@ -319,34 +319,61 @@ function weekLabel(week: number): string {
   return POST[week] ?? `W${week}`;
 }
 
-/** Points-margin bar chart for the Pythagorean card — one bar per team per played week this
- *  season (season-scoped, unlike Elo's rolling multi-season line — see `alignedMarginTimeline`),
- *  each team's own color, diverging from a zero baseline that a bar chart includes by default (no
- *  `scale:true` needed the way Elo's line did). A week only one team played (an ordinary bye, or
- *  a first-round playoff bye) simply has no bar for that side — not a zero-height one. Bars are
- *  already spatially distinct, so — unlike Elo's dual-line nearest-cursor tooltip — a plain
- *  axis-trigger tooltip listing whichever team(s) played that week is unambiguous. No separate
- *  win/loss dot: a bar's own direction already is the result. */
+/** Running (forward-filled) points for/against/margin through each slot, for the cumulative
+ *  view — a bye week simply carries the prior total forward rather than breaking the line. */
+function cumulativeMarginSeries(slots: MarginTimelineSlot[], side: "away" | "home") {
+  let pf = 0;
+  let pa = 0;
+  return slots.map((s) => {
+    const p = s[side];
+    if (p) {
+      pf += p.scored;
+      pa += p.allowed;
+    }
+    return { pf, pa, margin: pf - pa };
+  });
+}
+
+/** Points-margin chart for the Pythagorean card — toggles between two views of the exact same
+ *  per-game data (see `alignedMarginTimeline`): "Per game" is a bar per team per played week,
+ *  diverging from a zero baseline a bar chart includes by default (no `scale:true` needed the way
+ *  Elo's line did); "Cumulative" is each team's running point margin as a line, since that's a
+ *  continuously-evolving total (an Elo-like state) rather than a discrete per-game event. A week
+ *  only one team played (an ordinary bye, or a first-round playoff bye) has no bar for that side
+ *  in "Per game" — not a zero-height one — and simply carries its running total flat forward in
+ *  "Cumulative". Bars/lines are colored by team; no separate win/loss dot (a bar's own direction,
+ *  or a cumulative line's slope, already is the result). Tooltip lists whichever team(s) played
+ *  that week — bars and lines here are both spatially unambiguous, so no Elo-style dual-line
+ *  nearest-cursor logic is needed. */
 function MarginBars({
   slots,
   awayColor,
   homeColor,
   awayLabel,
   homeLabel,
+  mode,
 }: {
   slots: MarginTimelineSlot[];
   awayColor: string;
   homeColor: string;
   awayLabel: string;
   homeLabel: string;
+  mode: "game" | "cumulative";
 }) {
   const resultWord = (w: boolean | null) =>
     w == null ? '<span style="color:#94a3b8">Tie</span>' : w ? `<span style="color:${WIN_DOT}">Win</span>` : `<span style="color:${LOSS_DOT}">Loss</span>`;
-  const fmtLine = (label: string, color: string, p: NonNullable<MarginTimelineSlot["away"]>) => {
+  const fmtGame = (label: string, color: string, p: NonNullable<MarginTimelineSlot["away"]>) => {
     const dot = `<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${color};margin-right:4px"></span>`;
     const sign = p.margin >= 0 ? "+" : "";
     return `<div style="white-space:nowrap">${dot}<b>${label}</b> ${p.scored}-${p.allowed} (${sign}${p.margin}) vs ${p.opponent} · ${resultWord(p.win)}</div>`;
   };
+  const fmtCumulative = (label: string, color: string, c: { pf: number; pa: number; margin: number }) => {
+    const dot = `<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${color};margin-right:4px"></span>`;
+    const sign = c.margin >= 0 ? "+" : "";
+    return `<div style="white-space:nowrap">${dot}<b>${label}</b> ${c.pf}-${c.pa} (${sign}${c.margin}) season to date</div>`;
+  };
+  const awayCum = useMemo(() => cumulativeMarginSeries(slots, "away"), [slots]);
+  const homeCum = useMemo(() => cumulativeMarginSeries(slots, "home"), [slots]);
   const option = useMemo<EChartsOption>(
     () => ({
       grid: { left: 26, right: 6, top: 8, bottom: 16, containLabel: true },
@@ -357,30 +384,31 @@ function MarginBars({
         confine: true,
         padding: [6, 8],
         textStyle: { fontSize: 11 },
-        axisPointer: { type: "shadow" },
+        axisPointer: { type: mode === "game" ? "shadow" : "line" },
         formatter: (ps: unknown) => {
           const i = (ps as { dataIndex: number }[])[0]?.dataIndex ?? 0;
           const slot = slots[i];
-          const lines: string[] = [];
-          if (slot.away) lines.push(fmtLine(awayLabel, awayColor, slot.away));
-          if (slot.home) lines.push(fmtLine(homeLabel, homeColor, slot.home));
-          return lines.join("");
+          if (mode === "game") {
+            const lines: string[] = [];
+            if (slot.away) lines.push(fmtGame(awayLabel, awayColor, slot.away));
+            if (slot.home) lines.push(fmtGame(homeLabel, homeColor, slot.home));
+            return lines.join("");
+          }
+          return fmtCumulative(awayLabel, awayColor, awayCum[i]) + fmtCumulative(homeLabel, homeColor, homeCum[i]);
         },
       },
-      series: [
-        {
-          type: "bar",
-          name: awayLabel,
-          data: slots.map((s) => (s.away ? { value: s.away.margin, itemStyle: { color: awayColor, opacity: 0.85 } } : null)),
-        },
-        {
-          type: "bar",
-          name: homeLabel,
-          data: slots.map((s) => (s.home ? { value: s.home.margin, itemStyle: { color: homeColor, opacity: 0.85 } } : null)),
-        },
-      ],
+      series:
+        mode === "game"
+          ? [
+              { type: "bar", name: awayLabel, data: slots.map((s) => (s.away ? { value: s.away.margin, itemStyle: { color: awayColor, opacity: 0.85 } } : null)) },
+              { type: "bar", name: homeLabel, data: slots.map((s) => (s.home ? { value: s.home.margin, itemStyle: { color: homeColor, opacity: 0.85 } } : null)) },
+            ]
+          : [
+              { type: "line", name: awayLabel, data: awayCum.map((c) => +c.margin.toFixed(0)), lineStyle: { color: awayColor, width: 2 }, symbol: "none" },
+              { type: "line", name: homeLabel, data: homeCum.map((c) => +c.margin.toFixed(0)), lineStyle: { color: homeColor, width: 2 }, symbol: "none" },
+            ],
     }),
-    [slots, awayColor, homeColor, awayLabel, homeLabel],
+    [slots, awayColor, homeColor, awayLabel, homeLabel, mode, awayCum, homeCum],
   );
   const ref = useECharts(option);
   if (slots.length < 2) {
@@ -476,6 +504,7 @@ export default function MatchupTab({
   const away = selGame ? String(selGame.away_team) : "";
   const home = selGame ? String(selGame.home_team) : "";
   const [stat, setStat] = useState("points_margin");
+  const [pythMode, setPythMode] = useState<"game" | "cumulative">("game");
 
   // Elo rating history (for the Elo card's sparkline) — built once per schedule load, then
   // aligned to a shared last-17-weeks timeline strictly before this matchup (pre-game only,
@@ -608,14 +637,27 @@ export default function MatchupTab({
         a == null || h == null || a === h ? null : (hib ? a > h : a < h) ? "away" : "home";
       return { label, a, h, ra: rankOf(away, col), rh: rankOf(home, col), better };
     });
-    // model inputs: elo ratings + pythagorean expectation
+    // model inputs: elo ratings + pythagorean expectation (cumulative points for/against —
+    // also exposed raw, not just as a win%, for the Pythagorean card's PF/PA/margin KPIs).
     const eloE = eloIdx.get(String(selGame.game_id));
-    const pythExp = (team: string): number | null => {
+    const cumPoints = (team: string): { pf: number; pa: number } | null => {
       const tw = twIdx.rowsFor(team, s).filter((r) => Number(r.week) <= wkPlayed && r.points != null && r.points_allowed != null);
       if (!tw.length) return null;
-      return pythWinPct(tw.reduce((sm, r) => sm + Number(r.points), 0), tw.reduce((sm, r) => sm + Number(r.points_allowed), 0));
+      return { pf: tw.reduce((sm, r) => sm + Number(r.points), 0), pa: tw.reduce((sm, r) => sm + Number(r.points_allowed), 0) };
     };
-    return { rows, eloAway: eloE?.eloAway ?? null, eloHome: eloE?.eloHome ?? null, pythAway: pythExp(away), pythHome: pythExp(home) };
+    const cpAway = cumPoints(away);
+    const cpHome = cumPoints(home);
+    return {
+      rows,
+      eloAway: eloE?.eloAway ?? null,
+      eloHome: eloE?.eloHome ?? null,
+      pythAway: cpAway ? pythWinPct(cpAway.pf, cpAway.pa) : null,
+      pythHome: cpHome ? pythWinPct(cpHome.pf, cpHome.pa) : null,
+      pfAway: cpAway?.pf ?? null,
+      paAway: cpAway?.pa ?? null,
+      pfHome: cpHome?.pf ?? null,
+      paHome: cpHome?.pa ?? null,
+    };
   }, [selGame, twIdx, ranks, eloIdx, away, home, s, wkPlayed]);
 
   // ---- trend edge ----
@@ -634,6 +676,10 @@ export default function MatchupTab({
   const edgeBarOption = useMemo<EChartsOption | null>(() => {
     if (!trendEdge) return null;
     const names = ["Grade Δ", "Last6 PM Δ", "Last6 EPA Δ", "Last6 Win% Δ", "Last6 TO margin Δ"];
+    // Short forms for the on-chart x-axis labels — the full names above are kept for the
+    // tooltip. Five multi-word labels don't fit across a mobile-width chart without the
+    // outermost one overhanging the plot's edge and getting clipped by the canvas.
+    const shortNames = ["Grade Δ", "PM Δ", "EPA Δ", "Win% Δ", "TO marg Δ"];
     const vals = [trendEdge.parts.gradeD, trendEdge.parts.pmL6D, trendEdge.parts.epaL6D, trendEdge.parts.winL6D, trendEdge.parts.tomL6D];
     const detail = [
       [trendEdge.gA, trendEdge.gH, EDGE_WEIGHTS.grade],
@@ -644,9 +690,10 @@ export default function MatchupTab({
     ];
     const f2 = (x: number | null, signed = false) => (x == null || !Number.isFinite(x) ? "—" : `${signed && x >= 0 ? "+" : ""}${x.toFixed(2)}`);
     return {
-      grid: { left: 10, right: 10, top: 20, bottom: 10, containLabel: true },
+      grid: { left: 6, right: 6, top: 20, bottom: 4, containLabel: true },
       tooltip: {
         trigger: "item",
+        confine: true,
         formatter: (p: unknown) => {
           const q = p as { dataIndex: number; name: string };
           const [a, h, wt] = detail[q.dataIndex];
@@ -654,8 +701,17 @@ export default function MatchupTab({
           return `${q.name}<br/>Away: ${f2(a)} | Home: ${f2(h)}<br/>Diff (Away − Home): ${f2(d, true)}<br/>Weight: ${f2(wt)}<br/><b>Contribution:</b> ${f2(vals[q.dataIndex], true)}`;
         },
       },
-      xAxis: { type: "category", data: names, name: "Components (Δ away − home, weighted)", nameLocation: "middle", nameGap: 30, axisLabel: { fontSize: 10 } },
-      yAxis: { type: "value", name: "Edge contribution" },
+      // No axis titles here — "Components (Δ away − home, weighted)" and "Edge contribution"
+      // were pushing this chart's height past its h-40 container on narrow screens (name +
+      // nameGap has nowhere to go once the plot area itself needs the full height), clipping
+      // both names and the rightmost category label. The card's own description line below the
+      // chart, plus the tooltip, already say what the axes mean, so the titles were redundant.
+      xAxis: {
+        type: "category",
+        data: names,
+        axisLabel: { fontSize: 9, interval: 0, formatter: (_v: string, i: number) => shortNames[i] },
+      },
+      yAxis: { type: "value", axisLabel: { fontSize: 9 } },
       series: [
         {
           type: "bar",
@@ -1065,34 +1121,82 @@ export default function MatchupTab({
             </ModelBlock>
 
             <ModelBlock color={MODEL_COLORS.pyth} title="Pythagorean" pick={pickOf(bundle.pyth)} prob={probOf(bundle.pyth)}>
-              {/* Expected win% KPI row — same team-dot + abbreviation convention as the Elo card. */}
-              <div className="flex items-center justify-center gap-2.5">
-                <span className="inline-flex items-center gap-1.5">
+              {/* Cumulative points KPI — the meaningful numbers behind the (now-hidden) expected
+                  win% — team-dot header, then PF/PA/margin rows in the same away|label|home,
+                  bold-on-better-side convention as the "Key stats" card. */}
+              <div className="flex items-center justify-center gap-1.5 text-[10px] font-semibold text-slate-500">
+                <span className="inline-flex items-center gap-1">
                   <span className="inline-block h-2 w-2 rounded-full" style={{ background: meta.get(away)?.color ?? MODEL_COLORS.pyth }} />
-                  <span className="text-[11px] font-semibold text-slate-500">{away}</span>
-                  <span className={`text-sm tabular-nums ${keyStats.pythAway != null && keyStats.pythHome != null && keyStats.pythAway > keyStats.pythHome ? "font-bold text-slate-900" : "text-slate-500"}`}>
-                    {keyStats.pythAway == null ? "—" : `${Math.round(100 * keyStats.pythAway)}%`}
-                  </span>
+                  {away}
                 </span>
-                <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400">exp. win%</span>
-                <span className="inline-flex items-center gap-1.5">
-                  <span className={`text-sm tabular-nums ${keyStats.pythAway != null && keyStats.pythHome != null && keyStats.pythHome > keyStats.pythAway ? "font-bold text-slate-900" : "text-slate-500"}`}>
-                    {keyStats.pythHome == null ? "—" : `${Math.round(100 * keyStats.pythHome)}%`}
-                  </span>
-                  <span className="text-[11px] font-semibold text-slate-500">{home}</span>
+                <span className="text-slate-300">·</span>
+                <span className="inline-flex items-center gap-1">
+                  {home}
                   <span className="inline-block h-2 w-2 rounded-full" style={{ background: meta.get(home)?.color ?? MODEL_COLORS.pyth }} />
                 </span>
               </div>
+              {(() => {
+                const marginAway = keyStats.pfAway != null && keyStats.paAway != null ? keyStats.pfAway - keyStats.paAway : null;
+                const marginHome = keyStats.pfHome != null && keyStats.paHome != null ? keyStats.pfHome - keyStats.paHome : null;
+                const fmtSigned = (v: number) => (v >= 0 ? `+${v}` : `${v}`);
+                const pythRows: [string, number | null, number | null, boolean, boolean][] = [
+                  // [label, away, home, higherIsBetter, signed]
+                  ["Points for", keyStats.pfAway, keyStats.pfHome, true, false],
+                  ["Points allowed", keyStats.paAway, keyStats.paHome, false, false],
+                  ["Point margin", marginAway, marginHome, true, true],
+                ];
+                return (
+                  <div className="space-y-0.5">
+                    {pythRows.map(([label, a, h, hib, signed]) => {
+                      const better = a == null || h == null || a === h ? null : (hib ? a > h : a < h) ? "away" : "home";
+                      return (
+                        <div key={label} className="flex items-center gap-2 text-[11px]">
+                          <span className={`w-10 shrink-0 text-right tabular-nums ${better === "away" ? "font-bold text-slate-900" : "text-slate-500"}`}>
+                            {a == null ? "—" : signed ? fmtSigned(a) : Math.round(a)}
+                          </span>
+                          <span className="flex-1 text-center text-slate-500">{label}</span>
+                          <span className={`w-10 shrink-0 tabular-nums ${better === "home" ? "font-bold text-slate-900" : "text-slate-500"}`}>
+                            {h == null ? "—" : signed ? fmtSigned(h) : Math.round(h)}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
 
-              {/* Points margin per played week this season — one bar per team, diverging from
-                  zero. A week only one team played (bye, or a playoff first-round bye) has no
-                  bar for that side. Hover for that game's actual points scored/allowed. */}
+              {/* Small, subtle toggle between this week's game-by-game margin and the running
+                  season-to-date total — same underlying data, two ways to read it over time. */}
+              <div className="flex items-center justify-end gap-1 pt-0.5 text-[9px]">
+                <button
+                  type="button"
+                  onClick={() => setPythMode("game")}
+                  className={pythMode === "game" ? "font-semibold text-slate-600" : "text-slate-400 hover:text-slate-500"}
+                >
+                  Per game
+                </button>
+                <span className="text-slate-300">|</span>
+                <button
+                  type="button"
+                  onClick={() => setPythMode("cumulative")}
+                  className={pythMode === "cumulative" ? "font-semibold text-slate-600" : "text-slate-400 hover:text-slate-500"}
+                >
+                  Cumulative
+                </button>
+              </div>
+
+              {/* Points margin per played week this season — "Per game": one bar per team,
+                  diverging from zero, hover for that game's actual points scored/allowed.
+                  "Cumulative": each team's running point margin as a line. A week only one team
+                  played (bye, or a playoff first-round bye) has no bar in "Per game" and simply
+                  carries the running total flat forward in "Cumulative". */}
               <MarginBars
                 slots={marginTimeline}
                 awayColor={meta.get(away)?.color ?? MODEL_COLORS.pyth}
                 homeColor={meta.get(home)?.color ?? MODEL_COLORS.pyth}
                 awayLabel={away}
                 homeLabel={home}
+                mode={pythMode}
               />
 
               <div className="text-[10px] text-slate-400">
@@ -1101,7 +1205,11 @@ export default function MatchupTab({
             </ModelBlock>
 
             <ModelBlock color={MODEL_COLORS.trend} title="Trend Edge" pick={pickOf(bundle.trend)} prob={probOf(bundle.trend)}>
-              <div ref={edgeRef} className="h-40" />
+              {trendEdge.pAway == null ? (
+                <div className="flex h-40 items-center justify-center text-[10px] italic text-slate-400">Not enough recent-form data yet</div>
+              ) : (
+                <div ref={edgeRef} className="h-40" />
+              )}
               <div className="text-[10px] text-slate-400">Weighted recent-form differences (away − home): grade, last-6 margin, EPA, win rate, turnovers. Hover the bars.</div>
             </ModelBlock>
           </div>
