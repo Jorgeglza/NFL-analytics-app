@@ -319,6 +319,7 @@ export default function ModelsGuide() {
               "Elo rating differential (dominant feature by an order of magnitude)",
               "Rolling EPA / success-rate / explosive-play-rate differentials (last 3 games)",
               "Rest days, divisional game, weather (temp/wind/roof), QB-starter continuity, injury counts",
+              "Needed window: 3 prior played games per team for every rolling feature above (L3). With fewer — a team's first 3 games of a season — the same formula still runs, just averaged over however many games have actually been played so far; the Matchup tab flags this with a \"*\" next to the predicted home win probability for that game.",
               `Coverage: seasons ${predictiveCoverage ? `${predictiveCoverage.min}–${predictiveCoverage.max}` : "—"}${predictiveCoverage?.upcoming ? `, plus the live Week ${predictiveCoverage.upcoming.week} (${predictiveCoverage.upcoming.season}) prediction` : ""} — precomputed by the pipeline, not computed live in the browser`,
             ]}
           >

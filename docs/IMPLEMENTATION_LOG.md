@@ -559,6 +559,15 @@ Full work list, with per-item checkboxes and severities: **`docs/MOBILE_READINES
 
 ## Session notes (newest first)
 
+### 2026-09-16 (cont. x2) — Model notes: state the needed window explicitly
+User asked what window the full predictive model needs, and to make sure it's answered in the model
+notes. Answer: 3 prior played games per team (L3) — the same window every rolling feature
+(`_roll_l3`/`_rolling_trend` in `pipeline/predictive_model/features.py`) uses; with fewer, the identical
+formula still runs (`min_periods=1`), just averaged over whatever's actually been played.
+- `ModelsGuide.tsx`'s "Predictive (margin regression)" card gains an explicit `inputs` line stating this
+  and pointing at the Matchup tab's "*" as where it's surfaced per game.
+- `tsc -b --noEmit` / `npm run build` / 62-test suite all green.
+
 ### 2026-09-16 (cont.) — Matchup tab: flag the predictive pick when its rolling window is partial
 Follow-up to the fix above, per direct user request: make sure a partial L3 window (still correctly
 carried forward by the earlier fix, just averaging over fewer than 3 games early in a team's season) is
