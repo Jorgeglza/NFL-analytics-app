@@ -274,7 +274,7 @@ function MixChart({
           show: true,
           fontSize: 8,
           color: "#000",
-          formatter: (p: { value?: unknown }) => (Number(p.value) >= 5 ? `${CATEGORY_CODES[cat]} ${Math.round(Number(p.value))}%` : ""),
+          formatter: (p: { value?: unknown }) => (Number(p.value) >= 8 ? `${CATEGORY_CODES[cat]} ${Math.round(Number(p.value))}%` : ""),
         },
       })),
     } as unknown as EChartsOption;
@@ -316,7 +316,29 @@ function Block({ title, rows, xKey }: { title: string; rows: Row[]; xKey: "week"
     return {
       grid: { left: 10, right: 10, top: 60, bottom: 10, containLabel: true },
       legend: { top: 0, itemWidth: 14, itemHeight: 10, textStyle: { fontSize: 11 } },
-      tooltip: { trigger: "axis" as const, axisPointer: { type: "shadow" as const } },
+      tooltip: {
+        trigger: "axis" as const,
+        axisPointer: { type: "shadow" as const },
+        formatter: (ps: { seriesName: string; value: unknown; dataIndex: number }[]) => {
+          const idx = ps[0]?.dataIndex ?? 0;
+          const x = xs[idx];
+          const total = totals.get(x) ?? 0;
+          const lines = ps
+            .filter((p) => p.seriesName !== "Home Favorite Games" && Number(p.value) > 0)
+            .map((p) => {
+              const cat = p.seriesName as Category;
+              const v = Number(p.value);
+              const dot = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${CATEGORY_COLORS[cat]};margin-right:6px;"></span>`;
+              const pctOfTotal = total ? Math.round((v / total) * 100) : 0;
+              return `<div style="display:flex;justify-content:space-between;gap:14px;"><span>${dot}${cat}</span><span style="font-weight:600;">${v} · ${pctOfTotal}%</span></div>`;
+            });
+          return (
+            `<div style="display:flex;justify-content:space-between;gap:14px;font-weight:600;margin-bottom:4px;">` +
+            `<span>${xLabel} ${x}</span><span>Home favorite: ${homeFav[idx] ?? 0}</span></div>` +
+            lines.join("")
+          );
+        },
+      },
       xAxis: { type: "category" as const, data: xs.map(String), name: xLabel, nameLocation: "middle" as const, nameGap: 26 },
       yAxis: { type: "value" as const, name: "Games" },
       series: [
@@ -333,8 +355,10 @@ function Block({ title, rows, xKey }: { title: string; rows: Row[]; xKey: "week"
             formatter: (p: { value?: unknown; name: string }) => {
               const v = Number(p.value);
               const total = totals.get(Number(p.name)) ?? 0;
-              if (!v || !total) return "";
-              return `${CATEGORY_CODES[cat]} ${v} | ${Math.round((v / total) * 100)}%`;
+              // hide labels on thin slices — they just smear together; full
+              // count/% detail is one tap/hover away in the tooltip
+              if (!v || !total || v / total < 0.08) return "";
+              return `${CATEGORY_CODES[cat]} ${v}`;
             },
           },
         })),
@@ -347,7 +371,7 @@ function Block({ title, rows, xKey }: { title: string; rows: Row[]; xKey: "week"
           symbolSize: 6,
         },
       ],
-    };
+    } as unknown as EChartsOption;
   }, [games, xs, xLabel]);
 
   const scatterOption = useMemo(() => {
