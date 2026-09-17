@@ -217,26 +217,22 @@ export interface BucketWindowPoint {
 }
 
 /** Unwidened per-bucket favorite win % + Wilson CI + N across a window of
- * nearby 1-point spread buckets — the same shape as Spread Analytics' full
- * "Calibration — favorite win % by spread bucket" chart, just zoomed to the
- * section around one game's own bucket, for a mini version of that chart on
- * the Matchup card. Unlike marketRate, these are raw single-bucket rates
- * (no pooling) — the point is to show the real, unsmoothed shape of the
- * curve this game's bucket sits on.
- *
- * Buckets are signed by spread, so a favSide's buckets only exist on one
- * side of 0 (spread<0 is a home favorite, spread>0 is an away favorite) —
- * a target near that boundary (a close game, e.g. bucket "1 to 2") has no
- * legitimate buckets at all past 0 for its own side. A plain symmetric
- * window would render half the chart structurally blank in that case, so
- * instead: cap growth at the 0 boundary on whichever side hits it, and
- * hand the unused budget to the other side, so the window always shows a
- * full two-sided curve when both sides genuinely have room, and otherwise
- * uses the whole width for the side that actually has data. */
+ * nearby 1-point spread buckets, centered on the game's own bucket — the
+ * same shape *and same convention* as Spread Analytics' full "Calibration —
+ * favorite win % by spread bucket" chart, just zoomed to the section around
+ * this game. Unlike marketRate (which is deliberately one-sided — the
+ * Market-calibrated blend treats a home favorite and an away favorite as
+ * different bets, since home-field advantage is its own effect on top of
+ * spread size), this combines both favSides per bucket, same as the full
+ * page's own byBin does: "did the favorite win" is comparable whichever
+ * team was favored, so the curve is continuous across the whole spread
+ * range. That's what keeps the target bucket centered with real neighbors
+ * on both sides — a bucket near the pick'em line (spread flips from a home
+ * to an away favorite right at 0) has no games of its *own side* past 0,
+ * but the favorite-win-rate curve itself doesn't have that seam. */
 export function bucketWindow(
   hist: HistAgg,
   targetSpread: number,
-  favSide: string,
   exclSeason: number,
   exclWeek: number,
   halfWindowPts: number,
@@ -244,33 +240,16 @@ export function bucketWindow(
 ): BucketWindowPoint[] {
   const targetLo = bucketLo(targetSpread, binSize);
   const halfWindow = Math.round(halfWindowPts / binSize);
-  // Only a bucket on the correct side of the favorite/underdog sign boundary
-  // can ever have games for this favSide.
-  const inDomain = (lo: number) => (favSide === "home" ? lo <= -binSize + 1e-9 : lo >= -1e-9);
-
-  let leftN = 0;
-  for (let k = 1; k <= halfWindow && inDomain(targetLo - k * binSize); k++) leftN = k;
-  let rightN = 0;
-  for (let k = 1; k <= halfWindow && inDomain(targetLo + k * binSize); k++) rightN = k;
-
-  const deficitLeft = halfWindow - leftN;
-  if (deficitLeft > 0) {
-    const rightTarget = rightN + deficitLeft;
-    for (let k = rightN + 1; k <= rightTarget && inDomain(targetLo + k * binSize); k++) rightN = k;
-  }
-  const deficitRight = halfWindow - rightN;
-  if (deficitRight > 0) {
-    const leftTarget = leftN + deficitRight;
-    for (let k = leftN + 1; k <= leftTarget && inDomain(targetLo - k * binSize); k++) leftN = k;
-  }
-
   const pts: BucketWindowPoint[] = [];
-  for (let k = -leftN; k <= rightN; k++) {
+  for (let k = -halfWindow; k <= halfWindow; k++) {
     const lo = targetLo + k * binSize;
     const label = bucketLabel(lo, binSize);
-    const r = singleBucketRate(hist, label, favSide, exclSeason, exclWeek);
-    const w = r.n > 0 ? wilson(r.wins / r.n, r.n) : null;
-    pts.push({ lo, label, n: r.n, pHat: w?.center ?? null, ciLow: w?.low ?? null, ciHigh: w?.high ?? null, isTarget: k === 0 });
+    const home = singleBucketRate(hist, label, "home", exclSeason, exclWeek);
+    const away = singleBucketRate(hist, label, "away", exclSeason, exclWeek);
+    const n = home.n + away.n;
+    const wins = home.wins + away.wins;
+    const w = n > 0 ? wilson(wins / n, n) : null;
+    pts.push({ lo, label, n, pHat: w?.center ?? null, ciLow: w?.low ?? null, ciHigh: w?.high ?? null, isTarget: k === 0 });
   }
   return pts;
 }

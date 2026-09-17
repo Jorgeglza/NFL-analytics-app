@@ -674,8 +674,7 @@ export default function MatchupTab({
     // Zoomed section of the full bucket-calibration curve around this game's own
     // bucket — at least as wide as whatever marketRate actually pooled, so every
     // bucket feeding the headline number is visible on the chart too.
-    const bucketWin =
-      spread != null && fav != null ? bucketWindow(hist, spread, fav, s, w, Math.min(9, Math.max(6, bucketHalfWidthPts))) : null;
+    const bucketWin = spread != null ? bucketWindow(hist, spread, s, w, Math.min(9, Math.max(6, bucketHalfWidthPts))) : null;
     return {
       spread,
       fav,
