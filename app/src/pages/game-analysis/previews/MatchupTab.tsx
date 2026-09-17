@@ -56,6 +56,10 @@ import { describeFeature } from "../../predictive-model/featureDescriptions";
 const fmtMl = (ml: number | null) => (ml == null ? "—" : ml > 0 ? `+${Math.round(ml)}` : String(Math.round(ml)));
 const pct1 = (p: number | null) => (p == null ? "—" : `${(100 * p).toFixed(1)}%`);
 const fmtSigned = (v: number) => (v >= 0 ? `+${v.toFixed(1)}` : v.toFixed(1));
+/** "-22.0 to -21.0" -> "-22 to -21" — drops the always-.0 decimals (bin size
+ * is always whole points in practice) so the bucket range reads at a glance
+ * instead of eating the label column. */
+const shortBucketRange = (bucket: string | null): string | null => bucket == null ? null : bucket.replace(/\.0\b/g, "");
 
 /** Horizontal probability bar (home-side share by convention) with a 50% tick.
  * Optionally overlays a 95% Wilson confidence bracket (two end-ticks + a
@@ -700,22 +704,41 @@ export default function MatchupTab({
     if (!pts?.length) return null;
     const targetIdx = pts.findIndex((p) => p.isTarget);
     const maxN = Math.max(1, ...pts.map((p) => p.n));
+    // Short tick: the bucket's lower edge only ("-5" not "-5.0 to -4.0") —
+    // the full range still shows in the tooltip. Bolds/colors just the
+    // target bucket's own tick instead of a floating "this game" label, so
+    // there's nothing extra to clip regardless of chart width or the
+    // (now data-driven) y range.
+    const shortTick = (lo: number) => (Number.isInteger(lo) ? String(lo) : lo.toFixed(1));
     const fmtPt = (p: BucketWindowPoint) =>
       `${p.label}${p.isTarget ? " — this game" : ""}<br/>Favorite win %: ${p.pHat == null ? "no history" : `${(100 * p.pHat).toFixed(1)}%`}<br/>N=${p.n}`;
+    // Zoom the y-axis to where the data actually sits (padded), instead of
+    // the full 0-100 scale, so the curve's real shape/movement is visible.
+    const vals = pts.flatMap((p) => [p.pHat, p.ciLow, p.ciHigh]).filter((v): v is number => v != null).map((v) => 100 * v);
+    const rawMin = vals.length ? Math.min(...vals) : 0;
+    const rawMax = vals.length ? Math.max(...vals) : 100;
+    const pad = Math.max(4, (rawMax - rawMin) * 0.2);
+    const yMin = Math.max(0, Math.floor((rawMin - pad) / 5) * 5);
+    const yMax = Math.min(100, Math.ceil((rawMax + pad) / 5) * 5);
     return {
-      grid: { left: 6, right: 6, top: 22, bottom: 30, containLabel: true },
+      grid: { left: 6, right: 6, top: 10, bottom: 20, containLabel: true },
       tooltip: {
         trigger: "axis",
         formatter: (params: unknown) => fmtPt(pts[(params as { dataIndex: number }[])[0]?.dataIndex ?? 0]),
       },
       xAxis: {
         type: "category",
-        data: pts.map((p) => p.label),
-        axisLabel: { rotate: 45, fontSize: 8 },
+        data: pts.map((p) => shortTick(p.lo)),
+        axisLabel: {
+          fontSize: 9,
+          interval: 0,
+          formatter: (value: string, idx: number) => (idx === targetIdx ? `{target|${value}}` : value),
+          rich: { target: { color: MODEL_COLORS.blend, fontWeight: "bold" as const } },
+        },
         axisTick: { show: false },
       },
       yAxis: [
-        { type: "value", min: 0, max: 100, axisLabel: { fontSize: 9, formatter: "{value}%" }, splitLine: { lineStyle: { color: "#f1f5f9" } } },
+        { type: "value", min: yMin, max: yMax, axisLabel: { fontSize: 9, formatter: "{value}%" }, splitLine: { lineStyle: { color: "#f1f5f9" } } },
         { type: "value", show: false, max: maxN * 3 },
       ],
       series: [
@@ -759,8 +782,8 @@ export default function MatchupTab({
               ? {
                   symbol: "none",
                   silent: true,
-                  lineStyle: { type: "dashed", color: "#0f172a" },
-                  label: { show: true, formatter: "This game", fontSize: 9, color: "#0f172a" },
+                  lineStyle: { type: "dashed", color: "#94a3b8" },
+                  label: { show: false },
                   data: [{ xAxis: targetIdx }],
                 }
               : undefined,
@@ -1204,7 +1227,7 @@ export default function MatchupTab({
 
             <ModelBlock color={MODEL_COLORS.blend} title="Market-calibrated" pick={pickOf(bundle.blend)} prob={probOf(bundle.blend)}>
               <ProbBar
-                label={`Bucket history (${engine.bucket ?? "—"})`}
+                label="Bucket history"
                 p={engine.pHome}
                 color={MODEL_COLORS.blend}
                 note={
@@ -1212,7 +1235,6 @@ export default function MatchupTab({
                     ? `N=${engine.nBucket.toLocaleString()} · CI ${Math.round(100 * engine.ciLowHome)}–${Math.round(100 * engine.ciHighHome)}%`
                     : `N=${engine.nBucket.toLocaleString()}`
                 }
-                labelWidthClass="w-40"
                 noteWidthClass="w-32"
               />
               {bucketCalOption && (
@@ -1224,8 +1246,8 @@ export default function MatchupTab({
               <div className="flex items-center justify-between gap-2 text-[10px] text-slate-400">
                 <span>
                   {engine.bucketWidened
-                    ? `Exact bucket was thin (N below ${MIN_N_BUCKET}), so history pooled in ±${engine.bucketHalfWidthPts}pt of nearby spreads.`
-                    : "This exact 1-point spread bucket alone — no widening needed."}
+                    ? `Bucket (${shortBucketRange(engine.bucket)}) was thin (N below ${MIN_N_BUCKET}), so history pooled in ±${engine.bucketHalfWidthPts}pt of nearby spreads.`
+                    : `This exact bucket (${shortBucketRange(engine.bucket)}) alone — no widening needed.`}
                 </span>
                 <Link
                   to="/game_analysis/spread_win_percentage/win_rate"
