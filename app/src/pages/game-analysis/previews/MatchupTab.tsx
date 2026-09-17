@@ -1,7 +1,7 @@
 // Port of matchup_previews_tab.py — single-game deep dive: snapshot, moneyline,
 // spread pick engine, trend edge predictor, trends, recent form, H2H.
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import type { EChartsOption } from "echarts";
 import type { Row } from "../../../lib/data/loader";
 import type { TeamMeta } from "../../../lib/team/meta";
@@ -20,7 +20,6 @@ import {
   favoriteSide,
   bucketLabel,
   marketRate,
-  bucketProfile,
   atsRate,
   defaultWeekNearToday,
   kickoffMs,
@@ -46,7 +45,6 @@ import {
   type PredictiveCoverage,
   type PredictiveFeaturesIndex,
   type PredictiveDriver,
-  type BucketProfilePoint,
   predictiveDisclaimer,
 } from "./engine";
 import type { EloRatingPoint } from "../../../lib/logic/elo";
@@ -57,7 +55,13 @@ const fmtMl = (ml: number | null) => (ml == null ? "—" : ml > 0 ? `+${Math.rou
 const pct1 = (p: number | null) => (p == null ? "—" : `${(100 * p).toFixed(1)}%`);
 const fmtSigned = (v: number) => (v >= 0 ? `+${v.toFixed(1)}` : v.toFixed(1));
 
-/** Horizontal probability bar (home-side share by convention) with a 50% tick. */
+/** Horizontal probability bar (home-side share by convention) with a 50% tick.
+ * Optionally overlays a 95% Wilson confidence bracket (two end-ticks + a
+ * connecting line) at `ciLow`/`ciHigh` — the statistical-significance read
+ * for *this exact* estimate (its own sample, not a neighborhood of other
+ * buckets): a narrow bracket says trust the number, a wide one says it's
+ * still thin even after any widening. Used by Market-calibrated's bucket-
+ * history row; other callers simply don't pass ciLow/ciHigh. */
 function ProbBar({
   label,
   p,
@@ -66,6 +70,8 @@ function ProbBar({
   partialWindow = false,
   labelWidthClass = "w-32",
   noteWidthClass = "w-20",
+  ciLow,
+  ciHigh,
 }: {
   label: string;
   p: number | null;
@@ -80,79 +86,30 @@ function ProbBar({
    *  row, which carries a spread range plus a widened-bucket note). */
   labelWidthClass?: string;
   noteWidthClass?: string;
+  /** 95% Wilson CI bounds (0-1, home-side probability) for this bar's own estimate. */
+  ciLow?: number | null;
+  ciHigh?: number | null;
 }) {
+  const hasCi = ciLow != null && ciHigh != null;
   return (
     <div className="flex items-center gap-2 text-[11px]">
       <span className={`${labelWidthClass} shrink-0 truncate text-slate-500`} title={label}>{label}</span>
-      <div className="relative h-3.5 flex-1 overflow-hidden rounded-full bg-slate-100">
+      <div
+        className="relative h-3.5 flex-1 overflow-hidden rounded-full bg-slate-100"
+        title={hasCi ? `95% confidence interval: ${Math.round(100 * ciLow)}–${Math.round(100 * ciHigh)}%` : undefined}
+      >
         <div className="absolute inset-y-0 left-1/2 z-10 w-px bg-slate-300" />
         {p != null && <div className="h-full rounded-full" style={{ width: `${Math.max(0, Math.min(100, 100 * p))}%`, background: color, opacity: 0.85 }} />}
+        {hasCi && (
+          <div className="absolute inset-y-0 z-20" style={{ left: `${100 * ciLow}%`, width: `${100 * (ciHigh - ciLow)}%` }}>
+            <div className="absolute inset-y-[3px] left-0 w-px bg-slate-700/60" />
+            <div className="absolute inset-y-[3px] right-0 w-px bg-slate-700/60" />
+            <div className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-slate-700/60" />
+          </div>
+        )}
       </div>
       <span className="w-10 shrink-0 text-right font-bold tabular-nums">{p == null ? "—" : `${Math.round(100 * p)}%${partialWindow ? "*" : ""}`}</span>
       {note != null && <span className={`${noteWidthClass} shrink-0 truncate text-slate-400`} title={note}>{note}</span>}
-    </div>
-  );
-}
-
-const fmtPt = (lo: number) => `${lo >= 0 ? "+" : ""}${lo}`;
-
-/** Bar chart of favorite win rate by nearby 1-point spread bucket — shows
- * *why* the bucket-history read did or didn't need widening (see
- * marketRate/bucketProfile in engine.ts). Unlike a bare sparkline this
- * labels itself: the game's own bucket gets a direct % label, the x-axis
- * shows the spread range it spans, a 50% reference line is called out, and
- * a 3-state legend (this bucket / pooled in / shown for context) explains
- * the shading instead of relying on hover alone. A bucket with no history
- * renders as a short flat neutral nub rather than a 0-height bar, so
- * "no data" never reads as "favorites always lose here". */
-function BucketProfileChart({ points, color }: { points: BucketProfilePoint[]; color: string }) {
-  const BAR_MAX = 26;
-  const target = points.find((p) => p.isTarget);
-  const targetPct = target?.pHat != null ? Math.round(100 * target.pHat) : null;
-  return (
-    <div>
-      <div className="relative flex h-9 items-end gap-[3px] pt-3.5">
-        <div className="pointer-events-none absolute inset-x-0 flex items-center gap-1" style={{ bottom: BAR_MAX / 2 }}>
-          <span className="text-[8px] leading-none text-slate-300">50%</span>
-          <div className="h-px flex-1 border-t border-dashed border-slate-300" />
-        </div>
-        {points.map((p) => {
-          const hasData = p.pHat != null && p.n > 0;
-          const h = hasData ? Math.max(4, Math.round((p.pHat as number) * BAR_MAX)) : 3;
-          return (
-            <div
-              key={p.label}
-              className="relative flex-1"
-              style={{ height: BAR_MAX }}
-              title={`${p.label}${p.isTarget ? " — this game's bucket" : p.pooled ? " — pooled into the estimate" : " — shown for context only"}: ${hasData ? `${Math.round(100 * (p.pHat as number))}% favorite win rate, N=${p.n}` : "no history"}`}
-            >
-              {p.isTarget && targetPct != null && (
-                <span className="absolute -top-3.5 left-1/2 -translate-x-1/2 whitespace-nowrap text-[9px] font-bold" style={{ color }}>
-                  {targetPct}%
-                </span>
-              )}
-              <div
-                className="absolute bottom-0 w-full rounded-t-sm"
-                style={{
-                  height: h,
-                  background: hasData ? color : "#cbd5e1",
-                  opacity: p.isTarget ? 1 : p.pooled ? 0.55 : 0.18,
-                }}
-              />
-            </div>
-          );
-        })}
-      </div>
-      <div className="mt-0.5 flex items-center justify-between text-[8px] text-slate-400">
-        <span>{fmtPt(points[0].lo)}pt</span>
-        <span className="uppercase tracking-wide">spread size</span>
-        <span>{fmtPt(points[points.length - 1].lo + 1)}pt</span>
-      </div>
-      <div className="mt-1 flex items-center gap-2.5 text-[8px] text-slate-400">
-        <span className="inline-flex items-center gap-1"><span className="inline-block h-1.5 w-1.5 rounded-[1px]" style={{ background: color }} />this bucket</span>
-        <span className="inline-flex items-center gap-1"><span className="inline-block h-1.5 w-1.5 rounded-[1px]" style={{ background: color, opacity: 0.55 }} />pooled in</span>
-        <span className="inline-flex items-center gap-1"><span className="inline-block h-1.5 w-1.5 rounded-[1px] bg-slate-300" />context only</span>
-      </div>
     </div>
   );
 }
@@ -680,6 +637,9 @@ export default function MatchupTab({
     let bucketWidened = false;
     let bucketHalfWidthPts = 0;
     let bucket: string | null = null;
+    let pHome: number | null = null;
+    let ciLowHome: number | null = null;
+    let ciHighHome: number | null = null;
     if (spread != null && fav != null) {
       bucket = bucketLabel(spread);
       const m = marketRate(hist, bucket, fav, s, w);
@@ -687,14 +647,12 @@ export default function MatchupTab({
         nBucket = m.n;
         bucketWidened = m.widened;
         bucketHalfWidthPts = m.halfWidthPts;
+        pHome = fav === "home" ? m.pHat : 1 - m.pHat;
+        // Flipping favorite->home perspective reverses (and swaps) the interval too.
+        ciLowHome = fav === "home" ? m.ciLow : 1 - m.ciHigh;
+        ciHighHome = fav === "home" ? m.ciHigh : 1 - m.ciLow;
       }
     }
-    // bucket details both sides
-    const bucketRows = (["home", "away"] as const).map((side) => {
-      const m = bucket ? marketRate(hist, bucket, side, s, w) : null;
-      return { side, n: m?.n ?? null, p: m?.pHat ?? null };
-    });
-    const bucketProf = spread != null && fav != null ? bucketProfile(hist, spread, fav, s, w, bucketHalfWidthPts) : null;
     const homeCoverFair = homeCoverFairProb(
       selGame.away_spread_odds == null ? null : Number(selGame.away_spread_odds),
       selGame.home_spread_odds == null ? null : Number(selGame.home_spread_odds),
@@ -714,8 +672,9 @@ export default function MatchupTab({
       nBucket,
       bucketWidened,
       bucketHalfWidthPts,
-      bucketProf,
-      bucketRows,
+      pHome,
+      ciLowHome,
+      ciHighHome,
       homeCoverFair,
       pVigLeanHome,
       atsHome,
@@ -953,12 +912,6 @@ export default function MatchupTab({
     pair[0] != null && pair[1] != null ? (pair[0] >= pair[1] ? away : home) : null;
   const probOf = (pair: [number | null, number | null]): number | null =>
     pair[0] != null && pair[1] != null ? Math.max(pair[0], pair[1]) : null;
-  const mktHome: number | null = (() => {
-    if (!engine || engine.fav == null) return null;
-    const r = engine.bucketRows.find((b) => b.side === engine.fav);
-    if (r?.p == null) return null;
-    return engine.fav === "home" ? r.p : 1 - r.p;
-  })();
   const gradeMetricOf = { Ovr: "Overall Grade", Off: "Offensive Grade", Def: "Defensive Grade" } as const;
 
   const gradeBox = (team: string) => {
@@ -1166,16 +1119,31 @@ export default function MatchupTab({
             <ModelBlock color={MODEL_COLORS.blend} title="Market-calibrated" pick={pickOf(bundle.blend)} prob={probOf(bundle.blend)}>
               <ProbBar
                 label={`Bucket history (${engine.bucket ?? "—"})`}
-                p={mktHome}
+                p={engine.pHome}
                 color={MODEL_COLORS.blend}
-                note={`N=${engine.nBucket.toLocaleString()}`}
+                note={
+                  engine.ciLowHome != null && engine.ciHighHome != null
+                    ? `N=${engine.nBucket.toLocaleString()} · CI ${Math.round(100 * engine.ciLowHome)}–${Math.round(100 * engine.ciHighHome)}%`
+                    : `N=${engine.nBucket.toLocaleString()}`
+                }
                 labelWidthClass="w-40"
+                noteWidthClass="w-32"
+                ciLow={engine.ciLowHome}
+                ciHigh={engine.ciHighHome}
               />
-              {engine.bucketProf && <BucketProfileChart points={engine.bucketProf} color={MODEL_COLORS.blend} />}
-              <div className="text-[10px] text-slate-400">
-                {engine.bucketWidened
-                  ? `Exact bucket was thin (N below ${MIN_N_BUCKET}), so history pooled in ±${engine.bucketHalfWidthPts}pt of nearby spreads (darker bars above).`
-                  : "This exact 1-point spread bucket alone — no widening needed."}
+              <div className="flex items-center justify-between gap-2 text-[10px] text-slate-400">
+                <span>
+                  {engine.bucketWidened
+                    ? `Exact bucket was thin (N below ${MIN_N_BUCKET}), so history pooled in ±${engine.bucketHalfWidthPts}pt of nearby spreads.`
+                    : "This exact 1-point spread bucket alone — no widening needed."}
+                </span>
+                <Link
+                  to="/game_analysis/spread_win_percentage/win_rate"
+                  className="shrink-0 whitespace-nowrap font-medium text-[#002f6c] underline decoration-slate-300 underline-offset-2 hover:decoration-[#002f6c]"
+                  title="Open the full calibration chart — favorite win % across every spread bucket, with confidence bands"
+                >
+                  Full bucket history →
+                </Link>
               </div>
               <div className="grid grid-cols-2 gap-1.5 pt-0.5">
                 {(() => {

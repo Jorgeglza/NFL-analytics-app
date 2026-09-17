@@ -146,8 +146,8 @@ export function atsRate(hist: HistAgg, team: string, season: number, wk: number,
 
 /** Raw single-bucket p̂ + N for a bucket/side, excluding one season-week —
  * no widening, just what actually happened in that exact 1-point bucket.
- * Shared by `marketRate` (which widens) and `bucketProfile` (which shows
- * the unwidened per-bucket picture that justifies widening in the UI). */
+ * `marketRate` sums this across however many neighboring buckets widening
+ * needs. */
 function singleBucketRate(
   hist: HistAgg,
   label: string,
@@ -162,13 +162,17 @@ function singleBucketRate(
   return { n: c.n - (ex?.n ?? 0), wins: c.wins - (ex?.wins ?? 0) };
 }
 
-/** Wilson-centered p̂ + N for a bucket/side, excluding one season-week. A
- * bucket short of MIN_N_BUCKET games widens outward one bucket-width at a
- * time (±1, then ±2, …binSize), pooling the nearest spread sizes first
- * since favorite win rate moves fairly smoothly with spread — this used to
- * just return null on a thin/empty bucket (silently dropping the whole
- * Market-calibrated blend for it). `widened`/`halfWidthPts` say whether and
- * how far it had to reach, for surfacing low-confidence bucket reads in the UI. */
+/** Wilson-centered p̂ + N (plus its 95% CI) for a bucket/side, excluding one
+ * season-week. A bucket short of MIN_N_BUCKET games widens outward one
+ * bucket-width at a time (±1, then ±2, …binSize), pooling the nearest
+ * spread sizes first since favorite win rate moves fairly smoothly with
+ * spread — this used to just return null on a thin/empty bucket (silently
+ * dropping the whole Market-calibrated blend for it). `widened`/
+ * `halfWidthPts` say whether and how far it had to reach; `ciLow`/`ciHigh`
+ * are the Wilson 95% interval on the (possibly widened) pooled sample —
+ * the direct answer to "how much should I trust this exact number", since
+ * a thin bucket's estimate can have the same pHat as a deep one but a much
+ * wider interval. */
 export function marketRate(
   hist: HistAgg,
   bucket: string,
@@ -176,7 +180,7 @@ export function marketRate(
   exclSeason: number,
   exclWeek: number,
   binSize = BIN_SIZE_DEFAULT,
-): { pHat: number; n: number; widened: boolean; halfWidthPts: number } | null {
+): { pHat: number; n: number; widened: boolean; halfWidthPts: number; ciLow: number; ciHigh: number } | null {
   const lo = parseFloat(bucket);
   if (!Number.isFinite(lo)) return null;
 
@@ -197,53 +201,8 @@ export function marketRate(
   }
 
   if (acc.n <= 0) return null;
-  return { pHat: wilson(acc.wins / acc.n, acc.n).center, n: acc.n, widened: halfWidthPts > 0, halfWidthPts };
-}
-
-export interface BucketProfilePoint {
-  lo: number;
-  label: string;
-  n: number;
-  pHat: number | null;
-  /** true for the game's own bucket (k=0). */
-  isTarget: boolean;
-  /** true for a neighbor bucket actually pooled into marketRate's widened estimate. */
-  pooled: boolean;
-}
-
-/** Unwidened per-bucket win rates around a target spread, for a compact
- * "how does this bucket actually hit, and why did/didn't it need
- * widening" chart — halfWindow buckets on each side of the target,
- * always including at least `halfWidthPts` (marketRate's actual pooled
- * range) so every bucket that fed the estimate is shown and marked. */
-export function bucketProfile(
-  hist: HistAgg,
-  targetSpread: number,
-  favSide: string,
-  exclSeason: number,
-  exclWeek: number,
-  halfWidthPts: number,
-  binSize = BIN_SIZE_DEFAULT,
-  minHalfWindow = 4,
-  maxHalfWindow = 6,
-): BucketProfilePoint[] {
-  const targetLo = bucketLo(targetSpread, binSize);
-  const halfWindow = Math.min(maxHalfWindow, Math.max(minHalfWindow, Math.round(halfWidthPts / binSize)));
-  const pts: BucketProfilePoint[] = [];
-  for (let k = -halfWindow; k <= halfWindow; k++) {
-    const lo = targetLo + k * binSize;
-    const label = bucketLabel(lo, binSize);
-    const r = singleBucketRate(hist, label, favSide, exclSeason, exclWeek);
-    pts.push({
-      lo,
-      label,
-      n: r.n,
-      pHat: r.n > 0 ? wilson(r.wins / r.n, r.n).center : null,
-      isTarget: k === 0,
-      pooled: Math.abs(k) * binSize <= halfWidthPts,
-    });
-  }
-  return pts;
+  const w = wilson(acc.wins / acc.n, acc.n);
+  return { pHat: w.center, n: acc.n, widened: halfWidthPts > 0, halfWidthPts, ciLow: w.low, ciHigh: w.high };
 }
 
 // ---------- grades ----------
