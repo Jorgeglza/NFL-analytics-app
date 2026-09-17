@@ -222,7 +222,17 @@ export interface BucketWindowPoint {
  * section around one game's own bucket, for a mini version of that chart on
  * the Matchup card. Unlike marketRate, these are raw single-bucket rates
  * (no pooling) — the point is to show the real, unsmoothed shape of the
- * curve this game's bucket sits on. */
+ * curve this game's bucket sits on.
+ *
+ * Buckets are signed by spread, so a favSide's buckets only exist on one
+ * side of 0 (spread<0 is a home favorite, spread>0 is an away favorite) —
+ * a target near that boundary (a close game, e.g. bucket "1 to 2") has no
+ * legitimate buckets at all past 0 for its own side. A plain symmetric
+ * window would render half the chart structurally blank in that case, so
+ * instead: cap growth at the 0 boundary on whichever side hits it, and
+ * hand the unused budget to the other side, so the window always shows a
+ * full two-sided curve when both sides genuinely have room, and otherwise
+ * uses the whole width for the side that actually has data. */
 export function bucketWindow(
   hist: HistAgg,
   targetSpread: number,
@@ -234,8 +244,28 @@ export function bucketWindow(
 ): BucketWindowPoint[] {
   const targetLo = bucketLo(targetSpread, binSize);
   const halfWindow = Math.round(halfWindowPts / binSize);
+  // Only a bucket on the correct side of the favorite/underdog sign boundary
+  // can ever have games for this favSide.
+  const inDomain = (lo: number) => (favSide === "home" ? lo <= -binSize + 1e-9 : lo >= -1e-9);
+
+  let leftN = 0;
+  for (let k = 1; k <= halfWindow && inDomain(targetLo - k * binSize); k++) leftN = k;
+  let rightN = 0;
+  for (let k = 1; k <= halfWindow && inDomain(targetLo + k * binSize); k++) rightN = k;
+
+  const deficitLeft = halfWindow - leftN;
+  if (deficitLeft > 0) {
+    const rightTarget = rightN + deficitLeft;
+    for (let k = rightN + 1; k <= rightTarget && inDomain(targetLo + k * binSize); k++) rightN = k;
+  }
+  const deficitRight = halfWindow - rightN;
+  if (deficitRight > 0) {
+    const leftTarget = leftN + deficitRight;
+    for (let k = leftN + 1; k <= leftTarget && inDomain(targetLo - k * binSize); k++) leftN = k;
+  }
+
   const pts: BucketWindowPoint[] = [];
-  for (let k = -halfWindow; k <= halfWindow; k++) {
+  for (let k = -leftN; k <= rightN; k++) {
     const lo = targetLo + k * binSize;
     const label = bucketLabel(lo, binSize);
     const r = singleBucketRate(hist, label, favSide, exclSeason, exclWeek);
