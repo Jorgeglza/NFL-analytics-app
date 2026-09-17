@@ -205,6 +205,46 @@ export function marketRate(
   return { pHat: w.center, n: acc.n, widened: halfWidthPts > 0, halfWidthPts, ciLow: w.low, ciHigh: w.high };
 }
 
+export interface BucketWindowPoint {
+  lo: number;
+  label: string;
+  n: number;
+  pHat: number | null;
+  ciLow: number | null;
+  ciHigh: number | null;
+  /** true for the game's own bucket. */
+  isTarget: boolean;
+}
+
+/** Unwidened per-bucket favorite win % + Wilson CI + N across a window of
+ * nearby 1-point spread buckets — the same shape as Spread Analytics' full
+ * "Calibration — favorite win % by spread bucket" chart, just zoomed to the
+ * section around one game's own bucket, for a mini version of that chart on
+ * the Matchup card. Unlike marketRate, these are raw single-bucket rates
+ * (no pooling) — the point is to show the real, unsmoothed shape of the
+ * curve this game's bucket sits on. */
+export function bucketWindow(
+  hist: HistAgg,
+  targetSpread: number,
+  favSide: string,
+  exclSeason: number,
+  exclWeek: number,
+  halfWindowPts: number,
+  binSize = BIN_SIZE_DEFAULT,
+): BucketWindowPoint[] {
+  const targetLo = bucketLo(targetSpread, binSize);
+  const halfWindow = Math.round(halfWindowPts / binSize);
+  const pts: BucketWindowPoint[] = [];
+  for (let k = -halfWindow; k <= halfWindow; k++) {
+    const lo = targetLo + k * binSize;
+    const label = bucketLabel(lo, binSize);
+    const r = singleBucketRate(hist, label, favSide, exclSeason, exclWeek);
+    const w = r.n > 0 ? wilson(r.wins / r.n, r.n) : null;
+    pts.push({ lo, label, n: r.n, pHat: w?.center ?? null, ciLow: w?.low ?? null, ciHigh: w?.high ?? null, isTarget: k === 0 });
+  }
+  return pts;
+}
+
 // ---------- grades ----------
 export type GradeMetric = "Overall Grade" | "Offensive Grade" | "Defensive Grade";
 

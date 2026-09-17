@@ -20,6 +20,7 @@ import {
   favoriteSide,
   bucketLabel,
   marketRate,
+  bucketWindow,
   atsRate,
   defaultWeekNearToday,
   kickoffMs,
@@ -45,6 +46,7 @@ import {
   type PredictiveCoverage,
   type PredictiveFeaturesIndex,
   type PredictiveDriver,
+  type BucketWindowPoint,
   predictiveDisclaimer,
 } from "./engine";
 import type { EloRatingPoint } from "../../../lib/logic/elo";
@@ -665,6 +667,11 @@ export default function MatchupTab({
     if (spread == null) risks.push("No spread for this game (no market prior).");
     if (bucket == null) risks.push("Bucket undefined.");
     if (nBucket < MIN_N_BUCKET) risks.push(`Low-N bucket even after widening to nearby spreads (N=${nBucket}, min ${MIN_N_BUCKET}).`);
+    // Zoomed section of the full bucket-calibration curve around this game's own
+    // bucket — at least as wide as whatever marketRate actually pooled, so every
+    // bucket feeding the headline number is visible on the chart too.
+    const bucketWin =
+      spread != null && fav != null ? bucketWindow(hist, spread, fav, s, w, Math.min(9, Math.max(6, bucketHalfWidthPts))) : null;
     return {
       spread,
       fav,
@@ -675,6 +682,7 @@ export default function MatchupTab({
       pHome,
       ciLowHome,
       ciHighHome,
+      bucketWin,
       homeCoverFair,
       pVigLeanHome,
       atsHome,
@@ -683,6 +691,84 @@ export default function MatchupTab({
       risks,
     };
   }, [selGame, hist, away, home, s, w, wkPlayed]);
+
+  // ---- bucket calibration mini-chart (zoomed section of Spread Analytics'
+  // full "Calibration — favorite win % by spread bucket" chart, centered on
+  // this game's own bucket) ----
+  const bucketCalOption = useMemo<EChartsOption | null>(() => {
+    const pts = engine?.bucketWin;
+    if (!pts?.length) return null;
+    const targetIdx = pts.findIndex((p) => p.isTarget);
+    const maxN = Math.max(1, ...pts.map((p) => p.n));
+    const fmtPt = (p: BucketWindowPoint) =>
+      `${p.label}${p.isTarget ? " — this game" : ""}<br/>Favorite win %: ${p.pHat == null ? "no history" : `${(100 * p.pHat).toFixed(1)}%`}<br/>N=${p.n}`;
+    return {
+      grid: { left: 6, right: 6, top: 22, bottom: 30, containLabel: true },
+      tooltip: {
+        trigger: "axis",
+        formatter: (params: unknown) => fmtPt(pts[(params as { dataIndex: number }[])[0]?.dataIndex ?? 0]),
+      },
+      xAxis: {
+        type: "category",
+        data: pts.map((p) => p.label),
+        axisLabel: { rotate: 45, fontSize: 8 },
+        axisTick: { show: false },
+      },
+      yAxis: [
+        { type: "value", min: 0, max: 100, axisLabel: { fontSize: 9, formatter: "{value}%" }, splitLine: { lineStyle: { color: "#f1f5f9" } } },
+        { type: "value", show: false, max: maxN * 3 },
+      ],
+      series: [
+        {
+          name: "ci_low",
+          type: "line",
+          data: pts.map((p) => (p.ciLow == null ? null : +(100 * p.ciLow).toFixed(1))),
+          stack: "ci",
+          lineStyle: { opacity: 0 },
+          symbol: "none",
+          tooltip: { show: false },
+        },
+        {
+          name: "ci_band",
+          type: "line",
+          data: pts.map((p) => (p.ciLow == null || p.ciHigh == null ? null : +(100 * (p.ciHigh - p.ciLow)).toFixed(1))),
+          stack: "ci",
+          lineStyle: { opacity: 0 },
+          symbol: "none",
+          areaStyle: { color: "rgba(100,116,139,0.16)" },
+          tooltip: { show: false },
+        },
+        {
+          name: "N",
+          type: "bar",
+          yAxisIndex: 1,
+          data: pts.map((p) => p.n),
+          itemStyle: { color: "rgba(100,116,139,0.28)" },
+          barWidth: "55%",
+          tooltip: { show: false },
+        },
+        {
+          name: "Favorite win %",
+          type: "line",
+          data: pts.map((p) => (p.pHat == null ? null : +(100 * p.pHat).toFixed(1))),
+          symbolSize: (_val: unknown, p: { dataIndex: number }) => (p.dataIndex === targetIdx ? 9 : 4),
+          itemStyle: { color: MODEL_COLORS.blend },
+          lineStyle: { width: 2, color: MODEL_COLORS.blend },
+          markLine:
+            targetIdx >= 0
+              ? {
+                  symbol: "none",
+                  silent: true,
+                  lineStyle: { type: "dashed", color: "#0f172a" },
+                  label: { show: true, formatter: "This game", fontSize: 9, color: "#0f172a" },
+                  data: [{ xAxis: targetIdx }],
+                }
+              : undefined,
+        },
+      ],
+    } as EChartsOption;
+  }, [engine]);
+  const bucketCalRef = useECharts(bucketCalOption);
 
   // ---- all-model bundle for the verdict strip ----
   const bundle = useMemo(
@@ -1128,9 +1214,13 @@ export default function MatchupTab({
                 }
                 labelWidthClass="w-40"
                 noteWidthClass="w-32"
-                ciLow={engine.ciLowHome}
-                ciHigh={engine.ciHighHome}
               />
+              {bucketCalOption && (
+                <div>
+                  <div ref={bucketCalRef} className="h-32" />
+                  <div className="-mt-1 text-[9px] text-slate-400">Gray bars = sample size (N) per bucket, right-hand scale.</div>
+                </div>
+              )}
               <div className="flex items-center justify-between gap-2 text-[10px] text-slate-400">
                 <span>
                   {engine.bucketWidened
@@ -1142,7 +1232,7 @@ export default function MatchupTab({
                   className="shrink-0 whitespace-nowrap font-medium text-[#002f6c] underline decoration-slate-300 underline-offset-2 hover:decoration-[#002f6c]"
                   title="Open the full calibration chart — favorite win % across every spread bucket, with confidence bands"
                 >
-                  Full bucket history →
+                  Full range →
                 </Link>
               </div>
               <div className="grid grid-cols-2 gap-1.5 pt-0.5">
