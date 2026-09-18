@@ -71,6 +71,11 @@ export default function ModelBacktest() {
   const [tab, setTab] = useState<Tab>(TAB_SLUGS[searchParams.get("tab") ?? ""] ?? "Overview");
   const [primary, setPrimary] = useState<MetricKey>("consensus");
 
+  // `setSearchParams` is deliberately not a dependency: react-router gives it
+  // a new identity on every URL change, so including it would re-run this
+  // effect (and re-stamp `tab` back onto the URL) after any navigation at
+  // all — including a browser Back/Forward that had just intentionally
+  // changed it. See Matchup Previews' identical fix for the full writeup.
   useEffect(() => {
     setSearchParams(
       (prev) => {
@@ -80,7 +85,20 @@ export default function ModelBacktest() {
       },
       { replace: true },
     );
-  }, [tab, setSearchParams]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- setSearchParams intentionally excluded, see comment above
+  }, [tab]);
+
+  // The effect above only writes tab -> URL. Without a matching reader,
+  // browser back/forward changes the URL/history entry but leaves this
+  // component's own `tab` state — and therefore what's on screen — stuck on
+  // whatever was last set via setTab. Re-derive it from the URL whenever the
+  // URL's own tab slug changes to something this state doesn't already reflect.
+  const urlTabSlug = searchParams.get("tab");
+  useEffect(() => {
+    const urlTab = TAB_SLUGS[urlTabSlug ?? ""];
+    if (urlTab && urlTab !== tab) setTab(urlTab);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-sync when the URL's own tab slug changes
+  }, [urlTabSlug]);
 
   const [schedule, setSchedule] = useState<Row[]>([]);
   const [grades, setGrades] = useState<Row[]>([]);
