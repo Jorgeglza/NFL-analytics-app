@@ -190,7 +190,13 @@ export default function MatchupPreviews() {
       </div>
 
       {/* Prominent section tabs — cards, not a lost pill bar */}
-      <TabBar tabs={TABS} active={tab} onChange={setTab} gridClassName="sm:grid-cols-2 lg:grid-cols-4" />
+      <TabBar
+        tabs={TABS}
+        active={tab}
+        onChange={setTab}
+        gridClassName="sm:grid-cols-2 lg:grid-cols-4"
+        hrefFor={(t) => `?tab=${TAB_TO_SLUG[t]}`}
+      />
 
       {loadError ? (
         <ErrorRetry onRetry={() => setRetryTick((t) => t + 1)} />

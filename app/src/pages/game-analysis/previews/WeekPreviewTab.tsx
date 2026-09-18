@@ -1,5 +1,6 @@
 // Port of week_preview_tab.py — game cards for a week with 4 probability metrics.
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import type { Row } from "../../../lib/data/loader";
 import type { TeamMeta } from "../../../lib/team/meta";
 import { Select } from "../../../components/filters/Select";
@@ -122,7 +123,7 @@ function ModelDotStrip({ bundle, away, home, actual }: { bundle: ProbBundle; awa
     <div ref={rootRef} className="relative mt-2 h-5 rounded-full bg-slate-100" title="Each dot = one model's home-win probability. Hover or tap a dot for details. Spread-out dots = the models disagree.">
       <div className="absolute inset-y-0 left-1/2 w-px bg-slate-300" />
       <span className="absolute -top-0.5 left-1/2 -translate-x-1/2 text-[8px] text-slate-400">50%</span>
-      {MODEL_KEYS.filter(([k]) => k !== "consensus").map(([k, lbl]) => {
+      {MODEL_KEYS.filter(([k]) => k !== "consensus").map(([k, lbl], i) => {
         const pH = bundle[k][1];
         if (pH == null) return null;
         const visible = openKey === k || hoverKey === k;
@@ -134,7 +135,11 @@ function ModelDotStrip({ bundle, away, home, actual }: { bundle: ProbBundle; awa
             aria-expanded={visible}
             {...dotHandlers(k)}
             className="absolute top-1/2 flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center"
-            style={{ left: `${100 * pH}%` }}
+            // Stacking (which dot sits in front on overlap) follows the same order as the top
+            // models list (Average, ML Fair, Market-calibrated, ...) — MODEL_KEYS.length - i so
+            // earlier-ranked models get a higher z-index and paint on top; consensus (always
+            // rendered last, below) gets the highest of all via MODEL_KEYS.length itself.
+            style={{ left: `${100 * pH}%`, zIndex: MODEL_KEYS.length - 1 - i }}
           >
             <span className="h-2.5 w-2.5 rounded-full border border-white shadow-sm" style={{ background: MODEL_COLORS[k] }} />
             {visible && <DotPopover pH={pH} label={lbl} color={MODEL_COLORS[k]} away={away} home={home} actual={actual} />}
@@ -148,7 +153,7 @@ function ModelDotStrip({ bundle, away, home, actual }: { bundle: ProbBundle; awa
           aria-expanded={openKey === "consensus" || hoverKey === "consensus"}
           {...dotHandlers("consensus")}
           className="absolute top-1/2 flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center"
-          style={{ left: `${100 * bundle.consensus[1]}%` }}
+          style={{ left: `${100 * bundle.consensus[1]}%`, zIndex: MODEL_KEYS.length }}
         >
           <span className="h-3.5 w-1 rounded-sm" style={{ background: MODEL_COLORS.consensus }} />
           {(openKey === "consensus" || hoverKey === "consensus") && (
@@ -355,11 +360,23 @@ export default function WeekPreviewTab({
           return (
             <div
               key={String(g.game_id)}
-              onClick={() => onOpenMatchup?.(sel, selWeek, String(g.game_id))}
               className={`group relative rounded-2xl bg-white p-3.5 shadow-sm transition-shadow hover:shadow-md ${onOpenMatchup ? "cursor-pointer" : ""}`}
               style={{ border: `2px solid ${borderCol ?? "#ddd"}` }}
               title={onOpenMatchup ? "View full matchup breakdown" : undefined}
             >
+              {onOpenMatchup && (
+                // Stretched-link overlay: covers the whole card so ctrl/cmd/middle-click and
+                // "open in new tab" work like any other link, while a plain click still runs
+                // the in-page SPA transition via onClick. Sits at z-0 (below the interactive
+                // children below, which opt back in with `relative z-10`) so clicking a team
+                // logo or a model dot still reaches its own handler instead of this overlay.
+                <Link
+                  to={`?tab=matchup&season=${sel}&week=${selWeek}&game=${g.game_id}`}
+                  onClick={() => onOpenMatchup(sel, selWeek, String(g.game_id))}
+                  aria-label={`View matchup: ${away} at ${home}`}
+                  className="absolute inset-0 z-0 rounded-2xl"
+                />
+              )}
               {onOpenMatchup && (
                 <span className="pointer-events-none absolute bottom-1.5 right-2 text-[10px] text-slate-300 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
                   view matchup →
@@ -374,7 +391,7 @@ export default function WeekPreviewTab({
                 <div className="text-sm font-bold">{dateStr}</div>
                 <div className="text-[11px] font-medium uppercase tracking-wider text-slate-400">{away} @ {home}</div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="relative z-10 flex items-center gap-2">
                 <div className="flex-1 text-center">
                   {meta.get(away)?.logo ? (
                     <TeamLogoLink
@@ -420,7 +437,7 @@ export default function WeekPreviewTab({
                   </span>
                 )}
               </div>
-              <div className="pb-3">
+              <div className="relative z-10 pb-3">
                 <ModelDotStrip bundle={bundle} away={away} home={home} actual={actual} />
               </div>
             </div>
