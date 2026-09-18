@@ -211,6 +211,14 @@ export default function WeekPreviewTab({
   const [week, setWeek] = useState("");
   const defWeek = useMemo(() => defaultWeekNearToday(reg, Number(sel)) ?? weeks[weeks.length - 1], [reg, sel, weeks]);
   const selWeek = weeks.map(String).includes(week) ? week : String(defWeek ?? "");
+  // Commit the resolved week back into state once it's known — otherwise `week` never
+  // leaves "" until the user touches the Week dropdown, so switching Season always falls
+  // through to the fallback default (oldest/newest week of the new season) instead of
+  // keeping the week # that was actually on screen.
+  useEffect(() => {
+    if (selWeek && selWeek !== week) setWeek(selWeek);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-sync when the resolved week itself changes
+  }, [selWeek]);
   const [primary, setPrimary] = useState<MetricKey>("consensus");
   const [sortMode, setSortMode] = useState<"time" | "confidence" | "disagree">("time");
 

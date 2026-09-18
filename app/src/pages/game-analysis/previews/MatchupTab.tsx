@@ -548,6 +548,13 @@ export default function MatchupTab({
   const [week, setWeek] = useState(initialSelection?.week ?? searchParams.get("week") ?? "");
   const defWeek = useMemo(() => defaultWeekNearToday(reg, s) ?? weeks[weeks.length - 1], [reg, s, weeks]);
   const selWeek = weeks.map(String).includes(week) ? week : String(defWeek ?? "");
+  // Commit the resolved week back into state once known, so switching Season keeps the
+  // week # that was actually on screen (when it exists in the new season) instead of
+  // always falling back to that season's default week — see WeekPreviewTab's identical fix.
+  useEffect(() => {
+    if (selWeek && selWeek !== week) setWeek(selWeek);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-sync when the resolved week itself changes
+  }, [selWeek]);
   const w = Number(selWeek);
   const wkPlayed = Math.max(0, w - 1);
 
