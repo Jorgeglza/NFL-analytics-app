@@ -619,6 +619,12 @@ export default function MatchupTab({
 
   // Keep season/week/game in the URL so "How the models work" (and browser
   // back/forward) can return to the exact matchup being viewed.
+  // `setSearchParams` deliberately isn't a dependency here: react-router
+  // gives it a new identity on every URL change (it's memoized on the
+  // `searchParams` it closes over, which is itself derived from
+  // `location.search`), so including it would re-run this effect — and
+  // re-stamp season/week/game back onto the URL — after ANY navigation,
+  // including a browser Back that had just intentionally left them off.
   useEffect(() => {
     if (!selGame) return;
     setSearchParams(
@@ -631,7 +637,8 @@ export default function MatchupTab({
       },
       { replace: true },
     );
-  }, [sel, selWeek, selGame, setSearchParams]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- setSearchParams intentionally excluded, see comment above
+  }, [sel, selWeek, selGame]);
 
   usePageTitle(away && home ? `${away} @ ${home} — Matchup Previews` : "Matchup Previews — Matchup");
 

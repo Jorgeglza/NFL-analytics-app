@@ -375,14 +375,16 @@ export default function WeekPreviewTab({
               {onOpenMatchup && (
                 // Stretched-link overlay: covers the whole card so ctrl/cmd/middle-click and
                 // "open in new tab" work like any other link, while a plain click still runs
-                // the in-page SPA transition via onClick. Sits at z-0 (below the interactive
-                // children below, which opt back in with `relative z-10`) so clicking a team
-                // logo or a model dot still reaches its own handler instead of this overlay.
+                // the in-page SPA transition via onClick. z-[1] — above any *other* card content
+                // (the code/pick badges are `position:relative|absolute` but z-index:auto, which
+                // painting-order rules treat as z-index 0, so they'd otherwise sit on top of this
+                // overlay by DOM order alone and silently swallow clicks) but below the genuinely
+                // interactive team-logo/model-dot regions, which opt back in with `relative z-10`.
                 <Link
                   to={`?tab=matchup&season=${sel}&week=${selWeek}&game=${g.game_id}`}
                   onClick={() => onOpenMatchup(sel, selWeek, String(g.game_id))}
                   aria-label={`View matchup: ${away} at ${home}`}
-                  className="absolute inset-0 z-0 rounded-2xl"
+                  className="absolute inset-0 z-[1] rounded-2xl"
                 />
               )}
               {onOpenMatchup && (
