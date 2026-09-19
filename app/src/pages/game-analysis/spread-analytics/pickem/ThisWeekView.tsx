@@ -364,9 +364,18 @@ function DotStripRow({ g, bundle, teamMeta, annotation }: { g: Row; bundle: Prob
 
   return (
     <div
-      className={`flex items-center gap-3 rounded-2xl bg-white px-3 py-3 shadow-sm ${isBlowoutSpread ? "border-2 border-emerald-500" : "border border-slate-200"}`}
+      className={`relative flex items-center gap-3 rounded-2xl bg-white px-3 py-3 shadow-sm ${isBlowoutSpread ? "border-2 border-emerald-500" : "border border-slate-200"}`}
       title={isBlowoutSpread ? `Spread ${absSpread!.toFixed(1)} — a wide (>6pt) line` : undefined}
     >
+      {absSpread != null && (
+        <span
+          className={`absolute -top-2 left-4 rounded-full border px-2 text-[9px] font-bold leading-[15px] ${
+            isBlowoutSpread ? "border-emerald-500 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-white text-slate-400"
+          }`}
+        >
+          Spread {absSpread.toFixed(1)}
+        </span>
+      )}
       {logo(away, played && actual === "away")}
       <div className="min-w-0 flex-1">
         <ModelDotStrip bundle={bundle} away={away} home={home} actual={actual} showEndLabels={false} />
@@ -920,7 +929,7 @@ export default function ThisWeekView() {
                 </span>
               </p>
 
-              <div className="space-y-2">
+              <div className="space-y-4">
                 {cardsForSeason.map((r) => (
                   <DotStripRow key={String(r.g.game_id)} g={r.g} bundle={r.bundle} teamMeta={teamMeta} annotation={r.annotation} />
                 ))}
