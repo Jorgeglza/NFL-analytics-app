@@ -19,13 +19,3 @@ export const chartH = {
 export function rowChartH(n: number, rowPx = 22, pad = 60): number {
   return n * rowPx + pad;
 }
-
-/** Horizontal counterpart to `rowChartH`, for a category axis with one
- * column per item (e.g. one per game rather than one per team) — grows
- * width with the item count instead of squeezing into the viewport, so
- * category labels never collide. Pair with a horizontal-scroll wrapper
- * (`overflow-x-auto`, same as a wide table) rather than shrinking the
- * chart to fit. */
-export function colChartW(n: number, colPx = 28, pad = 80): number {
-  return n * colPx + pad;
-}
