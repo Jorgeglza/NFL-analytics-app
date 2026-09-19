@@ -118,7 +118,7 @@ export default function WinTypeDetailModal({
   games,
   onClose,
 }: {
-  x: number;
+  x: number | string;
   xLabel: string;
   games: Game[];
   onClose: () => void;
@@ -152,7 +152,7 @@ export default function WinTypeDetailModal({
     <Modal
       onClose={onClose}
       wide
-      title={`${xLabel} ${x} — win-type breakdown`}
+      title={`${xLabel}${x !== "" ? ` ${x}` : ""} — win-type breakdown`}
       subtitle={`${games.length} game${games.length === 1 ? "" : "s"} across ${groups.length} win type${groups.length === 1 ? "" : "s"}`}
     >
       <div className="space-y-5">

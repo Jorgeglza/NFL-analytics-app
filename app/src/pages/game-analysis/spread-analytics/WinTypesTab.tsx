@@ -69,7 +69,7 @@ export interface Game {
   gameday: string | null;
 }
 
-function classify(r: Row, xKey: "week" | "season"): Game {
+export function classify(r: Row, xKey: "week" | "season"): Game {
   const spread = r.spread_line == null ? null : Number(r.spread_line);
   // matches pandas: NaN comparisons are false -> "none"
   const favorite = spread != null && spread < 0 ? "home" : spread != null && spread > 0 ? "away" : "none";

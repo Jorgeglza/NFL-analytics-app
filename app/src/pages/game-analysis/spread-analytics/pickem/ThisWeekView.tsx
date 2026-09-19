@@ -32,6 +32,8 @@ import { InfoDot } from "../../../../components/InfoDot";
 import { ModelDotStrip, disagreementOf } from "../../previews/ModelDotStrip";
 import { GameModelsPopover } from "../../previews/GameModelsPopover";
 import TeamMomentumDetail from "./TeamMomentumDetail";
+import { classify, type Game } from "../WinTypesTab";
+import WinTypeDetailModal from "../WinTypeDetailModal";
 import {
   computeAgreementMatrix,
   computeAllAgreeStat,
@@ -784,19 +786,21 @@ export default function ThisWeekView() {
   const boxTooltipLines = (v: number[]) =>
     `${boxMaxLabel}: ${v[4].toFixed(1)}<br/>Q3: ${v[3].toFixed(1)}<br/>Median: ${v[2].toFixed(1)}<br/>Q1: ${v[1].toFixed(1)}<br/>${boxMinLabel}: ${v[0].toFixed(1)}`;
 
-  const spreadBoxOption = useMemo<EChartsOption | null>(() => {
-    const bySeason = new Map<number, number[]>();
+  const bySeasonRows = useMemo(() => {
+    const m = new Map<number, Row[]>();
     for (const r of weekSchedRows) {
-      if (r.spread_line == null) continue;
-      const raw = Number(r.spread_line);
-      if (!Number.isFinite(raw)) continue;
+      if (r.spread_line == null || !Number.isFinite(Number(r.spread_line))) continue;
       const s = Number(r.season);
-      if (!bySeason.has(s)) bySeason.set(s, []);
-      bySeason.get(s)!.push(spreadValue(raw));
+      if (!m.has(s)) m.set(s, []);
+      m.get(s)!.push(r);
     }
-    const seasonsSorted = [...bySeason.keys()].sort((a, b) => a - b);
+    return m;
+  }, [weekSchedRows]);
+
+  const spreadBoxOption = useMemo<EChartsOption | null>(() => {
+    const seasonsSorted = [...bySeasonRows.keys()].sort((a, b) => a - b);
     if (!seasonsSorted.length) return null;
-    const data = seasonsSorted.map((s) => boxStatsFromValues(bySeason.get(s)!));
+    const data = seasonsSorted.map((s) => boxStatsFromValues(bySeasonRows.get(s)!.map((r) => spreadValue(Number(r.spread_line)))));
     return {
       grid: { left: 44, right: 10, top: 20, bottom: 44, containLabel: true },
       xAxis: { type: "category", data: seasonsSorted.map(String), name: "Season", nameLocation: "middle", nameGap: 30 },
@@ -811,7 +815,7 @@ export default function ThisWeekView() {
       series: [{ type: "boxplot", data, itemStyle: { color: "rgba(36,89,167,0.35)", borderColor: "#2459A7", borderWidth: 1.5 } }],
     } as EChartsOption;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [weekSchedRows, spreadMode]);
+  }, [bySeasonRows, spreadMode]);
 
   // ---------- Section 1b: auto-detected similar weeks ----------
   // Every (season, week) combo's spread distribution, ranked by how close its
@@ -823,27 +827,26 @@ export default function ThisWeekView() {
   const MIN_GAMES_FOR_COMPARISON = 4;
   const similarWeeks = useMemo(() => {
     if (!spreadStats) return [];
-    const bySW = new Map<string, { season: number; week: number; raws: number[] }>();
+    const bySW = new Map<string, { season: number; week: number; rows: Row[] }>();
     for (const r of reg) {
-      if (r.spread_line == null) continue;
-      const raw = Number(r.spread_line);
-      if (!Number.isFinite(raw)) continue;
+      if (r.spread_line == null || !Number.isFinite(Number(r.spread_line))) continue;
       const season = Number(r.season);
       const week = Number(r.week);
       if (!Number.isFinite(season) || !Number.isFinite(week)) continue;
       const key = `${season}-${week}`;
-      if (!bySW.has(key)) bySW.set(key, { season, week, raws: [] });
-      bySW.get(key)!.raws.push(raw);
+      if (!bySW.has(key)) bySW.set(key, { season, week, rows: [] });
+      bySW.get(key)!.rows.push(r);
     }
-    type Cand = { season: number; week: number; raws: number[]; mean: number; med: number; iqr: number };
+    type Cand = { season: number; week: number; rows: Row[]; raws: number[]; mean: number; med: number; iqr: number };
     const candidates: Cand[] = [];
-    for (const { season, week, raws } of bySW.values()) {
-      if (raws.length < MIN_GAMES_FOR_COMPARISON) continue;
+    for (const { season, week, rows } of bySW.values()) {
+      if (rows.length < MIN_GAMES_FOR_COMPARISON) continue;
+      const raws = rows.map((r) => Number(r.spread_line));
       const abs = raws.map((x) => Math.abs(x));
       const mean = abs.reduce((a, b) => a + b, 0) / abs.length;
       const med = percentile(abs, 50);
       const iqr = percentile(abs, 75) - percentile(abs, 25);
-      candidates.push({ season, week, raws, mean, med, iqr });
+      candidates.push({ season, week, rows, raws, mean, med, iqr });
     }
     if (candidates.length < 2) return [];
 
@@ -904,8 +907,44 @@ export default function ThisWeekView() {
   }, [similarWeeks, weekSchedRows, spreadMode]);
 
   const spreadHistRef = useECharts(spreadHistOption);
-  const spreadBoxRef = useECharts(spreadBoxOption);
-  const similarWeeksBoxRef = useECharts(similarWeeksBoxOption);
+
+  // Click a box in either box plot -> open the same game-details popup Win
+  // Types uses for its stacked-bar segments. Refs (not plain closures) hold
+  // the click->games mapping since useECharts only registers onInit once at
+  // mount, while the underlying rows change every time `selectedWeek` does.
+  const [gamesModal, setGamesModal] = useState<{ label: string; games: Game[] } | null>(null);
+
+  const seasonBoxEntriesRef = useRef<{ label: string; rows: Row[] }[]>([]);
+  seasonBoxEntriesRef.current = [...bySeasonRows.keys()]
+    .sort((a, b) => a - b)
+    .map((s) => ({ label: `Season ${s}`, rows: bySeasonRows.get(s)! }));
+
+  const similarBoxEntriesRef = useRef<{ label: string; rows: Row[] }[]>([]);
+  similarBoxEntriesRef.current = [
+    { label: "This week", rows: weekSchedRows },
+    ...similarWeeks.map((c) => ({ label: `Season ${c.season}, Week ${c.week}`, rows: c.rows })),
+  ];
+
+  const spreadBoxRef = useECharts(spreadBoxOption, {
+    onInit: (chart) => {
+      chart.on("click", (p: { dataIndex?: number }) => {
+        if (p.dataIndex == null) return;
+        const entry = seasonBoxEntriesRef.current[p.dataIndex];
+        if (!entry) return;
+        setGamesModal({ label: entry.label, games: entry.rows.map((r) => classify(r, "week")) });
+      });
+    },
+  });
+  const similarWeeksBoxRef = useECharts(similarWeeksBoxOption, {
+    onInit: (chart) => {
+      chart.on("click", (p: { dataIndex?: number }) => {
+        if (p.dataIndex == null) return;
+        const entry = similarBoxEntriesRef.current[p.dataIndex];
+        if (!entry) return;
+        setGamesModal({ label: entry.label, games: entry.rows.map((r) => classify(r, "week")) });
+      });
+    },
+  });
 
   // ---------- Section 2: all models' behavior for this week's games ----------
   const gameModelRows = useMemo<GameModelRow[]>(() => {
@@ -1264,12 +1303,16 @@ export default function ThisWeekView() {
                 </div>
                 <div>
                   <h3 className="mb-1 text-sm font-semibold text-slate-700">Spread by season (box plot)</h3>
-                  <div ref={spreadBoxRef} className="h-[340px]" />
+                  <div className="mb-1 text-[11px] text-slate-400">Click a box to see that season's games.</div>
+                  <div ref={spreadBoxRef} className="h-[340px] cursor-pointer" />
                 </div>
                 <div>
                   <h3 className="mb-1 text-sm font-semibold text-slate-700">Similar weeks (auto-detected)</h3>
                   {similarWeeksBoxOption ? (
-                    <div ref={similarWeeksBoxRef} className="h-[340px]" />
+                    <>
+                      <div className="mb-1 text-[11px] text-slate-400">Click a box to see those games.</div>
+                      <div ref={similarWeeksBoxRef} className="h-[340px] cursor-pointer" />
+                    </>
                   ) : (
                     <div className="flex h-[340px] items-center justify-center text-center text-xs text-slate-400">
                       Not enough data yet to find comparable weeks.
@@ -1279,6 +1322,10 @@ export default function ThisWeekView() {
               </div>
             </div>
           </Card>
+
+          {gamesModal && (
+            <WinTypeDetailModal x="" xLabel={gamesModal.label} games={gamesModal.games} onClose={() => setGamesModal(null)} />
+          )}
 
           {/* Section 2 */}
           <Card title="Model behavior for this week's games" subtitle="All models the app computes — production regression, market/ML fair, market-calibrated blend, Elo, Pythagorean, Trend Edge, and their consensus average.">
