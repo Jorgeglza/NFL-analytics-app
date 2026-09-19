@@ -268,6 +268,8 @@ function gameTooltipLine(g: ProbSpreadGame): string {
   return `${prefix} — ${g.awayScore}-${g.homeScore}, ${winnerTeam} won${mark}`;
 }
 
+const scatterSymbolSize = (_val: unknown, params: { data: { count: number } }) => 7 + Math.min(params.data.count - 1, 8) * 2.5;
+
 /** One scatter series per currently-visible model — toggled-off models are
  * simply not included, so the pill row above the chart doubles as its
  * legend with no separate selectedMode/legend state to keep in sync. */
@@ -277,14 +279,32 @@ function buildProbSpreadChartOption(pointsByModel: [MetricKey, ProbSpreadPoint[]
     name: MODEL_KEYS.find(([k]) => k === key)?.[1] ?? key,
     type: "scatter" as const,
     data: points.map((p) => ({ value: [p.x, p.y], count: p.count, anyCorrect: p.anyCorrect, games: p.games })),
-    symbolSize: (_val: unknown, params: { data: { count: number } }) => 7 + Math.min(params.data.count - 1, 8) * 2.5,
+    symbolSize: scatterSymbolSize,
     itemStyle: {
       color: MODEL_COLORS[key],
       opacity: (params: { data: { count: number } }) => Math.min(1, 0.45 + (params.data.count - 1) * 0.12),
-      borderColor: (params: { data: { anyCorrect: boolean } }) => (params.data.anyCorrect ? "#16a34a" : "transparent"),
-      borderWidth: (params: { data: { anyCorrect: boolean } }) => (params.data.anyCorrect ? 2 : 0),
     },
   }));
+  // Correct-pick outlines are drawn as their own overlay series, one per
+  // model, layered above every fill series via `z`. A per-point border on
+  // the fill series itself isn't enough: series paint in array order, so
+  // whichever model's dot happens to land last on a shared/adjacent bin
+  // paints straight over an earlier model's dot — border included — even
+  // when that earlier model was the one that picked correctly. Drawing the
+  // rings as a separate top layer (transparent fill, `silent`, no tooltip)
+  // means a green ring can never be erased by another model's dot.
+  const outlineSeries = pointsByModel
+    .filter(([, points]) => points.some((p) => p.anyCorrect))
+    .map(([key, points]) => ({
+      name: `${MODEL_KEYS.find(([k]) => k === key)?.[1] ?? key} (correct)`,
+      type: "scatter" as const,
+      data: points.filter((p) => p.anyCorrect).map((p) => ({ value: [p.x, p.y], count: p.count })),
+      symbolSize: scatterSymbolSize,
+      silent: true,
+      tooltip: { show: false },
+      z: 10,
+      itemStyle: { color: "transparent", borderColor: "#16a34a", borderWidth: 2 },
+    }));
   return {
     grid: { left: 48, right: 16, top: 16, bottom: 44, containLabel: true },
     tooltip: {
@@ -314,18 +334,21 @@ function buildProbSpreadChartOption(pointsByModel: [MetricKey, ProbSpreadPoint[]
       nameRotate: 90,
       splitLine: { lineStyle: { color: "#f1f5f9" } },
     },
-    series: series.map((s, i) => ({
-      ...s,
-      markLine:
-        i === 0
-          ? {
-              symbol: "none",
-              lineStyle: { type: "dashed", color: "#94a3b8" },
-              label: { show: false },
-              data: [{ xAxis: 50 }, { yAxis: 0 }],
-            }
-          : undefined,
-    })),
+    series: [
+      ...series.map((s, i) => ({
+        ...s,
+        markLine:
+          i === 0
+            ? {
+                symbol: "none",
+                lineStyle: { type: "dashed", color: "#94a3b8" },
+                label: { show: false },
+                data: [{ xAxis: 50 }, { yAxis: 0 }],
+              }
+            : undefined,
+      })),
+      ...outlineSeries,
+    ],
   } as EChartsOption;
 }
 
