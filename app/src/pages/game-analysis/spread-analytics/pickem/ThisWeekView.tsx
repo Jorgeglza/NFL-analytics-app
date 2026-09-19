@@ -29,7 +29,19 @@ import { pearsonCorrelation, correlationRead } from "../../../../lib/logic/weekH
 import { getTeamMetaMap, type TeamMeta } from "../../../../lib/team/meta";
 import { TeamLogoLink } from "../../../../components/team/TeamLogoLink";
 import { ModelDotStrip, disagreementOf } from "../../previews/ModelDotStrip";
-import { computeAgreementMatrix, AXIS_KEYS, AXIS_LABELS, type AxisKey } from "../../previews/modelAgreement";
+import {
+  computeAgreementMatrix,
+  computeAllAgreeStat,
+  computePairwiseResolution,
+  computeTossUpAccuracy,
+  bestTossUpModel,
+  categorizeGame,
+  pairKey,
+  AXIS_KEYS,
+  AXIS_LABELS,
+  type AxisKey,
+  type GameCategory,
+} from "../../previews/modelAgreement";
 import {
   buildHist,
   buildGradesIndex,
@@ -191,13 +203,110 @@ function buildAgreementChartOption(cells: { a: AxisKey; b: AxisKey; pct: number 
   } as EChartsOption;
 }
 
+const ANNOTATION_MIN_N = 5;
+
+interface RowAnnotationInfo {
+  tone: "agree" | "tossup" | "disagree" | "unknown";
+  text: string;
+  title: string;
+  muted: boolean;
+}
+
+/** "Listening recommendation" for one game: given which situation it falls
+ * into (all-agree / a specific pair disagreeing / a toss-up), what history
+ * actually says about that exact situation — not a static per-model
+ * comparison, but conditional accuracy sliced by situation type. */
+function buildAnnotation(
+  category: GameCategory,
+  ctx: {
+    allAgreeStat: { winRate: number | null; n: number };
+    pairwiseResolution: Map<string, { a: MetricKey; b: MetricKey; accA: number | null; accB: number | null; n: number; better: MetricKey | null }>;
+    tossUpAccuracy: Map<MetricKey, { acc: number | null; n: number }>;
+    bestTossUp: MetricKey | null;
+  },
+): RowAnnotationInfo {
+  const label = (k: MetricKey) => MODEL_KEYS.find(([mk]) => mk === k)?.[1] ?? k;
+
+  if (category.kind === "all-agree") {
+    const { winRate, n } = ctx.allAgreeStat;
+    const pct = winRate != null ? Math.round(winRate * 100) : null;
+    return {
+      tone: "agree",
+      text: pct != null ? `🤝 ${pct}%` : "🤝 —",
+      title:
+        pct != null
+          ? `All models agree here — right ${pct}% of the time historically (n=${n}).`
+          : "All models agree here — not enough graded history yet.",
+      muted: n < ANNOTATION_MIN_N,
+    };
+  }
+
+  if (category.kind === "toss-up") {
+    if (!ctx.bestTossUp) return { tone: "tossup", text: "🪙 —", title: "Toss-up game — not enough history yet to say which model does best here.", muted: true };
+    const { acc, n } = ctx.tossUpAccuracy.get(ctx.bestTossUp) ?? { acc: null, n: 0 };
+    const pct = acc != null ? Math.round(acc * 100) : null;
+    return {
+      tone: "tossup",
+      text: `🪙 ${label(ctx.bestTossUp)}`,
+      title: `Toss-up game (all models near 50/50) — ${label(ctx.bestTossUp)} has been the most accurate model in these spots (${pct}%, n=${n}).`,
+      muted: n < ANNOTATION_MIN_N,
+    };
+  }
+
+  if (category.kind === "disagree") {
+    const res = ctx.pairwiseResolution.get(pairKey(category.a, category.b));
+    if (!res || res.n === 0) {
+      return { tone: "disagree", text: "⚡ Split", title: `${label(category.a)} and ${label(category.b)} disagree here — not enough history yet.`, muted: true };
+    }
+    const pctA = res.accA != null ? Math.round(res.accA * 100) : null;
+    const pctB = res.accB != null ? Math.round(res.accB * 100) : null;
+    if (!res.better) {
+      return {
+        tone: "disagree",
+        text: "⚡ Split",
+        title: `${label(category.a)} and ${label(category.b)} disagree here — no clear edge historically (${pctA}% vs ${pctB}%, n=${res.n}).`,
+        muted: res.n < ANNOTATION_MIN_N,
+      };
+    }
+    return {
+      tone: "disagree",
+      text: `⚡ ${label(res.better)}`,
+      title: `${label(category.a)} and ${label(category.b)} disagree here — ${label(res.better)} has been right more often when these two split (${pctA}% vs ${pctB}%, n=${res.n}).`,
+      muted: res.n < ANNOTATION_MIN_N,
+    };
+  }
+
+  return { tone: "unknown", text: "—", title: "Not enough model data for this game.", muted: true };
+}
+
+const ANNOTATION_TONE_CLS: Record<RowAnnotationInfo["tone"], string> = {
+  agree: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  tossup: "border-amber-200 bg-amber-50 text-amber-700",
+  disagree: "border-sky-200 bg-sky-50 text-sky-700",
+  unknown: "border-slate-200 bg-slate-50 text-slate-400",
+};
+
+function RowAnnotation({ annotation }: { annotation: RowAnnotationInfo }) {
+  return (
+    <div
+      className={`w-20 shrink-0 rounded-lg border px-1.5 py-1 text-center text-[10px] font-semibold sm:w-24 ${ANNOTATION_TONE_CLS[annotation.tone]} ${annotation.muted ? "opacity-50" : ""}`}
+      title={annotation.title}
+    >
+      {annotation.text}
+    </div>
+  );
+}
+
 /** Simplified per-game row for easy side-by-side comparison across a whole
  * season's slate: just the dot-strip (every model, all at once) flanked by
  * the two team logos — no probability bar, no pick badge, no date/text
  * clutter. All rows share the same track width so dot positions line up
  * vertically from one game to the next. The winning team's logo still gets
- * a colored ring, independent of any single model's pick. */
-function DotStripRow({ g, bundle, teamMeta }: { g: Row; bundle: ProbBundle; teamMeta: Map<string, TeamMeta> }) {
+ * a colored ring, independent of any single model's pick. A "listening
+ * recommendation" badge on the right shows which situation this game falls
+ * into (all-agree / a pair disagreeing / a toss-up) and what history says
+ * about it. */
+function DotStripRow({ g, bundle, teamMeta, annotation }: { g: Row; bundle: ProbBundle; teamMeta: Map<string, TeamMeta>; annotation: RowAnnotationInfo }) {
   const away = String(g.away_team);
   const home = String(g.home_team);
   const actual = resultWinner(g);
@@ -227,6 +336,7 @@ function DotStripRow({ g, bundle, teamMeta }: { g: Row; bundle: ProbBundle; team
         <ModelDotStrip bundle={bundle} away={away} home={home} actual={actual} showEndLabels={false} />
       </div>
       {logo(home, played && actual === "home")}
+      <RowAnnotation annotation={annotation} />
     </div>
   );
 }
@@ -440,6 +550,15 @@ export default function ThisWeekView() {
   }, [gameModelRows]);
   const agreementChartRef = useECharts(agreementChartOption);
 
+  // "Listening recommendations" — three conditional-accuracy stats behind
+  // the per-row annotation badges: what history says once you already know
+  // which *situation* a game falls into (all-agree / a specific pair
+  // splitting / a toss-up), rather than a static per-model comparison.
+  const allAgreeStat = useMemo(() => computeAllAgreeStat(gameModelRows), [gameModelRows]);
+  const pairwiseResolution = useMemo(() => computePairwiseResolution(gameModelRows), [gameModelRows]);
+  const tossUpAccuracy = useMemo(() => computeTossUpAccuracy(gameModelRows), [gameModelRows]);
+  const bestTossUp = useMemo(() => bestTossUpModel(tossUpAccuracy), [tossUpAccuracy]);
+
   // Per-model accuracy across every historical game this week (all seasons) —
   // doubles as the primary-model picker for the card grid below, same pattern
   // as Matchup Previews' WeekPreviewTab.
@@ -490,19 +609,21 @@ export default function ThisWeekView() {
   };
 
   const cardsForSeason = useMemo(() => {
+    const annotationCtx = { allAgreeStat, pairwiseResolution, tossUpAccuracy, bestTossUp };
     const rows = gameModelRows
       .filter((r) => r.season === Number(selectedSeason))
       .map((r) => {
         const [pL, pR] = r.bundle[primary];
         const conf = pL != null && pR != null ? Math.max(pL, pR) : -1;
-        return { ...r, conf };
+        const annotation = buildAnnotation(categorizeGame(r.bundle), annotationCtx);
+        return { ...r, conf, annotation };
       });
     const byTime = (a: (typeof rows)[number], b: (typeof rows)[number]) => kickoffMs(a.g) - kickoffMs(b.g) || String(a.g.game_id).localeCompare(String(b.g.game_id));
     if (sortMode === "confidence") rows.sort((a, b) => b.conf - a.conf || byTime(a, b));
     else if (sortMode === "disagree") rows.sort((a, b) => b.disagreement - a.disagreement || byTime(a, b));
     else rows.sort(byTime);
     return rows;
-  }, [gameModelRows, selectedSeason, primary, sortMode]);
+  }, [gameModelRows, selectedSeason, primary, sortMode, allAgreeStat, pairwiseResolution, tossUpAccuracy, bestTossUp]);
 
   // ---------- Section 3: correlation vs every prior week ----------
   const pairsForWeeks = useMemo(() => {
@@ -748,9 +869,24 @@ export default function ThisWeekView() {
                 </div>
               </div>
 
+              <p className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500">
+                <span>
+                  <span className="mr-1 rounded border border-emerald-200 bg-emerald-50 px-1 text-emerald-700">🤝</span>
+                  All models agree — historical win rate of that side
+                </span>
+                <span>
+                  <span className="mr-1 rounded border border-amber-200 bg-amber-50 px-1 text-amber-700">🪙</span>
+                  Toss-up — best-performing model in these spots
+                </span>
+                <span>
+                  <span className="mr-1 rounded border border-sky-200 bg-sky-50 px-1 text-sky-700">⚡</span>
+                  Two models split — which one to trust here
+                </span>
+              </p>
+
               <div className="space-y-2">
                 {cardsForSeason.map((r) => (
-                  <DotStripRow key={String(r.g.game_id)} g={r.g} bundle={r.bundle} teamMeta={teamMeta} />
+                  <DotStripRow key={String(r.g.game_id)} g={r.g} bundle={r.bundle} teamMeta={teamMeta} annotation={r.annotation} />
                 ))}
                 {!cardsForSeason.length && <div className="py-8 text-center text-sm text-slate-400">No games found for this season.</div>}
               </div>
