@@ -42,6 +42,9 @@ import {
   AXIS_LABELS,
   type AxisKey,
   type GameCategory,
+  type AllAgreeStat,
+  type PairwiseResolution,
+  type TossUpAccuracy,
 } from "../../previews/modelAgreement";
 import {
   buildHist,
@@ -506,7 +509,25 @@ function RowAnnotation({ annotation }: { annotation: RowAnnotationInfo }) {
  * recommendation" badge on the right shows which situation this game falls
  * into (all-agree / a pair disagreeing / a toss-up) and what history says
  * about it. */
-function DotStripRow({ g, bundle, teamMeta, annotation }: { g: Row; bundle: ProbBundle; teamMeta: Map<string, TeamMeta>; annotation: RowAnnotationInfo }) {
+function DotStripRow({
+  g,
+  bundle,
+  teamMeta,
+  annotation,
+  category,
+  allAgreeStat,
+  pairwiseResolution,
+  tossUpAccuracy,
+}: {
+  g: Row;
+  bundle: ProbBundle;
+  teamMeta: Map<string, TeamMeta>;
+  annotation: RowAnnotationInfo;
+  category: GameCategory;
+  allAgreeStat: AllAgreeStat;
+  pairwiseResolution: Map<string, PairwiseResolution>;
+  tossUpAccuracy: Map<MetricKey, TossUpAccuracy>;
+}) {
   const away = String(g.away_team);
   const home = String(g.home_team);
   const actual = resultWinner(g);
@@ -519,7 +540,7 @@ function DotStripRow({ g, bundle, teamMeta, annotation }: { g: Row; bundle: Prob
     const src = teamMeta.get(team)?.logo;
     const ringColor = teamMeta.get(team)?.color ?? "#16a34a";
     return (
-      <div className="flex w-14 shrink-0 flex-col items-center gap-1 text-center sm:w-16" onClick={(e) => e.stopPropagation()}>
+      <div className="flex w-14 shrink-0 flex-col items-center gap-1 text-center sm:w-16">
         <span className="inline-block rounded-full" style={isWinner ? { boxShadow: `0 0 0 3px ${ringColor}, 0 0 0 5px white` } : undefined}>
           {src ? (
             <TeamLogoLink to={`/game_analysis/team_comparison?team1=${away}&team2=${home}`} logo={src} alt={team} imgClassName="h-8 w-8 object-contain" title={`Compare ${away} vs ${home}`} />
@@ -534,18 +555,8 @@ function DotStripRow({ g, bundle, teamMeta, annotation }: { g: Row; bundle: Prob
 
   return (
     <div
-      role="button"
-      tabIndex={0}
-      aria-expanded={open}
-      onClick={() => setOpen((v) => !v)}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          setOpen((v) => !v);
-        }
-      }}
-      className={`relative flex cursor-pointer items-center gap-3 rounded-2xl bg-white px-3 py-3 shadow-sm transition hover:border-slate-300 hover:shadow-md ${isBlowoutSpread ? "border-2 border-violet-500" : "border border-slate-200"}`}
-      title={isBlowoutSpread ? `Spread ${absSpread!.toFixed(1)} — a wide (>6pt) line. Click for every model's probability.` : "Click for every model's probability."}
+      className={`relative flex items-center gap-3 rounded-2xl bg-white px-3 py-3 shadow-sm ${isBlowoutSpread ? "border-2 border-violet-500" : "border border-slate-200"}`}
+      title={isBlowoutSpread ? `Spread ${absSpread!.toFixed(1)} — a wide (>6pt) line.` : undefined}
     >
       {absSpread != null && (
         <span
@@ -556,18 +567,15 @@ function DotStripRow({ g, bundle, teamMeta, annotation }: { g: Row; bundle: Prob
           Spread {absSpread.toFixed(1)}
         </span>
       )}
-      {/* Dedicated, always-visible trigger — the row's own onClick still works, but
-          its "blank space" is easily swallowed by the logos/dots/badge next to it,
-          so this guarantees a discoverable, unambiguous way to open the popup. */}
+      {/* Sole trigger for the popup — a whole-row click was too easy to miss (the
+          logos/dots/badge next to it swallow most clicks for their own behavior),
+          so this small always-visible button is the one guaranteed, discoverable way in. */}
       <button
         type="button"
         title="Compare all 7 models"
         aria-label="Compare all models for this game"
         aria-expanded={open}
-        onClick={(e) => {
-          e.stopPropagation();
-          setOpen((v) => !v);
-        }}
+        onClick={() => setOpen((v) => !v)}
         className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 bg-white text-[11px] font-bold text-slate-500 shadow-sm hover:border-[#002f6c] hover:text-[#002f6c]"
       >
         i
@@ -578,7 +586,20 @@ function DotStripRow({ g, bundle, teamMeta, annotation }: { g: Row; bundle: Prob
       </div>
       {logo(home, played && actual === "home")}
       <RowAnnotation annotation={annotation} />
-      {open && <GameModelsPopover bundle={bundle} away={away} home={home} actual={actual} annotation={annotation} onClose={() => setOpen(false)} />}
+      {open && (
+        <GameModelsPopover
+          bundle={bundle}
+          away={away}
+          home={home}
+          actual={actual}
+          annotation={annotation}
+          category={category}
+          allAgreeStat={allAgreeStat}
+          pairwiseResolution={pairwiseResolution}
+          tossUpAccuracy={tossUpAccuracy}
+          onClose={() => setOpen(false)}
+        />
+      )}
     </div>
   );
 }
@@ -890,22 +911,27 @@ export default function ThisWeekView() {
   }, [probSpreadRows, visibleModels]);
   const probSpreadChartRef = useECharts(probSpreadChartOption);
 
+  const annotationCtx = useMemo(
+    () => ({ allAgreeStat, pairwiseResolution, tossUpAccuracy, bestTossUp }),
+    [allAgreeStat, pairwiseResolution, tossUpAccuracy, bestTossUp],
+  );
+
   const cardsForSeason = useMemo(() => {
-    const annotationCtx = { allAgreeStat, pairwiseResolution, tossUpAccuracy, bestTossUp };
     const rows = gameModelRows
       .filter((r) => r.season === Number(selectedSeason))
       .map((r) => {
         const [pL, pR] = r.bundle[primary];
         const conf = pL != null && pR != null ? Math.max(pL, pR) : -1;
-        const annotation = buildAnnotation(categorizeGame(r.bundle), annotationCtx);
-        return { ...r, conf, annotation };
+        const category = categorizeGame(r.bundle);
+        const annotation = buildAnnotation(category, annotationCtx);
+        return { ...r, conf, annotation, category };
       });
     const byTime = (a: (typeof rows)[number], b: (typeof rows)[number]) => kickoffMs(a.g) - kickoffMs(b.g) || String(a.g.game_id).localeCompare(String(b.g.game_id));
     if (sortMode === "confidence") rows.sort((a, b) => b.conf - a.conf || byTime(a, b));
     else if (sortMode === "disagree") rows.sort((a, b) => b.disagreement - a.disagreement || byTime(a, b));
     else rows.sort(byTime);
     return rows;
-  }, [gameModelRows, selectedSeason, primary, sortMode, allAgreeStat, pairwiseResolution, tossUpAccuracy, bestTossUp]);
+  }, [gameModelRows, selectedSeason, primary, sortMode, annotationCtx]);
 
   // ---------- Section 3: correlation vs every prior week ----------
   const pairsForWeeks = useMemo(() => {
@@ -1168,7 +1194,17 @@ export default function ThisWeekView() {
 
               <div className="space-y-4">
                 {cardsForSeason.map((r) => (
-                  <DotStripRow key={String(r.g.game_id)} g={r.g} bundle={r.bundle} teamMeta={teamMeta} annotation={r.annotation} />
+                  <DotStripRow
+                    key={String(r.g.game_id)}
+                    g={r.g}
+                    bundle={r.bundle}
+                    teamMeta={teamMeta}
+                    annotation={r.annotation}
+                    category={r.category}
+                    allAgreeStat={allAgreeStat}
+                    pairwiseResolution={pairwiseResolution}
+                    tossUpAccuracy={tossUpAccuracy}
+                  />
                 ))}
                 {!cardsForSeason.length && <div className="py-8 text-center text-sm text-slate-400">No games found for this season.</div>}
               </div>

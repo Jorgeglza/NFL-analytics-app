@@ -6,11 +6,16 @@
 // but comprehensive.
 import { useEffect, useRef, useState } from "react";
 import { MODEL_KEYS, MODEL_COLORS, pickWinner, type MetricKey, type ProbBundle } from "./engine";
+import { pairKey, type GameCategory, type AllAgreeStat, type PairwiseResolution, type TossUpAccuracy } from "./modelAgreement";
 
 export interface GameModelsAnnotation {
   tone: "agree" | "tossup" | "disagree" | "unknown";
   title: string;
 }
+
+// Minimum sample size before a historical figure is shown at full strength —
+// matches ANNOTATION_MIN_N in ThisWeekView.tsx so the two stay consistent.
+const HIST_MIN_N = 5;
 
 // Short labels so the 92px-wide column never truncates mid-word — the
 // dot-strip color + this label is enough to identify the model at a glance.
@@ -76,6 +81,76 @@ function ModelRow({
   );
 }
 
+/** One historical-accuracy row: a model label plus its win rate in whatever
+ * situational bucket is being compared (a specific pair's disagreements, or
+ * near-50/50 toss-ups) — the actual number behind the one-line annotation
+ * banner, so "who's usually right in spots like this" isn't just asserted. */
+function HistRow({ label, color, acc, n }: { label: string; color?: string; acc: number | null; n: number }) {
+  const thin = n < HIST_MIN_N;
+  return (
+    <div className={`flex items-center justify-between gap-2 py-1 text-[11px] ${thin ? "opacity-50" : ""}`}>
+      <span className="flex min-w-0 items-center gap-1.5 truncate text-slate-600">
+        {color && <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ background: color }} />}
+        {label}
+      </span>
+      <span className="shrink-0 tabular-nums text-slate-700">
+        {acc == null ? "—" : <span className="font-bold">{Math.round(acc * 100)}%</span>} <span className="text-slate-400">(n={n})</span>
+      </span>
+    </div>
+  );
+}
+
+/** The "compared to history" section: what actually backs the annotation
+ * banner's one-line claim, broken out by the specific situation this game
+ * falls into — a two-model comparison for a disagreement, or the full
+ * model ranking for a toss-up (models "in the close-to-50 bucket"). */
+function HistoricalSection({
+  category,
+  allAgreeStat,
+  pairwiseResolution,
+  tossUpAccuracy,
+}: {
+  category: GameCategory;
+  allAgreeStat: AllAgreeStat;
+  pairwiseResolution: Map<string, PairwiseResolution>;
+  tossUpAccuracy: Map<MetricKey, TossUpAccuracy>;
+}) {
+  if (category.kind === "disagree") {
+    const res = pairwiseResolution.get(pairKey(category.a, category.b));
+    if (!res || res.n === 0) return null;
+    return (
+      <div className="mb-2 rounded-lg border border-slate-200 bg-slate-50 p-2">
+        <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">When these two have split before</div>
+        <HistRow label={SHORT_LABEL[res.a]} color={MODEL_COLORS[res.a]} acc={res.accA} n={res.n} />
+        <HistRow label={SHORT_LABEL[res.b]} color={MODEL_COLORS[res.b]} acc={res.accB} n={res.n} />
+      </div>
+    );
+  }
+  if (category.kind === "toss-up") {
+    const rows = MODEL_KEYS.map(([k, ]) => ({ k, ...(tossUpAccuracy.get(k) ?? { acc: null, n: 0 }) }))
+      .filter((r) => r.n > 0)
+      .sort((a, b) => (b.acc ?? -1) - (a.acc ?? -1));
+    if (!rows.length) return null;
+    return (
+      <div className="mb-2 rounded-lg border border-slate-200 bg-slate-50 p-2">
+        <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Accuracy in toss-up games (near 50/50)</div>
+        {rows.map((r) => (
+          <HistRow key={r.k} label={SHORT_LABEL[r.k]} color={MODEL_COLORS[r.k]} acc={r.acc} n={r.n} />
+        ))}
+      </div>
+    );
+  }
+  if (category.kind === "all-agree" && allAgreeStat.n > 0) {
+    return (
+      <div className="mb-2 rounded-lg border border-slate-200 bg-slate-50 p-2">
+        <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">When every model agrees like this</div>
+        <HistRow label="Agreed side wins" acc={allAgreeStat.winRate} n={allAgreeStat.n} />
+      </div>
+    );
+  }
+  return null;
+}
+
 /** Card-level popover listing every model's home/away win probability for a
  * game, anchored to (and dismissed independently of) the row it belongs to. */
 export function GameModelsPopover({
@@ -84,6 +159,10 @@ export function GameModelsPopover({
   home,
   actual,
   annotation,
+  category,
+  allAgreeStat,
+  pairwiseResolution,
+  tossUpAccuracy,
   onClose,
 }: {
   bundle: ProbBundle;
@@ -91,6 +170,10 @@ export function GameModelsPopover({
   home: string;
   actual: "home" | "away" | null;
   annotation: GameModelsAnnotation;
+  category: GameCategory;
+  allAgreeStat: AllAgreeStat;
+  pairwiseResolution: Map<string, PairwiseResolution>;
+  tossUpAccuracy: Map<MetricKey, TossUpAccuracy>;
   onClose: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -132,6 +215,7 @@ export function GameModelsPopover({
       className={`absolute left-0 right-0 z-30 w-full rounded-2xl border border-slate-200 bg-white p-3 shadow-lg sm:left-1/2 sm:right-auto sm:w-[24rem] sm:-translate-x-1/2 ${flip ? "bottom-full mb-2" : "top-full mt-2"}`}
     >
       <div className={`mb-2 rounded-lg border px-2 py-1.5 text-[11px] leading-snug ${TONE_CLS[annotation.tone]}`}>{annotation.title}</div>
+      <HistoricalSection category={category} allAgreeStat={allAgreeStat} pairwiseResolution={pairwiseResolution} tossUpAccuracy={tossUpAccuracy} />
       <div className="divide-y divide-slate-100">
         {rows.map(([k]) => (
           <ModelRow key={k} label={SHORT_LABEL[k]} color={MODEL_COLORS[k]} away={away} home={home} pH={bundle[k][1]!} actual={actual} emphasize={k === "consensus"} />
