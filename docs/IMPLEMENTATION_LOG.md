@@ -559,6 +559,10 @@ Full work list, with per-item checkboxes and severities: **`docs/MOBILE_READINES
 
 ## Session notes (newest first)
 
+### 2026-09-19 (cont. x11) — "This Week": bring the outline back alongside the color coding
+User liked the color/opacity encoding from cont. x10 but wanted the dark-green ring back too, as a second reinforcing cue on correct picks rather than a replacement for one or the other. Re-added the silent-overlay-series outline technique from cont. x9 (still the right approach — it paints as its own top layer instead of a per-item border on the fill series, so it can't be erased by a later-drawn model's dot), sourced from the current `status === "correct"` points instead of the old `anyCorrect` boolean, appended after the three color-coded series so it's always the top layer. Ring color is `#065f46` (emerald-800, visibly darker than the `darkenColor` fill tint underneath so it doesn't blend into the dot body). Caption appended one clause noting the ring.
+- Verified: `npm run lint`/62-test suite green; dev-server screenshot with all 12 seasons and all 7 models toggled on showed every darker/opaque "correct" dot with a crisp dark-green ring, wrong/unplayed dots ring-free; 375px mobile check showed zero horizontal overflow.
+
 ### 2026-09-19 (cont. x10) — "This Week": replace scatter outline with color/opacity-coded correctness
 Even after fixing the outline's paint-order bug (cont. x9), the user said a thin border ring still wasn't reading clearly, especially on small/clustered dots — asked for the outcome to live in the dot's own color instead: correct picks full/darker and opaque, wrong picks a lighter tint, unplayed games the model's normal color. Replaced the whole outline mechanism (no borders anywhere now).
 - `ProbSpreadPoint.anyCorrect: boolean` → `status: "correct" | "wrong" | "unplayed"`, same bin-level "one marker covers several games" simplification as before, just resolved with precedence correct > wrong > unplayed instead of a single boolean.

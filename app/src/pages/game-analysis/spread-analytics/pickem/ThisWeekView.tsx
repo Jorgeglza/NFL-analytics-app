@@ -312,7 +312,21 @@ function buildProbSpreadChartOption(pointsByModel: [MetricKey, ProbSpreadPoint[]
   // wherever multiple models' dots overlap the same bin, a correct pick
   // from *any* model always wins the pixel instead of being hidden under
   // another model's unplayed/wrong dot drawn later in the array.
-  const series = [...seriesFor("unplayed"), ...seriesFor("wrong"), ...seriesFor("correct")];
+  // Correct picks get a second, reinforcing cue on top of the darker fill:
+  // a dark-green ring, drawn as its own silent/non-tooltip overlay series
+  // (not a per-item border on the fill series) so it can't be erased by a
+  // later-drawn model's dot the way the original border implementation was.
+  const outlineSeries = byStatus("correct").map(([key, points]) => ({
+    name: MODEL_KEYS.find(([k]) => k === key)?.[1] ?? key,
+    type: "scatter" as const,
+    data: probSpreadSeriesData(points),
+    symbolSize: scatterSymbolSize,
+    silent: true,
+    tooltip: { show: false },
+    z: 10,
+    itemStyle: { color: "transparent", borderColor: "#065f46", borderWidth: 2 },
+  }));
+  const series = [...seriesFor("unplayed"), ...seriesFor("wrong"), ...seriesFor("correct"), ...outlineSeries];
   return {
     grid: { left: 48, right: 16, top: 16, bottom: 44, containLabel: true },
     tooltip: {
@@ -1173,7 +1187,8 @@ export default function ThisWeekView() {
                   hover a dot to see which game(s), their score, and the winner. Color shows the outcome:{" "}
                   <span className="font-semibold text-slate-800">darker, solid</span> means the model correctly predicted the winner,{" "}
                   <span className="font-semibold text-slate-400">lighter</span> means it picked wrong, and the model's normal color means
-                  the game hasn't been played yet.
+                  the game hasn't been played yet. Correct picks also get a{" "}
+                  <span className="font-semibold text-emerald-800">dark-green ring</span>.
                 </p>
 
                 <div className="mb-2 flex flex-wrap items-center gap-2">
