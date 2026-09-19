@@ -123,6 +123,19 @@ function prettyHistogramSeries(bins: HistogramBins, name = "Games"): CustomSerie
   } as CustomSeriesOption;
 }
 
+function hexToRgbTuple(hex: string): [number, number, number] {
+  const s = hex.replace("#", "");
+  return [parseInt(s.slice(0, 2), 16), parseInt(s.slice(2, 4), 16), parseInt(s.slice(4, 6), 16)];
+}
+/** Linear-interpolate between two hex colors — used to shade the "similar weeks"
+ * box plot from green (closest match) to red (least similar of the shown set). */
+function lerpColor(hexA: string, hexB: string, t: number): string {
+  const a = hexToRgbTuple(hexA);
+  const b = hexToRgbTuple(hexB);
+  const mix = (i: number) => Math.round(a[i] + (b[i] - a[i]) * t);
+  return `rgb(${mix(0)}, ${mix(1)}, ${mix(2)})`;
+}
+
 /** Mini version of ModelDotStrip's visual language for an *aggregate* stat:
  * each model's average confidence (probability assigned to whichever side
  * it picked, so always 50–100%) across every game in the selected week,
@@ -639,6 +652,7 @@ export default function ThisWeekView() {
   const [selectedGraphSeasons, setSelectedGraphSeasons] = useState<Set<number>>(new Set());
   const [visibleModels, setVisibleModels] = useState<Set<MetricKey>>(new Set(MODEL_KEYS.map(([k]) => k)));
   const [selectedMomentumTeam, setSelectedMomentumTeam] = useState<string | null>(null);
+  const [spreadMode, setSpreadMode] = useState<"abs" | "raw">("abs");
 
   useEffect(() => {
     setLoadError(null);
@@ -715,9 +729,17 @@ export default function ThisWeekView() {
     const mean = spreads.reduce((a, b) => a + b, 0) / spreads.length;
     const med = percentile(spreads, 50);
     return {
-      grid: { left: 44, right: 10, top: 30, bottom: 44, containLabel: true },
-      legend: { top: 0 },
-      tooltip: { trigger: "axis" },
+      grid: { left: 44, right: 10, top: 20, bottom: 44, containLabel: true },
+      tooltip: {
+        trigger: "axis",
+        formatter: (p: unknown) => {
+          const arr = (Array.isArray(p) ? p : [p]) as { value?: unknown }[];
+          const bar = arr.find((it) => Array.isArray(it.value)) as { value: number[] } | undefined;
+          if (!bar) return "";
+          const [lo, hi, count] = bar.value;
+          return `Spread ${lo.toFixed(1)} to ${hi.toFixed(1)}<br/>${count} game${count === 1 ? "" : "s"}`;
+        },
+      },
       xAxis: { type: "value", min: bins.lo, max: bins.hi, name: "Spread (home perspective)", nameLocation: "middle", nameGap: 26, splitLine: { lineStyle: { color: "#f1f5f9" } } },
       yAxis: { type: "value", name: "Games", nameLocation: "middle", nameGap: 30, nameRotate: 90, splitLine: { lineStyle: { color: "#f1f5f9" } } },
       series: [
@@ -738,37 +760,152 @@ export default function ThisWeekView() {
     } as EChartsOption;
   }, [spreads]);
 
+  // Raw spread (home perspective) or |spread| — shared by the season box plot
+  // and the similar-weeks box plot below.
+  const spreadValue = (raw: number) => (spreadMode === "abs" ? Math.abs(raw) : raw);
+  const boxStatsFromValues = (vals: number[]): number[] => {
+    const v = [...vals].sort((a, b) => a - b);
+    return [Math.min(...v), percentile(v, 25), percentile(v, 50), percentile(v, 75), Math.max(...v)];
+  };
+  const isAbsMode = spreadMode === "abs";
+  // Spread is home-perspective: negative = home favored, positive = home
+  // underdog (away favored) — so in raw mode the *min* (most negative) is
+  // the biggest home favorite and the *max* is the biggest road favorite.
+  const boxMinLabel = isAbsMode ? "Min |Spread| (closest matchup)" : "Min (biggest home favorite)";
+  const boxMaxLabel = isAbsMode ? "Max |Spread| (biggest blowout)" : "Max (biggest road favorite)";
+  const boxYAxisName = isAbsMode ? "|Spread|" : "Spread (home perspective)";
+  // Top-to-bottom in the tooltip matches top-to-bottom in the box's whisker —
+  // Max first, Min last — instead of the old Min-first order that read
+  // backwards against what's drawn on screen. Reads `v` as the plain
+  // [min, Q1, median, Q3, max] stats tuple we computed — never echarts'
+  // own `params.data`/`params.value`, which for a category-axis boxplot
+  // series silently prepends the category index as an extra leading
+  // dimension and would shift every field by one if indexed directly.
+  const boxTooltipLines = (v: number[]) =>
+    `${boxMaxLabel}: ${v[4].toFixed(1)}<br/>Q3: ${v[3].toFixed(1)}<br/>Median: ${v[2].toFixed(1)}<br/>Q1: ${v[1].toFixed(1)}<br/>${boxMinLabel}: ${v[0].toFixed(1)}`;
+
   const spreadBoxOption = useMemo<EChartsOption | null>(() => {
     const bySeason = new Map<number, number[]>();
     for (const r of weekSchedRows) {
       if (r.spread_line == null) continue;
+      const raw = Number(r.spread_line);
+      if (!Number.isFinite(raw)) continue;
       const s = Number(r.season);
       if (!bySeason.has(s)) bySeason.set(s, []);
-      bySeason.get(s)!.push(Math.abs(Number(r.spread_line)));
+      bySeason.get(s)!.push(spreadValue(raw));
     }
     const seasonsSorted = [...bySeason.keys()].sort((a, b) => a - b);
     if (!seasonsSorted.length) return null;
-    const data = seasonsSorted.map((s) => {
-      const v = [...bySeason.get(s)!].sort((a, b) => a - b);
-      return [Math.min(...v), percentile(v, 25), percentile(v, 50), percentile(v, 75), Math.max(...v)];
-    });
+    const data = seasonsSorted.map((s) => boxStatsFromValues(bySeason.get(s)!));
     return {
       grid: { left: 44, right: 10, top: 20, bottom: 44, containLabel: true },
       xAxis: { type: "category", data: seasonsSorted.map(String), name: "Season", nameLocation: "middle", nameGap: 30 },
-      yAxis: { type: "value", name: "|Spread|", nameLocation: "middle", nameGap: 30, nameRotate: 90, splitLine: { lineStyle: { color: "#f1f5f9" } } },
+      yAxis: { type: "value", name: boxYAxisName, nameLocation: "middle", nameGap: 30, nameRotate: 90, splitLine: { lineStyle: { color: "#f1f5f9" } } },
       tooltip: {
         formatter: (p: unknown) => {
           const param = Array.isArray(p) ? p[0] : p;
-          const v = (param as { data: number[] }).data;
-          return `Season ${(param as { name: string }).name}<br/>Min: ${v[0].toFixed(1)}<br/>Q1: ${v[1].toFixed(1)}<br/>Median: ${v[2].toFixed(1)}<br/>Q3: ${v[3].toFixed(1)}<br/>Max: ${v[4].toFixed(1)}`;
+          const { dataIndex, name } = param as { dataIndex: number; name: string };
+          return `Season ${name}<br/>${boxTooltipLines(data[dataIndex])}`;
         },
       },
       series: [{ type: "boxplot", data, itemStyle: { color: "rgba(36,89,167,0.35)", borderColor: "#2459A7", borderWidth: 1.5 } }],
     } as EChartsOption;
-  }, [weekSchedRows]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weekSchedRows, spreadMode]);
+
+  // ---------- Section 1b: auto-detected similar weeks ----------
+  // Every (season, week) combo's spread distribution, ranked by how close its
+  // [mean, median, IQR] of |spread| is to the currently selected week's
+  // aggregate — a normalized-Euclidean distance so mean/median/IQR (different
+  // natural scales) contribute comparably. Similarity is always judged on
+  // |spread| regardless of the raw/abs toggle, since it's measuring how
+  // competitive/lopsided the games were, not which side was favored.
+  const MIN_GAMES_FOR_COMPARISON = 4;
+  const similarWeeks = useMemo(() => {
+    if (!spreadStats) return [];
+    const bySW = new Map<string, { season: number; week: number; raws: number[] }>();
+    for (const r of reg) {
+      if (r.spread_line == null) continue;
+      const raw = Number(r.spread_line);
+      if (!Number.isFinite(raw)) continue;
+      const season = Number(r.season);
+      const week = Number(r.week);
+      if (!Number.isFinite(season) || !Number.isFinite(week)) continue;
+      const key = `${season}-${week}`;
+      if (!bySW.has(key)) bySW.set(key, { season, week, raws: [] });
+      bySW.get(key)!.raws.push(raw);
+    }
+    type Cand = { season: number; week: number; raws: number[]; mean: number; med: number; iqr: number };
+    const candidates: Cand[] = [];
+    for (const { season, week, raws } of bySW.values()) {
+      if (raws.length < MIN_GAMES_FOR_COMPARISON) continue;
+      const abs = raws.map((x) => Math.abs(x));
+      const mean = abs.reduce((a, b) => a + b, 0) / abs.length;
+      const med = percentile(abs, 50);
+      const iqr = percentile(abs, 75) - percentile(abs, 25);
+      candidates.push({ season, week, raws, mean, med, iqr });
+    }
+    if (candidates.length < 2) return [];
+
+    const dims: (keyof Pick<Cand, "mean" | "med" | "iqr">)[] = ["mean", "med", "iqr"];
+    const stds = dims.map((d) => sampleStd(candidates.map((c) => c[d])) || 1);
+    const target = { mean: spreadStats.mean, med: spreadStats.med, iqr: spreadStats.iqr };
+
+    const scored = candidates
+      .map((c) => {
+        const dist = Math.sqrt(dims.reduce((sum, d, i) => sum + ((c[d] - target[d]) / stds[i]) ** 2, 0));
+        return { ...c, dist };
+      })
+      .sort((a, b) => a.dist - b.dist);
+
+    const top = scored.slice(0, 3);
+    for (let i = 3; i < Math.min(5, scored.length); i++) {
+      if (scored[i].dist <= top[2].dist * 1.25) top.push(scored[i]);
+      else break;
+    }
+    return top;
+  }, [reg, spreadStats]);
+
+  const similarWeeksBoxOption = useMemo<EChartsOption | null>(() => {
+    if (!similarWeeks.length) return null;
+    const currentVals = weekSchedRows
+      .map((r) => (r.spread_line == null ? null : Number(r.spread_line)))
+      .filter((v): v is number => v != null && Number.isFinite(v))
+      .map(spreadValue);
+    if (!currentVals.length) return null;
+
+    const categories = ["This week", ...similarWeeks.map((c) => `S${c.season} Wk${c.week}`)];
+    const dataArr = [boxStatsFromValues(currentVals), ...similarWeeks.map((c) => boxStatsFromValues(c.raws.map(spreadValue)))];
+    const GREEN = "#3C9A5F";
+    const RED = "#C8102E";
+    const n = similarWeeks.length;
+    const colors = ["#2459A7", ...similarWeeks.map((_, i) => lerpColor(GREEN, RED, n <= 1 ? 0 : i / (n - 1)))];
+    const rankLabels = ["This week", "Closest match", "2nd closest", "3rd closest", "4th closest", "5th closest"];
+
+    return {
+      grid: { left: 44, right: 10, top: 20, bottom: 56, containLabel: true },
+      xAxis: { type: "category", data: categories, name: "Week", nameLocation: "middle", nameGap: 40, axisLabel: { rotate: categories.length > 4 ? 20 : 0 } },
+      yAxis: { type: "value", name: boxYAxisName, nameLocation: "middle", nameGap: 30, nameRotate: 90, splitLine: { lineStyle: { color: "#f1f5f9" } } },
+      tooltip: {
+        formatter: (p: unknown) => {
+          const param = Array.isArray(p) ? p[0] : p;
+          const idx = (param as { dataIndex: number }).dataIndex;
+          return `${rankLabels[idx] ?? categories[idx]}<br/>${boxTooltipLines(dataArr[idx])}`;
+        },
+      },
+      series: [
+        {
+          type: "boxplot",
+          data: dataArr.map((d, i) => ({ value: d, itemStyle: { color: colors[i], opacity: 0.35, borderColor: colors[i], borderWidth: 1.5 } })),
+        },
+      ],
+    } as EChartsOption;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [similarWeeks, weekSchedRows, spreadMode]);
 
   const spreadHistRef = useECharts(spreadHistOption);
   const spreadBoxRef = useECharts(spreadBoxOption);
+  const similarWeeksBoxRef = useECharts(similarWeeksBoxOption);
 
   // ---------- Section 2: all models' behavior for this week's games ----------
   const gameModelRows = useMemo<GameModelRow[]>(() => {
@@ -1106,7 +1243,21 @@ export default function ThisWeekView() {
               {seasonsCoveredThisWeek < 5 && (
                 <p className="text-xs text-amber-600">Only {seasonsCoveredThisWeek} season(s) of data for this week — read with caution.</p>
               )}
-              <div className="grid gap-4 lg:grid-cols-2">
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <span className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Box plots show</span>
+                <div className="flex gap-2">
+                  {([["abs", "|Spread|"], ["raw", "No change"]] as const).map(([m, lbl]) => (
+                    <button
+                      key={m}
+                      onClick={() => setSpreadMode(m)}
+                      className={`rounded-full px-3 py-1.5 text-sm ${spreadMode === m ? "bg-[#002f6c] text-white shadow-sm" : "bg-slate-100 text-slate-600 hover:text-slate-900"}`}
+                    >
+                      {lbl}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="grid gap-4 lg:grid-cols-3">
                 <div>
                   <h3 className="mb-1 text-sm font-semibold text-slate-700">Histogram</h3>
                   <div ref={spreadHistRef} className="h-[340px]" />
@@ -1114,6 +1265,16 @@ export default function ThisWeekView() {
                 <div>
                   <h3 className="mb-1 text-sm font-semibold text-slate-700">Spread by season (box plot)</h3>
                   <div ref={spreadBoxRef} className="h-[340px]" />
+                </div>
+                <div>
+                  <h3 className="mb-1 text-sm font-semibold text-slate-700">Similar weeks (auto-detected)</h3>
+                  {similarWeeksBoxOption ? (
+                    <div ref={similarWeeksBoxRef} className="h-[340px]" />
+                  ) : (
+                    <div className="flex h-[340px] items-center justify-center text-center text-xs text-slate-400">
+                      Not enough data yet to find comparable weeks.
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
