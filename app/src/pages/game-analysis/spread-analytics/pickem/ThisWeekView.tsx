@@ -29,6 +29,7 @@ import { pearsonCorrelation, correlationRead } from "../../../../lib/logic/weekH
 import { getTeamMetaMap, type TeamMeta } from "../../../../lib/team/meta";
 import { TeamLogoLink } from "../../../../components/team/TeamLogoLink";
 import { ModelDotStrip, disagreementOf } from "../../previews/ModelDotStrip";
+import { GameModelsPopover } from "../../previews/GameModelsPopover";
 import {
   computeAgreementMatrix,
   computeAllAgreeStat,
@@ -512,12 +513,13 @@ function DotStripRow({ g, bundle, teamMeta, annotation }: { g: Row; bundle: Prob
   const played = g.home_score != null && g.away_score != null;
   const absSpread = g.spread_line == null ? null : Math.abs(Number(g.spread_line));
   const isBlowoutSpread = absSpread != null && absSpread > 6;
+  const [open, setOpen] = useState(false);
 
   const logo = (team: string, isWinner: boolean) => {
     const src = teamMeta.get(team)?.logo;
     const ringColor = teamMeta.get(team)?.color ?? "#16a34a";
     return (
-      <div className="flex w-14 shrink-0 flex-col items-center gap-1 text-center sm:w-16">
+      <div className="flex w-14 shrink-0 flex-col items-center gap-1 text-center sm:w-16" onClick={(e) => e.stopPropagation()}>
         <span className="inline-block rounded-full" style={isWinner ? { boxShadow: `0 0 0 3px ${ringColor}, 0 0 0 5px white` } : undefined}>
           {src ? (
             <TeamLogoLink to={`/game_analysis/team_comparison?team1=${away}&team2=${home}`} logo={src} alt={team} imgClassName="h-8 w-8 object-contain" title={`Compare ${away} vs ${home}`} />
@@ -532,8 +534,18 @@ function DotStripRow({ g, bundle, teamMeta, annotation }: { g: Row; bundle: Prob
 
   return (
     <div
-      className={`relative flex items-center gap-3 rounded-2xl bg-white px-3 py-3 shadow-sm ${isBlowoutSpread ? "border-2 border-violet-500" : "border border-slate-200"}`}
-      title={isBlowoutSpread ? `Spread ${absSpread!.toFixed(1)} — a wide (>6pt) line` : undefined}
+      role="button"
+      tabIndex={0}
+      aria-expanded={open}
+      onClick={() => setOpen((v) => !v)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          setOpen((v) => !v);
+        }
+      }}
+      className={`relative flex cursor-pointer items-center gap-3 rounded-2xl bg-white px-3 py-3 shadow-sm transition hover:border-slate-300 hover:shadow-md ${isBlowoutSpread ? "border-2 border-violet-500" : "border border-slate-200"}`}
+      title={isBlowoutSpread ? `Spread ${absSpread!.toFixed(1)} — a wide (>6pt) line. Click for every model's probability.` : "Click for every model's probability."}
     >
       {absSpread != null && (
         <span
@@ -550,6 +562,7 @@ function DotStripRow({ g, bundle, teamMeta, annotation }: { g: Row; bundle: Prob
       </div>
       {logo(home, played && actual === "home")}
       <RowAnnotation annotation={annotation} />
+      {open && <GameModelsPopover bundle={bundle} away={away} home={home} actual={actual} annotation={annotation} onClose={() => setOpen(false)} />}
     </div>
   );
 }
