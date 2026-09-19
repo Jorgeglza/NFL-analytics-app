@@ -56,7 +56,22 @@ const DOT_TAP_AUTOCLOSE_MS = 2500;
  * mouse-out. Click/tap (mobile, which has no hover) pins it open briefly —
  * it auto-dismisses after a few seconds, or immediately on an outside click
  * or Escape — without triggering the card's own onClick navigation. */
-export function ModelDotStrip({ bundle, away, home, actual }: { bundle: ProbBundle; away: string; home: string; actual: "home" | "away" | null }) {
+export function ModelDotStrip({
+  bundle,
+  away,
+  home,
+  actual,
+  showEndLabels = true,
+}: {
+  bundle: ProbBundle;
+  away: string;
+  home: string;
+  actual: "home" | "away" | null;
+  /** Set false when the caller already shows away/home identity next to the
+   * strip (e.g. real team logos flanking it) so the strip's own tiny text
+   * labels don't double up. */
+  showEndLabels?: boolean;
+}) {
   type Key = MetricKey | "consensus";
   const [openKey, setOpenKey] = useState<Key | null>(null); // tap-opened, auto-dismisses
   const [hoverKey, setHoverKey] = useState<Key | null>(null); // shown transiently by hover/focus
@@ -135,8 +150,12 @@ export function ModelDotStrip({ bundle, away, home, actual }: { bundle: ProbBund
           )}
         </button>
       )}
-      <span className="absolute -bottom-3.5 left-0 text-[8px] text-slate-400">← {away}</span>
-      <span className="absolute -bottom-3.5 right-0 text-[8px] text-slate-400">{home} →</span>
+      {showEndLabels && (
+        <>
+          <span className="absolute -bottom-3.5 left-0 text-[8px] text-slate-400">← {away}</span>
+          <span className="absolute -bottom-3.5 right-0 text-[8px] text-slate-400">{home} →</span>
+        </>
+      )}
     </div>
   );
 }

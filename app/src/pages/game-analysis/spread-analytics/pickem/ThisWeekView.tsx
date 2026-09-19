@@ -37,8 +37,6 @@ import {
   buildPredictiveIndex,
   probBundle,
   resultWinner,
-  pickWinner,
-  pickBgColor,
   kickoffMs,
   MODEL_KEYS,
   MODEL_COLORS,
@@ -137,81 +135,42 @@ function AvgConfidenceStrip({ avg }: { avg: Partial<Record<MetricKey, number>> }
  * badge, and the shared ModelDotStrip below. Modeled on Matchup Previews'
  * WeekPreviewTab.tsx card, minus its "view full matchup" overlay/win-type
  * badge (out of scope here). */
-function GameCard({
-  g,
-  bundle,
-  primary,
-  primaryLabel,
-  teamMeta,
-}: {
-  g: Row;
-  bundle: ProbBundle;
-  primary: MetricKey;
-  primaryLabel: string;
-  teamMeta: Map<string, TeamMeta>;
-}) {
+/** Simplified per-game row for easy side-by-side comparison across a whole
+ * season's slate: just the dot-strip (every model, all at once) flanked by
+ * the two team logos — no probability bar, no pick badge, no date/text
+ * clutter. All rows share the same track width so dot positions line up
+ * vertically from one game to the next. The winning team's logo still gets
+ * a colored ring, independent of any single model's pick. */
+function DotStripRow({ g, bundle, teamMeta }: { g: Row; bundle: ProbBundle; teamMeta: Map<string, TeamMeta> }) {
   const away = String(g.away_team);
   const home = String(g.home_team);
-  const [pL, pR] = bundle[primary];
-  const leadSide = pickWinner(bundle[primary]);
-  const lead = leadSide === "away" ? away : leadSide === "home" ? home : null;
-  const conf01 = pL != null && pR != null ? Math.max(0, Math.min(1, 2 * Math.max(pL, pR) - 1)) : 0;
   const actual = resultWinner(g);
-  const isCorrect = leadSide != null && actual === leadSide;
-  const borderCol = lead === away ? teamMeta.get(away)?.color : lead === home ? teamMeta.get(home)?.color : "#ddd";
-  const dateStr = g.gameday
-    ? new Date(`${g.gameday}T12:00`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "2-digit" })
-    : "";
   const played = g.home_score != null && g.away_score != null;
 
-  const logoBlock = (team: string, prob: number | null, score: unknown, isWinner: boolean) => {
-    const logo = teamMeta.get(team)?.logo;
+  const logo = (team: string, isWinner: boolean) => {
+    const src = teamMeta.get(team)?.logo;
     const ringColor = teamMeta.get(team)?.color ?? "#16a34a";
     return (
-      <div className="flex-1 text-center">
+      <div className="flex w-14 shrink-0 flex-col items-center gap-1 text-center sm:w-16">
         <span className="inline-block rounded-full" style={isWinner ? { boxShadow: `0 0 0 3px ${ringColor}, 0 0 0 5px white` } : undefined}>
-          {logo ? (
-            <TeamLogoLink to={`/game_analysis/team_comparison?team1=${away}&team2=${home}`} logo={logo} alt={team} imgClassName="mx-auto h-11" title={`Compare ${away} vs ${home}`} />
+          {src ? (
+            <TeamLogoLink to={`/game_analysis/team_comparison?team1=${away}&team2=${home}`} logo={src} alt={team} imgClassName="h-8 w-8 object-contain" title={`Compare ${away} vs ${home}`} />
           ) : (
             <div className="font-bold">{team}</div>
           )}
         </span>
-        <div className={`mt-1 tabular-nums ${isWinner ? "font-black text-slate-900" : "font-medium text-slate-500"}`}>
-          {played ? String(score) : prob != null ? `${Math.round(prob * 100)}%` : "—"}
-        </div>
+        <span className={`text-[10px] font-semibold ${isWinner ? "text-slate-900" : "text-slate-400"}`}>{team}</span>
       </div>
     );
   };
 
   return (
-    <div className="rounded-2xl bg-white p-3.5 shadow-sm" style={{ border: `2px solid ${borderCol ?? "#ddd"}` }}>
-      <div className="mb-1.5">
-        <div className="text-sm font-bold">{dateStr}</div>
-        <div className="text-[11px] font-medium uppercase tracking-wider text-slate-400">
-          {away} @ {home}
-        </div>
+    <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-3 py-3 shadow-sm">
+      {logo(away, played && actual === "away")}
+      <div className="min-w-0 flex-1">
+        <ModelDotStrip bundle={bundle} away={away} home={home} actual={actual} showEndLabels={false} />
       </div>
-      <div className="flex items-center gap-2">
-        {logoBlock(away, pL, g.away_score, played && actual === "away")}
-        <div className="flex h-4 flex-[2] overflow-hidden rounded-full border border-slate-100">
-          <div style={{ width: `${pL != null ? Math.round(100 * pL) : 0}%`, background: teamMeta.get(away)?.color ?? "#888" }} />
-          <div style={{ width: `${pR != null ? Math.round(100 * pR) : 0}%`, background: teamMeta.get(home)?.color ?? "#888" }} />
-        </div>
-        {logoBlock(home, pR, g.home_score, played && actual === "home")}
-      </div>
-      <div className="relative mt-2 inline-block pr-3">
-        <span className="inline-block rounded-full px-2.5 py-1 text-xs font-bold text-slate-900" style={{ background: lead ? pickBgColor(conf01) : "#eee" }}>
-          Pick: {lead ?? "—"} ({primaryLabel})
-        </span>
-        {isCorrect && (
-          <span className="absolute -right-1 top-1/2 grid h-4 w-4 -translate-y-1/2 place-items-center rounded-full bg-[#2CA25F] text-[10px] font-black text-white" title="Correct pick">
-            ✓
-          </span>
-        )}
-      </div>
-      <div className="pb-3">
-        <ModelDotStrip bundle={bundle} away={away} home={home} actual={actual} />
-      </div>
+      {logo(home, played && actual === "home")}
     </div>
   );
 }
@@ -437,7 +396,6 @@ export default function ThisWeekView() {
     });
   }, [gameModelRows]);
   const anyCompleted = modelAcc.some((m) => m.total > 0);
-  const primaryLabel = MODEL_KEYS.find(([k]) => k === primary)?.[1] ?? "";
 
   const disagreementBuckets = useMemo(() => {
     return DISAGREEMENT_BUCKETS.map((label) => {
@@ -722,9 +680,9 @@ export default function ThisWeekView() {
                 </div>
               </div>
 
-              <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))" }}>
+              <div className="space-y-2">
                 {cardsForSeason.map((r) => (
-                  <GameCard key={String(r.g.game_id)} g={r.g} bundle={r.bundle} primary={primary} primaryLabel={primaryLabel} teamMeta={teamMeta} />
+                  <DotStripRow key={String(r.g.game_id)} g={r.g} bundle={r.bundle} teamMeta={teamMeta} />
                 ))}
                 {!cardsForSeason.length && <div className="py-8 text-center text-sm text-slate-400">No games found for this season.</div>}
               </div>
