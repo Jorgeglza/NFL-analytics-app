@@ -54,6 +54,8 @@ import {
   kickoffMs,
   MODEL_KEYS,
   MODEL_COLORS,
+  darkenColor,
+  lightenColor,
   type MetricKey,
   type ProbBundle,
 } from "../../previews/engine";
@@ -218,21 +220,25 @@ interface ProbSpreadGame {
   correct: boolean | null; // null until graded
 }
 
+type ProbSpreadStatus = "correct" | "wrong" | "unplayed";
+
 interface ProbSpreadPoint {
   x: number; // binned P(home wins), 0-100
   y: number; // binned spread_line, home perspective
   count: number;
-  anyCorrect: boolean; // at least one game in this bin where the model's pick matched the actual winner
+  status: ProbSpreadStatus; // precedence correct > wrong > unplayed — see buildProbSpreadPoints
   games: ProbSpreadGame[];
 }
 
 /** Bins each visible model's (P(home wins), spread) pairs to a coarse grid
  * so near-identical games collapse into one marker instead of silently
- * overplotting — `count` then drives marker size/opacity, so overlap reads
- * as "more games here" rather than disappearing. A bin's `anyCorrect` is a
- * deliberate simplification: it's true if the model's pick matched the
- * winner for *any* game in that bin, not tracked per game, since one
- * marker can represent several games — hovering lists them individually. */
+ * overplotting — `count` then drives marker size, so overlap reads as
+ * "more games here" rather than disappearing. A bin's `status` is a
+ * deliberate simplification: one marker can represent several games (some
+ * graded, some not, some right, some wrong), so it collapses them to
+ * whichever outcome is most decision-relevant — a correct pick anywhere in
+ * the bin wins, else a wrong pick, else it's treated as unplayed — rather
+ * than tracking each game's outcome individually. Hovering lists them all. */
 function buildProbSpreadPoints(rows: { bundle: ProbBundle; winner: "home" | "away" | null; g: Row; season: number }[], key: MetricKey): ProbSpreadPoint[] {
   const bins = new Map<string, ProbSpreadPoint>();
   for (const row of rows) {
@@ -241,11 +247,12 @@ function buildProbSpreadPoints(rows: { bundle: ProbBundle; winner: "home" | "awa
     const x = Math.round((p * 100) / PROB_BIN) * PROB_BIN;
     const y = Math.round(Number(row.g.spread_line) / SPREAD_BIN) * SPREAD_BIN;
     const k = `${x}|${y}`;
-    const cur = bins.get(k) ?? { x, y, count: 0, anyCorrect: false, games: [] };
+    const cur = bins.get(k) ?? { x, y, count: 0, status: "unplayed" as ProbSpreadStatus, games: [] };
     cur.count++;
     const predictedSide = pickWinner([1 - p, p]);
     const correct = row.winner == null ? null : predictedSide === row.winner;
-    if (correct) cur.anyCorrect = true;
+    if (correct) cur.status = "correct";
+    else if (correct === false && cur.status !== "correct") cur.status = "wrong";
     cur.games.push({
       season: row.season,
       away: String(row.g.away_team),
@@ -270,41 +277,42 @@ function gameTooltipLine(g: ProbSpreadGame): string {
 
 const scatterSymbolSize = (_val: unknown, params: { data: { count: number } }) => 7 + Math.min(params.data.count - 1, 8) * 2.5;
 
-/** One scatter series per currently-visible model — toggled-off models are
- * simply not included, so the pill row above the chart doubles as its
- * legend with no separate selectedMode/legend state to keep in sync. */
+function probSpreadSeriesData(points: ProbSpreadPoint[]) {
+  return points.map((p) => ({ value: [p.x, p.y], count: p.count, games: p.games }));
+}
+
+/** Up to three scatter series per currently-visible model, split by
+ * `status` (a model with no wrong picks yet just skips that series).
+ * Toggled-off models are simply not included, so the pill row above the
+ * chart doubles as its legend with no separate selectedMode/legend state
+ * to keep in sync. Color/opacity — not a border — carries the outcome:
+ * darker + fully opaque = correct, a lighter tint = wrong, the model's
+ * normal color at baseline opacity = not yet played. */
 function buildProbSpreadChartOption(pointsByModel: [MetricKey, ProbSpreadPoint[]][]): EChartsOption | null {
   if (!pointsByModel.length) return null;
-  const series = pointsByModel.map(([key, points]) => ({
-    name: MODEL_KEYS.find(([k]) => k === key)?.[1] ?? key,
-    type: "scatter" as const,
-    data: points.map((p) => ({ value: [p.x, p.y], count: p.count, anyCorrect: p.anyCorrect, games: p.games })),
-    symbolSize: scatterSymbolSize,
-    itemStyle: {
-      color: MODEL_COLORS[key],
-      opacity: (params: { data: { count: number } }) => Math.min(1, 0.45 + (params.data.count - 1) * 0.12),
-    },
-  }));
-  // Correct-pick outlines are drawn as their own overlay series, one per
-  // model, layered above every fill series via `z`. A per-point border on
-  // the fill series itself isn't enough: series paint in array order, so
-  // whichever model's dot happens to land last on a shared/adjacent bin
-  // paints straight over an earlier model's dot — border included — even
-  // when that earlier model was the one that picked correctly. Drawing the
-  // rings as a separate top layer (transparent fill, `silent`, no tooltip)
-  // means a green ring can never be erased by another model's dot.
-  const outlineSeries = pointsByModel
-    .filter(([, points]) => points.some((p) => p.anyCorrect))
-    .map(([key, points]) => ({
-      name: `${MODEL_KEYS.find(([k]) => k === key)?.[1] ?? key} (correct)`,
+  const baseOpacity = (params: { data: { count: number } }) => Math.min(1, 0.45 + (params.data.count - 1) * 0.12);
+  const byStatus = (status: ProbSpreadStatus) =>
+    pointsByModel
+      .map(([key, points]) => [key, points.filter((p) => p.status === status)] as [MetricKey, ProbSpreadPoint[]])
+      .filter(([, points]) => points.length > 0);
+  const seriesFor = (status: ProbSpreadStatus) =>
+    byStatus(status).map(([key, points]) => ({
+      name: MODEL_KEYS.find(([k]) => k === key)?.[1] ?? key,
       type: "scatter" as const,
-      data: points.filter((p) => p.anyCorrect).map((p) => ({ value: [p.x, p.y], count: p.count })),
+      data: probSpreadSeriesData(points),
       symbolSize: scatterSymbolSize,
-      silent: true,
-      tooltip: { show: false },
-      z: 10,
-      itemStyle: { color: "transparent", borderColor: "#16a34a", borderWidth: 2 },
+      itemStyle:
+        status === "correct"
+          ? { color: darkenColor(MODEL_COLORS[key], 0.35), opacity: 1 }
+          : status === "wrong"
+            ? { color: lightenColor(MODEL_COLORS[key], 0.45), opacity: 0.85 }
+            : { color: MODEL_COLORS[key], opacity: baseOpacity },
     }));
+  // Draw order matters: unplayed, then wrong, then correct last, so that
+  // wherever multiple models' dots overlap the same bin, a correct pick
+  // from *any* model always wins the pixel instead of being hidden under
+  // another model's unplayed/wrong dot drawn later in the array.
+  const series = [...seriesFor("unplayed"), ...seriesFor("wrong"), ...seriesFor("correct")];
   return {
     grid: { left: 48, right: 16, top: 16, bottom: 44, containLabel: true },
     tooltip: {
@@ -334,21 +342,18 @@ function buildProbSpreadChartOption(pointsByModel: [MetricKey, ProbSpreadPoint[]
       nameRotate: 90,
       splitLine: { lineStyle: { color: "#f1f5f9" } },
     },
-    series: [
-      ...series.map((s, i) => ({
-        ...s,
-        markLine:
-          i === 0
-            ? {
-                symbol: "none",
-                lineStyle: { type: "dashed", color: "#94a3b8" },
-                label: { show: false },
-                data: [{ xAxis: 50 }, { yAxis: 0 }],
-              }
-            : undefined,
-      })),
-      ...outlineSeries,
-    ],
+    series: series.map((s, i) => ({
+      ...s,
+      markLine:
+        i === 0
+          ? {
+              symbol: "none",
+              lineStyle: { type: "dashed", color: "#94a3b8" },
+              label: { show: false },
+              data: [{ xAxis: 50 }, { yAxis: 0 }],
+            }
+          : undefined,
+    })),
   } as EChartsOption;
 }
 
@@ -1164,10 +1169,11 @@ export default function ThisWeekView() {
               <div>
                 <h3 className="mb-1 text-sm font-semibold text-slate-700">Model probability vs. spread</h3>
                 <p className="mb-2 text-xs text-slate-500">
-                  Each dot is one model's P(home wins) for a game at that spread. Dots grow (and darken) where several games land in the same
-                  spot — hover a dot to see which game(s), their score, and the winner. A{" "}
-                  <span className="font-semibold text-emerald-600">green outline</span> means the model correctly predicted the winner in at
-                  least one of those games.
+                  Each dot is one model's P(home wins) for a game at that spread. Dots grow where several games land in the same spot —
+                  hover a dot to see which game(s), their score, and the winner. Color shows the outcome:{" "}
+                  <span className="font-semibold text-slate-800">darker, solid</span> means the model correctly predicted the winner,{" "}
+                  <span className="font-semibold text-slate-400">lighter</span> means it picked wrong, and the model's normal color means
+                  the game hasn't been played yet.
                 </p>
 
                 <div className="mb-2 flex flex-wrap items-center gap-2">
