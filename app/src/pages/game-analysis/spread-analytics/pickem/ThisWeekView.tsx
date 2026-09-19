@@ -6,7 +6,7 @@
 // newest first — reuses the Matchup Previews game-card/dot-strip design), and
 // whether the selected week's actual results correlate with each prior
 // week's (expected to fade the further back you go).
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as echarts from "echarts";
 import type { EChartsOption, CustomSeriesOption, CustomSeriesRenderItemAPI, CustomSeriesRenderItemReturn } from "echarts";
 import {
@@ -535,6 +535,7 @@ function DotStripRow({
   const absSpread = g.spread_line == null ? null : Math.abs(Number(g.spread_line));
   const isBlowoutSpread = absSpread != null && absSpread > 6;
   const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   const logo = (team: string, isWinner: boolean) => {
     const src = teamMeta.get(team)?.logo;
@@ -555,37 +556,50 @@ function DotStripRow({
 
   return (
     <div
-      className={`relative flex items-center gap-3 rounded-2xl bg-white px-3 py-3 shadow-sm ${isBlowoutSpread ? "border-2 border-violet-500" : "border border-slate-200"}`}
+      className={`relative rounded-2xl bg-white shadow-sm ${isBlowoutSpread ? "border-2 border-violet-500" : "border border-slate-200"}`}
       title={isBlowoutSpread ? `Spread ${absSpread!.toFixed(1)} — a wide (>6pt) line.` : undefined}
     >
-      {absSpread != null && (
-        <span
-          className={`absolute -top-2 left-4 rounded-full border px-2 text-[9px] font-bold leading-[15px] ${
-            isBlowoutSpread ? "border-violet-500 bg-violet-50 text-violet-700" : "border-slate-200 bg-white text-slate-400"
-          }`}
-        >
-          Spread {absSpread.toFixed(1)}
-        </span>
-      )}
-      {/* Sole trigger for the popup — a whole-row click was too easy to miss (the
-          logos/dots/badge next to it swallow most clicks for their own behavior),
-          so this small always-visible button is the one guaranteed, discoverable way in. */}
-      <button
-        type="button"
-        title="Compare all 7 models"
-        aria-label="Compare all models for this game"
-        aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
-        className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 bg-white text-[11px] font-bold text-slate-500 shadow-sm hover:border-[#002f6c] hover:text-[#002f6c]"
-      >
-        i
-      </button>
-      {logo(away, played && actual === "away")}
-      <div className="min-w-0 flex-1">
-        <ModelDotStrip bundle={bundle} away={away} home={home} actual={actual} showEndLabels={false} />
+      <div className="relative flex items-center gap-3 px-3 py-3">
+        {absSpread != null && (
+          <span
+            className={`absolute -top-2 left-4 rounded-full border px-2 text-[9px] font-bold leading-[15px] ${
+              isBlowoutSpread ? "border-violet-500 bg-violet-50 text-violet-700" : "border-slate-200 bg-white text-slate-400"
+            }`}
+          >
+            Spread {absSpread.toFixed(1)}
+          </span>
+        )}
+        {logo(away, played && actual === "away")}
+        <div className="min-w-0 flex-1">
+          <ModelDotStrip bundle={bundle} away={away} home={home} actual={actual} showEndLabels={false} />
+        </div>
+        {logo(home, played && actual === "home")}
+        <RowAnnotation annotation={annotation} />
       </div>
-      {logo(home, played && actual === "home")}
-      <RowAnnotation annotation={annotation} />
+      {/* Sole trigger for the popup, as a full-width footer strip in normal document
+          flow — not a small absolutely-positioned corner icon. That corner-icon design
+          proved unreliable to tap in practice (on top of the whole-row click it replaced,
+          which was unreliable for the same reason: too small/ambiguous a target next to
+          the logos/dots/badge that swallow most clicks for their own behavior). A full-width
+          bar in normal flow can't be missed and can't be affected by any positioning quirk. */}
+      <button
+        ref={triggerRef}
+        type="button"
+        aria-expanded={open}
+        onClick={(e) => {
+          // Must stop propagation: GameModelsPopover attaches a document-level "click
+          // outside to close" listener the instant it mounts, and React can flush that
+          // effect synchronously enough, for a real (non-synthetic) click, that the very
+          // click which opens it is still bubbling toward `document` when the listener
+          // attaches — so without this it re-closes itself immediately on every real
+          // click. Same reason DotPopover/InfoDot's triggers stop propagation too.
+          e.stopPropagation();
+          setOpen((v) => !v);
+        }}
+        className="flex w-full touch-manipulation items-center justify-center gap-1 rounded-b-2xl border-t border-slate-100 bg-slate-50 py-2 text-[11px] font-semibold text-slate-500 hover:bg-slate-100 hover:text-[#002f6c]"
+      >
+        Compare all 7 models {open ? "▴" : "▾"}
+      </button>
       {open && (
         <GameModelsPopover
           bundle={bundle}
@@ -597,6 +611,7 @@ function DotStripRow({
           allAgreeStat={allAgreeStat}
           pairwiseResolution={pairwiseResolution}
           tossUpAccuracy={tossUpAccuracy}
+          triggerRef={triggerRef}
           onClose={() => setOpen(false)}
         />
       )}

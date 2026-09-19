@@ -163,6 +163,7 @@ export function GameModelsPopover({
   allAgreeStat,
   pairwiseResolution,
   tossUpAccuracy,
+  triggerRef,
   onClose,
 }: {
   bundle: ProbBundle;
@@ -174,6 +175,12 @@ export function GameModelsPopover({
   allAgreeStat: AllAgreeStat;
   pairwiseResolution: Map<string, PairwiseResolution>;
   tossUpAccuracy: Map<MetricKey, TossUpAccuracy>;
+  /** The button that opens/closes this popover. On touch, `touchstart` fires
+   * (and is treated as "outside") before the trigger's own click-driven toggle
+   * runs — without excluding it here, re-tapping the trigger to close would
+   * close-via-outside-touch and then immediately reopen via the trigger's own
+   * toggle, so a second tap would appear to do nothing. */
+  triggerRef?: React.RefObject<HTMLElement>;
   onClose: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -181,7 +188,10 @@ export function GameModelsPopover({
 
   useEffect(() => {
     const onOutside = (e: MouseEvent | TouchEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+      const target = e.target as Node;
+      if (ref.current?.contains(target)) return;
+      if (triggerRef?.current?.contains(target)) return;
+      onClose();
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
