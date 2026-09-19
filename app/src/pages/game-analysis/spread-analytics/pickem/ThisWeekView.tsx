@@ -28,8 +28,10 @@ import { percentile, sampleStd } from "../../../../lib/logic/contributions";
 import { pearsonCorrelation, correlationRead } from "../../../../lib/logic/weekHistory";
 import { getTeamMetaMap, type TeamMeta } from "../../../../lib/team/meta";
 import { TeamLogoLink } from "../../../../components/team/TeamLogoLink";
+import { InfoDot } from "../../../../components/InfoDot";
 import { ModelDotStrip, disagreementOf } from "../../previews/ModelDotStrip";
 import { GameModelsPopover } from "../../previews/GameModelsPopover";
+import TeamMomentumDetail from "./TeamMomentumDetail";
 import {
   computeAgreementMatrix,
   computeAllAgreeStat,
@@ -636,6 +638,7 @@ export default function ThisWeekView() {
   const [sortMode, setSortMode] = useState<"time" | "confidence" | "disagree">("time");
   const [selectedGraphSeasons, setSelectedGraphSeasons] = useState<Set<number>>(new Set());
   const [visibleModels, setVisibleModels] = useState<Set<MetricKey>>(new Set(MODEL_KEYS.map(([k]) => k)));
+  const [selectedMomentumTeam, setSelectedMomentumTeam] = useState<string | null>(null);
 
   useEffect(() => {
     setLoadError(null);
@@ -1359,17 +1362,38 @@ export default function ThisWeekView() {
                 )}
                 {momentumByTeam.length > 0 && (
                   <div>
-                    <h3 className="mb-2 text-sm font-semibold text-slate-700">Which teams carry momentum from Week {lastPriorBreakdown?.priorWeek}?</h3>
-                    <p className="mb-2 text-xs text-slate-500">Sorted by swing — the gap between a team's Week {selectedWeek} win rate after a Week {lastPriorBreakdown?.priorWeek} win vs. after a loss.</p>
+                    <h3 className="mb-1 text-sm font-semibold text-slate-700">
+                      Team record in Week {selectedWeek}, split by Week {lastPriorBreakdown?.priorWeek} result
+                    </h3>
+                    <p className="mb-2 max-w-2xl text-xs text-slate-500">
+                      Not a live streak — a historical split, pooled across all {seasons.length} seasons of data: for each team, how often it won Week{" "}
+                      {selectedWeek} in seasons where it had <span className="font-semibold text-slate-600">also won</span> Week{" "}
+                      {lastPriorBreakdown?.priorWeek}, versus seasons where it had <span className="font-semibold text-slate-600">lost</span> Week{" "}
+                      {lastPriorBreakdown?.priorWeek}. "Swing" is the gap between those two rates — a large swing means this team's Week{" "}
+                      {lastPriorBreakdown?.priorWeek} result has historically been a strong signal for Week {selectedWeek}; a small one means it hasn't
+                      mattered much. Click a team to see the exact seasons behind its numbers. Rows sorted by |swing|.
+                    </p>
                     <div className={tableWrapCls}>
                       <table className="w-full border-separate border-spacing-0 text-xs">
                         <thead className={theadCls}>
                           <tr>
                             <th className={`px-3 py-2 ${stickyColHeadCls}`}>Team</th>
-                            <th className="px-3 py-2 text-right">After win</th>
-                            <th className="px-3 py-2 text-right">After loss</th>
-                            <th className="px-3 py-2 text-right">Swing</th>
-                            <th className="px-3 py-2 text-right">n (W / L)</th>
+                            <th className="px-3 py-2 text-right">
+                              After win
+                              <InfoDot text={`Share of seasons where this team won both Week ${lastPriorBreakdown?.priorWeek} and Week ${selectedWeek}, out of every season it won Week ${lastPriorBreakdown?.priorWeek}.`} />
+                            </th>
+                            <th className="px-3 py-2 text-right">
+                              After loss
+                              <InfoDot text={`Share of seasons where this team lost Week ${lastPriorBreakdown?.priorWeek} but still won Week ${selectedWeek}, out of every season it lost Week ${lastPriorBreakdown?.priorWeek}.`} />
+                            </th>
+                            <th className="px-3 py-2 text-right">
+                              Swing
+                              <InfoDot text="After-win rate minus after-loss rate. Positive = winning the prior week correlates with winning this week; negative = the opposite (bounce-back tendency)." />
+                            </th>
+                            <th className="px-3 py-2 text-right">
+                              n (W / L)
+                              <InfoDot text="Sample size behind each rate: number of pooled seasons the team both won (W) or lost (L) the prior week and also has a result for this week. Small samples are noisy — read swing cautiously below ~10." />
+                            </th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1377,9 +1401,15 @@ export default function ThisWeekView() {
                             const logo = teamMeta.get(t.team)?.logo;
                             return (
                               <tr key={t.team} className={trCls}>
-                                <td className={`flex items-center gap-2 px-3 py-1.5 font-semibold ${stickyColCls}`}>
-                                  {logo && <img src={logo} alt="" className="h-5 w-5 object-contain" />}
-                                  {t.team}
+                                <td className={`px-3 py-1.5 ${stickyColCls}`}>
+                                  <button
+                                    type="button"
+                                    onClick={() => setSelectedMomentumTeam(t.team)}
+                                    className="flex items-center gap-2 font-semibold text-[#002f6c] hover:underline"
+                                  >
+                                    {logo && <img src={logo} alt="" className="h-5 w-5 object-contain" />}
+                                    {t.team}
+                                  </button>
                                 </td>
                                 <td className="px-3 py-1.5 text-right">{t.afterWinRate != null ? `${Math.round(t.afterWinRate * 100)}%` : "—"}</td>
                                 <td className="px-3 py-1.5 text-right">{t.afterLossRate != null ? `${Math.round(t.afterLossRate * 100)}%` : "—"}</td>
@@ -1404,6 +1434,23 @@ export default function ThisWeekView() {
           </Card>
         </>
       )}
+
+      {selectedMomentumTeam &&
+        (() => {
+          const row = momentumByTeam.find((t) => t.team === selectedMomentumTeam);
+          if (!row) return null;
+          return (
+            <TeamMomentumDetail
+              row={row}
+              meta={teamMeta.get(selectedMomentumTeam)}
+              priorWeek={selectedWeekNum - 1}
+              targetWeek={selectedWeekNum}
+              teamWeekBySeason={teamWeekBySeason}
+              reg={reg}
+              onClose={() => setSelectedMomentumTeam(null)}
+            />
+          );
+        })()}
     </div>
   );
 }
