@@ -17,11 +17,12 @@ import {
   type Row,
   type PredictiveModelUpcomingMeta,
 } from "../../../../lib/data/loader";
-import { Card, Kpi, tableWrapCls, theadCls, trCls, scrollHintCls, ScrollHint } from "../../../../components/ui";
+import { Card, Kpi, tableWrapCls, theadCls, trCls, stickyColCls, stickyColHeadCls, scrollHintCls, ScrollHint } from "../../../../components/ui";
 import { Select } from "../../../../components/filters/Select";
 import { Loading, ErrorRetry, Empty } from "../../../../components/Loading";
 import { useECharts } from "../../../../components/charts/useECharts";
 import { buildHistogramBins, histogramBarSeries, sturgesBinCount } from "../../../../components/charts/histogram";
+import { colChartW } from "../../../../components/charts/sizing";
 import { percentile, sampleStd } from "../../../../lib/logic/contributions";
 import { pearsonCorrelation, correlationRead } from "../../../../lib/logic/weekHistory";
 import {
@@ -470,7 +471,13 @@ export default function ThisWeekView() {
 
               <div>
                 <h3 className="mb-1 text-sm font-semibold text-slate-700">Model probabilities across this week's games (home win %)</h3>
-                <div ref={modelChartRef} className="h-[420px]" />
+                <div className="relative overflow-x-auto rounded-xl">
+                  <div style={{ width: colChartW(gameModelRows.length) }} className="h-[420px]">
+                    <div ref={modelChartRef} className="h-full" />
+                  </div>
+                  <div className={scrollHintCls} />
+                  <ScrollHint />
+                </div>
               </div>
 
               <div>
@@ -479,7 +486,7 @@ export default function ThisWeekView() {
                   <table className="w-full border-separate border-spacing-0 text-xs">
                     <thead className={theadCls}>
                       <tr>
-                        <th className="px-3 py-2">Disagreement</th>
+                        <th className={`px-3 py-2 ${stickyColHeadCls}`}>Disagreement</th>
                         <th className="px-3 py-2 text-right">Games</th>
                         <th className="px-3 py-2 text-right">Underdog win rate</th>
                         {MODEL_KEYS.map(([key, label]) => (
@@ -492,7 +499,7 @@ export default function ThisWeekView() {
                     <tbody>
                       {disagreementBuckets.map((b) => (
                         <tr key={b.label} className={trCls}>
-                          <td className="px-3 py-1.5 font-semibold">{b.label}</td>
+                          <td className={`px-3 py-1.5 font-semibold ${stickyColCls}`}>{b.label}</td>
                           <td className="px-3 py-1.5 text-right">{b.n}</td>
                           <td className="px-3 py-1.5 text-right">{b.underdogWinRate != null ? `${Math.round(b.underdogWinRate * 100)}%` : "—"}</td>
                           {MODEL_KEYS.map(([key]) => (
@@ -576,8 +583,7 @@ function ModelTable({ rows, showResult }: { rows: GameModelRow[]; showResult: bo
       <table className="w-full border-separate border-spacing-0 text-xs">
         <thead className={theadCls}>
           <tr>
-            <th className="px-3 py-2">Season</th>
-            <th className="px-3 py-2">Matchup</th>
+            <th className={`px-3 py-2 ${stickyColHeadCls}`}>Game</th>
             {MODEL_KEYS.map(([key, label]) => (
               <th key={key} className="px-3 py-2 text-right">
                 {label}
@@ -595,9 +601,8 @@ function ModelTable({ rows, showResult }: { rows: GameModelRow[]; showResult: bo
             const minKey = vals.length ? vals.reduce((a, b) => (b[1] < a[1] ? b : a))[0] : null;
             return (
               <tr key={g.gameId} className={trCls}>
-                <td className="px-3 py-1.5">{g.season}</td>
-                <td className="px-3 py-1.5 font-semibold">
-                  {g.away} @ {g.home}
+                <td className={`px-3 py-1.5 font-semibold ${stickyColCls}`}>
+                  {g.season} &middot; {g.away} @ {g.home}
                 </td>
                 {MODEL_KEYS.map(([key]) => {
                   const p = g.homeProbs[key];
