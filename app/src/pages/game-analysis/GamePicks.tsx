@@ -4,8 +4,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import type { EChartsOption } from "echarts";
-import { toPng } from "html-to-image";
 import { getSchedule, getGrades, getTeamWeek, getMeta, getPredictiveModelGames, getPredictiveModelUpcoming, type Row } from "../../lib/data/loader";
+import { loadAllImages, capturePngStable, copyOrDownloadPng } from "../../lib/exportImage";
 import { getTeamMetaMap, type TeamMeta } from "../../lib/team/meta";
 import { Select } from "../../components/filters/Select";
 import { useECharts } from "../../components/charts/useECharts";
@@ -56,114 +56,10 @@ const EXPORT_TIGHT_CSS = `
   .${EXPORT_TIGHT_CLASS} td:nth-child(7), .${EXPORT_TIGHT_CLASS} th:nth-child(7) { text-align: center; }
 `;
 
-// Team logos live on a cross-origin CDN, served at a fixed 500×500px
-// (ESPN's CDN) even though they render at a small icon size here (20 CSS
-// px). html-to-image's own approach — clone the DOM into an SVG
-// <foreignObject>, then base64 the *whole SVG* into a second data: URI for
-// final canvas rasterization — means every embedded image's full byte size
-// gets compounded into that outer payload. With ~16-32 full-resolution
-// logos embedded, that payload can reach multiple MB; real mobile
-// Safari/WebKit has a documented history of silently failing to rasterize
-// data: URIs in that size class (blank output, no thrown error) where
-// desktop Chromium tolerates it fine — which matches exactly what was
-// happening (everything else in the export is comparatively tiny and
-// rendered correctly; only the image-heavy portion came out blank, and
-// only on mobile). Downscaling each logo to its actual rendered size
-// before embedding keeps the whole export payload small enough to
-// rasterize reliably everywhere, as a bonus this also makes the export
-// noticeably lighter/faster. Cached by URL+size (module-level, survives
-// across captures) since the same handful of team logos repeat every week.
-const logoDataUriCache = new Map<string, Promise<string | null>>();
-
-/** Fetches `url` and re-encodes it as a small PNG data: URI at `renderPx`
- * (its actual on-screen size, not the source's native resolution) — see
- * the comment above for why this matters for the mobile export. Falls back
- * to `null` (leaving the original remote URL in place, same as before this
- * inlining existed) on any fetch/decode failure. */
-function toDataUri(url: string, renderPx: number): Promise<string | null> {
-  const key = `${url}@${renderPx}`;
-  let cached = logoDataUriCache.get(key);
-  if (!cached) {
-    cached = fetch(url)
-      .then((r) => (r.ok ? r.blob() : Promise.reject(new Error(`${r.status}`))))
-      .then(
-        (blob) =>
-          new Promise<string | null>((resolve) => {
-            const objectUrl = URL.createObjectURL(blob);
-            const img = new Image();
-            img.onload = () => {
-              URL.revokeObjectURL(objectUrl);
-              const canvas = document.createElement("canvas");
-              canvas.width = renderPx;
-              canvas.height = renderPx;
-              const ctx = canvas.getContext("2d");
-              if (!ctx) {
-                resolve(null);
-                return;
-              }
-              ctx.drawImage(img, 0, 0, renderPx, renderPx);
-              resolve(canvas.toDataURL("image/png"));
-            };
-            img.onerror = () => {
-              URL.revokeObjectURL(objectUrl);
-              resolve(null);
-            };
-            img.src = objectUrl;
-          }),
-      )
-      .catch(() => null);
-    logoDataUriCache.set(key, cached);
-  }
-  return cached;
-}
-
-/** Prepares every `<img>` inside `container` for the copy-as-image capture:
- * swaps each remote src for a small same-origin data: URI (see `toDataUri`
- * above) and waits for it to finish loading, bounded by a timeout per image
- * so one stalled/broken logo can't hang the whole export. */
-async function loadAllImages(container: HTMLElement, timeoutMs = 4000): Promise<void> {
-  const imgs = Array.from(container.querySelectorAll("img"));
-  await Promise.all(
-    imgs.map(async (img) => {
-      const src = img.getAttribute("src");
-      if (src && !src.startsWith("data:")) {
-        const renderPx = Math.max(20, Math.round((img.clientWidth || 20) * EXPORT_PIXEL_RATIO));
-        const dataUri = await toDataUri(src, renderPx);
-        if (dataUri) img.src = dataUri;
-      }
-      if (img.complete) return;
-      img.loading = "eager";
-      await new Promise<void>((resolve) => {
-        const done = () => resolve();
-        img.addEventListener("load", done, { once: true });
-        img.addEventListener("error", done, { once: true });
-        setTimeout(done, timeoutMs);
-      });
-    }),
-  );
-}
-
-/** Mobile WebKit (iOS Safari) has a documented, still-open bug in
- * html-to-image (github.com/bubkoo/html-to-image issue #591 — reproduced
- * by the library's own maintainers on a real iPhone, on 1.11.13, the exact
- * version this app uses) where a capture containing images comes back with
- * some of them blank under memory pressure, non-deterministically; desktop
- * Chromium isn't affected. A single retry isn't reliable either — the fix
- * that issue converged on, and the one used here, is to recapture until
- * two consecutive attempts come back byte-identical (or a small attempt
- * cap is hit), which reliably lands on a fully-rendered result. This is a
- * no-op extra cost on desktop/anyone unaffected: the very first attempt is
- * already stable there, so the loop exits on the second iteration. */
-async function capturePngStable(node: HTMLElement, options: Parameters<typeof toPng>[1], maxAttempts = 4): Promise<string> {
-  let previous: string | null = null;
-  let last = "";
-  for (let i = 0; i < maxAttempts; i++) {
-    last = await toPng(node, options);
-    if (previous === last) return last;
-    previous = last;
-  }
-  return last;
-}
+// toDataUri/loadAllImages/capturePngStable (cross-origin logo inlining +
+// the mobile-Safari stable-capture retry) live in ../../lib/exportImage —
+// shared with Parlay Builder's export button. See that module for the
+// detailed rationale.
 
 function loadManual(): string[] {
   try {
@@ -623,7 +519,7 @@ export default function GamePicks() {
     host.appendChild(clone);
     document.body.appendChild(host);
     try {
-      await loadAllImages(clone);
+      await loadAllImages(clone, EXPORT_PIXEL_RATIO);
       const dataUrl = await capturePngStable(clone, {
         backgroundColor: "#ffffff",
         pixelRatio: EXPORT_PIXEL_RATIO,
@@ -631,26 +527,8 @@ export default function GamePicks() {
         height: clone.scrollHeight,
         filter: (node) => !(node instanceof HTMLElement && node.dataset.exportExclude != null),
       });
-      let copied = false;
-      if (typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
-        try {
-          const blob = await (await fetch(dataUrl)).blob();
-          await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
-          copied = true;
-        } catch {
-          // Clipboard API present but denied/unsupported (permissions policy,
-          // browser quirk, etc.) — fall through to the download fallback below.
-        }
-      }
-      if (copied) {
-        setCopyState("copied");
-      } else {
-        const a = document.createElement("a");
-        a.href = dataUrl;
-        a.download = `game-picks-${season}-wk${week}.png`;
-        a.click();
-        setCopyState("downloaded");
-      }
+      const outcome = await copyOrDownloadPng(dataUrl, `game-picks-${season}-wk${week}.png`);
+      setCopyState(outcome);
     } catch {
       setCopyState("error");
     } finally {

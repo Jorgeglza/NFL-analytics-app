@@ -10,7 +10,19 @@ import { useECharts } from "../../components/charts/useECharts";
 import { opponentLabel } from "../grading-model/shared";
 import { PageSkeleton } from "../../components/Skeleton";
 import { ErrorRetry } from "../../components/Loading";
+import { loadAllImages, capturePngStable, copyOrDownloadPng } from "../../lib/exportImage";
 import { buildStatGroups, statLabel, americanOdds, headshotCrop, randomItem, randomPassRushRecStat, seasonTypeOptions, HIT_COLOR, MISS_COLOR, NEUTRAL_COLOR } from "./statPicker";
+
+// Toggled on the export container only for the instant of the copy-as-image
+// capture — tighter card padding/gaps read better as a shared static image
+// than the wider on-screen spacing. Scoped to this one class so the live,
+// interactive page is untouched. Mirrors Game Picks' EXPORT_TIGHT_CLASS.
+const EXPORT_TIGHT_CLASS = "pb-export-tight";
+const EXPORT_PIXEL_RATIO = 2;
+const EXPORT_TIGHT_CSS = `
+  .${EXPORT_TIGHT_CLASS} { width: auto; }
+  .${EXPORT_TIGHT_CLASS} .pb-leg-card { gap: 10px; padding: 10px; margin-bottom: 8px; }
+`;
 
 const EXCLUDE = new Set([
   "season", "week", "team", "opponent_team", "gameday", "game_id",
@@ -191,9 +203,17 @@ function LegCard({
   const set = (patch: Partial<Leg>) => onChange({ ...leg, ...patch, team, stat, player, ...patch });
 
   return (
-    <div className="mb-3 flex flex-wrap items-center gap-4 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+    <div className="pb-leg-card mb-3 flex flex-wrap items-center gap-4 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
       <div className="min-w-0 flex-1 sm:min-w-[340px]">
-        <div className="flex flex-wrap items-end gap-2">
+        {/* Plain-text readout of the current picks — the only thing that
+            survives the export-as-image capture once the selects/inputs
+            below are excluded from it (data-export-exclude), so the
+            exported card still says what leg it is. */}
+        <div className="pb-leg-summary mb-1 text-sm font-bold text-[#002f6c]">
+          {player || "—"} <span className="font-medium text-slate-400">·</span> {team} <span className="font-medium text-slate-400">·</span> {statLabel(stat)}
+          {line != null && <span className="text-slate-500"> {line}</span>}
+        </div>
+        <div data-export-exclude className="flex flex-wrap items-end gap-2">
           <Select label="Season" value={leg.season} onChange={(v) => set({ season: v })} options={seasons.map((s) => ({ value: String(s), label: String(s) }))} />
           <Select label="Season Type" value={leg.seasonType} onChange={(v) => set({ seasonType: v })} options={seasonTypeOptions(seasonTypes)} />
           <Select label="Team" value={team} onChange={(v) => set({ team: v })} options={teams.map((t) => ({ value: t, label: teamMeta?.get(t)?.name ?? t }))} />
@@ -208,7 +228,7 @@ function LegCard({
             </div>
           </div>
         </div>
-        <div className="mt-2 flex flex-wrap items-end gap-2">
+        <div data-export-exclude className="mt-2 flex flex-wrap items-end gap-2">
           <Select label="Stat" value={stat} onChange={(v) => set({ stat: v })} groups={statGroups} />
           <Select label="Player" value={player} onChange={(v) => set({ player: v })} options={players.map((p) => ({ value: p, label: p }))} />
           <label className="flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wider text-[#002f6c]">
@@ -261,7 +281,7 @@ function LegCard({
             "Set a line"
           )}
         </div>
-        <div className="flex flex-col items-center gap-1.5">
+        <div data-export-exclude className="flex flex-col items-center gap-1.5">
           <button onClick={onAdd} className="h-11 w-11 rounded-full border border-slate-300 font-bold hover:bg-slate-100 sm:h-8 sm:w-8">+</button>
           {removable && (
             <button onClick={onRemove} className="h-11 w-11 rounded-full border border-slate-300 font-bold hover:bg-slate-100 sm:h-8 sm:w-8">−</button>
@@ -289,6 +309,8 @@ export default function ParlayBuilder() {
   const [resetGen, setResetGen] = useState(0);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [retryTick, setRetryTick] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [copyState, setCopyState] = useState<"idle" | "working" | "copied" | "downloaded" | "error">("idle");
 
   useEffect(() => {
     setLoadError(null);
@@ -310,25 +332,83 @@ export default function ParlayBuilder() {
   const probs = legs.map((_, i) => pcts[i]).filter((p): p is number => p != null).map((p) => p / 100);
   const expectedProb = probs.length ? probs.reduce((a, b) => a * b, 1) : null;
   const expectedOdds = expectedProb != null && expectedProb > 0 ? 1 / expectedProb : null;
+  const expectedAmericanOdds = expectedProb != null ? americanOdds(expectedProb) : null;
+
+  // Captures the sticky header (title + probability/odds pills) plus every
+  // leg's clean summary (headshot, static pick label, chart, hit-rate) into
+  // one shareable PNG — mirrors Game Picks' copyTableAsImage, but over a
+  // whole-page clone instead of a single <table>. Anything marked
+  // data-export-exclude (the editable selects/inputs and +/− buttons) is
+  // dropped from the capture only, never from the live page.
+  const copyParlayAsImage = async () => {
+    const container = containerRef.current;
+    if (!container || copyState === "working") return;
+    setCopyState("working");
+    const clone = container.cloneNode(true) as HTMLDivElement;
+    clone.classList.add(EXPORT_TIGHT_CLASS);
+    const host = document.createElement("div");
+    host.style.cssText = "position:fixed; top:0; left:-10000px; pointer-events:none;";
+    host.appendChild(clone);
+    document.body.appendChild(host);
+    try {
+      await loadAllImages(clone, EXPORT_PIXEL_RATIO);
+      const dataUrl = await capturePngStable(clone, {
+        backgroundColor: "#ffffff",
+        pixelRatio: EXPORT_PIXEL_RATIO,
+        width: clone.scrollWidth,
+        height: clone.scrollHeight,
+        filter: (node) => !(node instanceof HTMLElement && node.dataset.exportExclude != null),
+      });
+      const outcome = await copyOrDownloadPng(dataUrl, `parlay-${legs.length}-leg.png`);
+      setCopyState(outcome);
+    } catch {
+      setCopyState("error");
+    } finally {
+      host.remove();
+      setTimeout(() => setCopyState("idle"), 1800);
+    }
+  };
+  const copyBtnLabel =
+    copyState === "copied" ? "✅" : copyState === "downloaded" ? "⬇️" : copyState === "error" ? "⚠️" : copyState === "working" ? "⏳" : "📋";
+  const copyBtnTitle =
+    copyState === "copied"
+      ? "Copied!"
+      : copyState === "downloaded"
+        ? "Clipboard unavailable — downloaded instead"
+        : copyState === "error"
+          ? "Couldn't copy image"
+          : copyState === "working"
+            ? "Copying…"
+            : "Copy parlay as image";
 
   if (loadError) return <ErrorRetry onRetry={() => setRetryTick((t) => t + 1)} />;
   if (!legs.length) return <PageSkeleton cards={2} blocks={2} />;
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-4">
+    <div ref={containerRef} className="space-y-4">
+      <style>{EXPORT_TIGHT_CSS}</style>
+      <div className="sticky top-[53px] z-20 -mx-3 flex flex-wrap items-center justify-between gap-4 border-b border-slate-200/80 bg-white/90 px-3 py-2 backdrop-blur sm:-mx-4 sm:px-4">
         <h1 className="flex items-center gap-2.5 text-2xl font-extrabold tracking-tight text-[#002f6c]"><span className="h-6 w-1.5 rounded-full bg-gradient-to-b from-[#002f6c] to-[#164a9c]" />Parlay Builder</h1>
         <div className="flex flex-wrap items-center gap-3">
-          {[
-            ["Expected Probability", expectedProb == null ? "—" : `${(expectedProb * 100).toFixed(2)}%`],
-            ["Expected Odds", expectedOdds == null ? "—" : expectedOdds.toFixed(2)],
-          ].map(([l, v]) => (
-            <div key={l} className="min-w-[calc(50%-2.25rem)] flex-1 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-center shadow-sm sm:min-w-40 sm:flex-none" style={{ borderTop: "3px solid #002f6c" }}>
-              <div className="text-[11px] font-medium uppercase tracking-wider text-slate-400">{l}</div>
-              <div className="mt-0.5 text-2xl font-bold">{v}</div>
-            </div>
-          ))}
+          <div className="min-w-[calc(50%-2.25rem)] flex-1 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-center shadow-sm sm:min-w-40 sm:flex-none" style={{ borderTop: "3px solid #002f6c" }}>
+            <div className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Expected Probability</div>
+            <div className="mt-0.5 text-2xl font-bold">{expectedProb == null ? "—" : `${(expectedProb * 100).toFixed(2)}%`}</div>
+            {expectedAmericanOdds && <div className="mt-0.5 text-[11px] font-semibold text-slate-400">{expectedAmericanOdds}</div>}
+          </div>
+          <div className="min-w-[calc(50%-2.25rem)] flex-1 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-center shadow-sm sm:min-w-40 sm:flex-none" style={{ borderTop: "3px solid #002f6c" }}>
+            <div className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Expected Odds</div>
+            <div className="mt-0.5 text-2xl font-bold">{expectedOdds == null ? "—" : expectedOdds.toFixed(2)}</div>
+          </div>
           <button
+            data-export-exclude
+            onClick={copyParlayAsImage}
+            className={`rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm transition-colors hover:text-slate-900 ${copyState === "working" ? "animate-pulse" : ""}`}
+            title={copyBtnTitle}
+          >
+            {copyBtnLabel} Export
+          </button>
+          <button
+            data-export-exclude
             onClick={resetParlay}
             className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm transition-colors hover:text-slate-900"
             title="Clear all legs and start over"
