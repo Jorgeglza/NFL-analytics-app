@@ -203,6 +203,97 @@ function buildAgreementChartOption(cells: { a: AxisKey; b: AxisKey; pct: number 
   } as EChartsOption;
 }
 
+const PROB_BIN = 4; // percentage points
+const SPREAD_BIN = 1; // points
+
+interface ProbSpreadPoint {
+  x: number; // binned P(home wins), 0-100
+  y: number; // binned spread_line, home perspective
+  count: number;
+  anyPlayed: boolean; // at least one game in this bin has a known winner
+}
+
+/** Bins each visible model's (P(home wins), spread) pairs to a coarse grid
+ * so near-identical games collapse into one marker instead of silently
+ * overplotting — `count` then drives marker size/opacity, so overlap reads
+ * as "more games here" rather than disappearing. A bin's `anyPlayed` is a
+ * deliberate simplification: it's true if *any* game in that bin is graded,
+ * not tracked per game, since one marker can represent several games. */
+function buildProbSpreadPoints(rows: { bundle: ProbBundle; winner: "home" | "away" | null; g: Row }[], key: MetricKey): ProbSpreadPoint[] {
+  const bins = new Map<string, ProbSpreadPoint>();
+  for (const row of rows) {
+    const p = row.bundle[key][1];
+    if (p == null || row.g.spread_line == null) continue;
+    const x = Math.round((p * 100) / PROB_BIN) * PROB_BIN;
+    const y = Math.round(Number(row.g.spread_line) / SPREAD_BIN) * SPREAD_BIN;
+    const k = `${x}|${y}`;
+    const cur = bins.get(k) ?? { x, y, count: 0, anyPlayed: false };
+    cur.count++;
+    if (row.winner != null) cur.anyPlayed = true;
+    bins.set(k, cur);
+  }
+  return [...bins.values()];
+}
+
+/** One scatter series per currently-visible model — toggled-off models are
+ * simply not included, so the pill row above the chart doubles as its
+ * legend with no separate selectedMode/legend state to keep in sync. */
+function buildProbSpreadChartOption(pointsByModel: [MetricKey, ProbSpreadPoint[]][]): EChartsOption | null {
+  if (!pointsByModel.length) return null;
+  const series = pointsByModel.map(([key, points]) => ({
+    name: MODEL_KEYS.find(([k]) => k === key)?.[1] ?? key,
+    type: "scatter" as const,
+    data: points.map((p) => ({ value: [p.x, p.y], count: p.count, anyPlayed: p.anyPlayed })),
+    symbolSize: (_val: unknown, params: { data: { count: number } }) => 7 + Math.min(params.data.count - 1, 8) * 2.5,
+    itemStyle: {
+      color: MODEL_COLORS[key],
+      opacity: (params: { data: { count: number } }) => Math.min(1, 0.45 + (params.data.count - 1) * 0.12),
+      borderColor: (params: { data: { anyPlayed: boolean } }) => (params.data.anyPlayed ? "#16a34a" : "transparent"),
+      borderWidth: (params: { data: { anyPlayed: boolean } }) => (params.data.anyPlayed ? 2 : 0),
+    },
+  }));
+  return {
+    grid: { left: 48, right: 16, top: 16, bottom: 44, containLabel: true },
+    tooltip: {
+      trigger: "item",
+      formatter: (p: unknown) => {
+        const { seriesName, value, data } = p as { seriesName: string; value: [number, number]; data: { count: number; anyPlayed: boolean } };
+        return `${seriesName}<br/>P(home) ≈ ${value[0]}%, spread ≈ ${value[1]}<br/>${data.count} game${data.count === 1 ? "" : "s"}${data.anyPlayed ? " · result known" : ""}`;
+      },
+    },
+    xAxis: {
+      type: "value",
+      min: 0,
+      max: 100,
+      name: "Model probability — P(home wins)",
+      nameLocation: "middle",
+      nameGap: 28,
+      axisLabel: { formatter: "{value}%" },
+      splitLine: { lineStyle: { color: "#f1f5f9" } },
+    },
+    yAxis: {
+      type: "value",
+      name: "Spread (home perspective)",
+      nameLocation: "middle",
+      nameGap: 34,
+      nameRotate: 90,
+      splitLine: { lineStyle: { color: "#f1f5f9" } },
+    },
+    series: series.map((s, i) => ({
+      ...s,
+      markLine:
+        i === 0
+          ? {
+              symbol: "none",
+              lineStyle: { type: "dashed", color: "#94a3b8" },
+              label: { show: false },
+              data: [{ xAxis: 50 }, { yAxis: 0 }],
+            }
+          : undefined,
+    })),
+  } as EChartsOption;
+}
+
 const ANNOTATION_MIN_N = 5;
 
 // Short forms for the badge itself (space is tight) — the hover title still
@@ -364,13 +455,13 @@ function DotStripRow({ g, bundle, teamMeta, annotation }: { g: Row; bundle: Prob
 
   return (
     <div
-      className={`relative flex items-center gap-3 rounded-2xl bg-white px-3 py-3 shadow-sm ${isBlowoutSpread ? "border-2 border-emerald-500" : "border border-slate-200"}`}
+      className={`relative flex items-center gap-3 rounded-2xl bg-white px-3 py-3 shadow-sm ${isBlowoutSpread ? "border-2 border-violet-500" : "border border-slate-200"}`}
       title={isBlowoutSpread ? `Spread ${absSpread!.toFixed(1)} — a wide (>6pt) line` : undefined}
     >
       {absSpread != null && (
         <span
           className={`absolute -top-2 left-4 rounded-full border px-2 text-[9px] font-bold leading-[15px] ${
-            isBlowoutSpread ? "border-emerald-500 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-white text-slate-400"
+            isBlowoutSpread ? "border-violet-500 bg-violet-50 text-violet-700" : "border-slate-200 bg-white text-slate-400"
           }`}
         >
           Spread {absSpread.toFixed(1)}
@@ -401,6 +492,8 @@ export default function ThisWeekView() {
   const [selectedSeason, setSelectedSeason] = useState("");
   const [primary, setPrimary] = useState<MetricKey>("consensus");
   const [sortMode, setSortMode] = useState<"time" | "confidence" | "disagree">("time");
+  const [selectedGraphSeasons, setSelectedGraphSeasons] = useState<Set<number>>(new Set());
+  const [visibleModels, setVisibleModels] = useState<Set<MetricKey>>(new Set(MODEL_KEYS.map(([k]) => k)));
 
   useEffect(() => {
     setLoadError(null);
@@ -652,6 +745,44 @@ export default function ThisWeekView() {
     const next = seasonsForWeek[seasonIdx + dir];
     if (next != null) setSelectedSeason(String(next));
   };
+
+  // Probability-vs-spread scatter's own season selection — starts on just
+  // the currently-paginated season (seeded once, not kept in sync with the
+  // pager afterward) so the chart opens clean; the season chips below it
+  // are how you "add more seasons to see how they contribute."
+  useEffect(() => {
+    if (selectedGraphSeasons.size > 0) return;
+    if (seasonsForWeek.length) setSelectedGraphSeasons(new Set([seasonsForWeek[0]]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- seed once only
+  }, [seasonsForWeek]);
+  const toggleGraphSeason = (season: number) => {
+    setSelectedGraphSeasons((prev) => {
+      const next = new Set(prev);
+      if (next.has(season)) next.delete(season);
+      else next.add(season);
+      return next;
+    });
+  };
+  const toggleVisibleModel = (key: MetricKey) => {
+    setVisibleModels((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const probSpreadRows = useMemo(
+    () => gameModelRows.filter((r) => selectedGraphSeasons.has(r.season)),
+    [gameModelRows, selectedGraphSeasons],
+  );
+  const probSpreadChartOption = useMemo(() => {
+    const pointsByModel: [MetricKey, ProbSpreadPoint[]][] = MODEL_KEYS.map(([key]) => key)
+      .filter((key) => visibleModels.has(key))
+      .map((key) => [key, buildProbSpreadPoints(probSpreadRows, key)]);
+    return buildProbSpreadChartOption(pointsByModel);
+  }, [probSpreadRows, visibleModels]);
+  const probSpreadChartRef = useECharts(probSpreadChartOption);
 
   const cardsForSeason = useMemo(() => {
     const annotationCtx = { allAgreeStat, pairwiseResolution, tossUpAccuracy, bestTossUp };
@@ -970,6 +1101,55 @@ export default function ThisWeekView() {
                   <div className={scrollHintCls} />
                   <ScrollHint />
                 </div>
+              </div>
+
+              <div>
+                <h3 className="mb-1 text-sm font-semibold text-slate-700">Model probability vs. spread</h3>
+                <p className="mb-2 text-xs text-slate-500">
+                  Each dot is one model's P(home wins) for a game at that spread. Dots grow (and darken) where several games land in the same
+                  spot; a <span className="font-semibold text-emerald-600">green outline</span> means that game's result is already known.
+                </p>
+
+                <div className="mb-2 flex flex-wrap items-center gap-2">
+                  <span className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Seasons</span>
+                  {seasonsForWeek.map((s) => {
+                    const on = selectedGraphSeasons.has(s);
+                    return (
+                      <button
+                        key={s}
+                        onClick={() => toggleGraphSeason(s)}
+                        className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
+                          on ? "border-[#002f6c] bg-[#002f6c] text-white" : "border-slate-200 bg-white text-slate-500 hover:text-slate-900"
+                        }`}
+                      >
+                        {s}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="mb-2 flex flex-wrap items-center gap-2">
+                  <span className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Models</span>
+                  {MODEL_KEYS.map(([key, label]) => {
+                    const on = visibleModels.has(key);
+                    return (
+                      <button
+                        key={key}
+                        onClick={() => toggleVisibleModel(key)}
+                        className={`rounded-full border px-2.5 py-1 text-xs font-semibold transition-all ${on ? "" : "opacity-40 grayscale"}`}
+                        style={{ borderColor: `${MODEL_COLORS[key]}88`, background: `${MODEL_COLORS[key]}1a`, color: MODEL_COLORS[key] }}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {probSpreadChartOption ? (
+                  <div ref={probSpreadChartRef} className="h-[380px]" />
+                ) : (
+                  <Empty label="Select at least one season and one model to plot." />
+                )}
               </div>
             </div>
           </Card>
