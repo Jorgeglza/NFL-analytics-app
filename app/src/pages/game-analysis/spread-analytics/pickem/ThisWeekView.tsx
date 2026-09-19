@@ -205,9 +205,26 @@ function buildAgreementChartOption(cells: { a: AxisKey; b: AxisKey; pct: number 
 
 const ANNOTATION_MIN_N = 5;
 
+// Short forms for the badge itself (space is tight) — the hover title still
+// spells out the full MODEL_KEYS label.
+const SHORT_LABEL: Record<MetricKey, string> = {
+  consensus: "Avg",
+  ml: "ML Fair",
+  blend: "Market",
+  predictive: "Predictive",
+  elo: "Elo",
+  pyth: "Pythag.",
+  trend: "Trend",
+};
+
 interface RowAnnotationInfo {
   tone: "agree" | "tossup" | "disagree" | "unknown";
-  text: string;
+  /** Top line: icon + who/what this badge is about. */
+  line1: string;
+  /** Bottom line: the win% for this specific split/category, plus the
+   * historical sample size it's based on — visible on every card, not just
+   * in the hover title. */
+  line2: string;
   title: string;
   muted: boolean;
 }
@@ -232,7 +249,8 @@ function buildAnnotation(
     const pct = winRate != null ? Math.round(winRate * 100) : null;
     return {
       tone: "agree",
-      text: pct != null ? `🤝 ${pct}%` : "🤝 —",
+      line1: "🤝 All agree",
+      line2: pct != null ? `${pct}% (n=${n})` : "no history yet",
       title:
         pct != null
           ? `All models agree here — right ${pct}% of the time historically (n=${n}).`
@@ -242,12 +260,15 @@ function buildAnnotation(
   }
 
   if (category.kind === "toss-up") {
-    if (!ctx.bestTossUp) return { tone: "tossup", text: "🪙 —", title: "Toss-up game — not enough history yet to say which model does best here.", muted: true };
+    if (!ctx.bestTossUp) {
+      return { tone: "tossup", line1: "🪙 Toss-up", line2: "no history yet", title: "Toss-up game — not enough history yet to say which model does best here.", muted: true };
+    }
     const { acc, n } = ctx.tossUpAccuracy.get(ctx.bestTossUp) ?? { acc: null, n: 0 };
     const pct = acc != null ? Math.round(acc * 100) : null;
     return {
       tone: "tossup",
-      text: `🪙 ${label(ctx.bestTossUp)}`,
+      line1: `🪙 ${SHORT_LABEL[ctx.bestTossUp]}`,
+      line2: pct != null ? `${pct}% (n=${n})` : "no history yet",
       title: `Toss-up game (all models near 50/50) — ${label(ctx.bestTossUp)} has been the most accurate model in these spots (${pct}%, n=${n}).`,
       muted: n < ANNOTATION_MIN_N,
     };
@@ -256,27 +277,36 @@ function buildAnnotation(
   if (category.kind === "disagree") {
     const res = ctx.pairwiseResolution.get(pairKey(category.a, category.b));
     if (!res || res.n === 0) {
-      return { tone: "disagree", text: "⚡ Split", title: `${label(category.a)} and ${label(category.b)} disagree here — not enough history yet.`, muted: true };
+      return {
+        tone: "disagree",
+        line1: `⚡ ${SHORT_LABEL[category.a]}/${SHORT_LABEL[category.b]}`,
+        line2: "no history yet",
+        title: `${label(category.a)} and ${label(category.b)} disagree here — not enough history yet.`,
+        muted: true,
+      };
     }
     const pctA = res.accA != null ? Math.round(res.accA * 100) : null;
     const pctB = res.accB != null ? Math.round(res.accB * 100) : null;
     if (!res.better) {
       return {
         tone: "disagree",
-        text: "⚡ Split",
+        line1: `⚡ ${SHORT_LABEL[category.a]}/${SHORT_LABEL[category.b]}`,
+        line2: `${pctA}% vs ${pctB}% (n=${res.n})`,
         title: `${label(category.a)} and ${label(category.b)} disagree here — no clear edge historically (${pctA}% vs ${pctB}%, n=${res.n}).`,
         muted: res.n < ANNOTATION_MIN_N,
       };
     }
+    const winPct = res.better === category.a ? pctA : pctB;
     return {
       tone: "disagree",
-      text: `⚡ ${label(res.better)}`,
+      line1: `⚡ ${SHORT_LABEL[res.better]}`,
+      line2: `${winPct}% (n=${res.n})`,
       title: `${label(category.a)} and ${label(category.b)} disagree here — ${label(res.better)} has been right more often when these two split (${pctA}% vs ${pctB}%, n=${res.n}).`,
       muted: res.n < ANNOTATION_MIN_N,
     };
   }
 
-  return { tone: "unknown", text: "—", title: "Not enough model data for this game.", muted: true };
+  return { tone: "unknown", line1: "—", line2: "", title: "Not enough model data for this game.", muted: true };
 }
 
 const ANNOTATION_TONE_CLS: Record<RowAnnotationInfo["tone"], string> = {
@@ -289,10 +319,11 @@ const ANNOTATION_TONE_CLS: Record<RowAnnotationInfo["tone"], string> = {
 function RowAnnotation({ annotation }: { annotation: RowAnnotationInfo }) {
   return (
     <div
-      className={`w-20 shrink-0 rounded-lg border px-1.5 py-1 text-center text-[10px] font-semibold sm:w-24 ${ANNOTATION_TONE_CLS[annotation.tone]} ${annotation.muted ? "opacity-50" : ""}`}
+      className={`w-24 shrink-0 rounded-lg border px-1.5 py-1 text-center leading-tight sm:w-28 ${ANNOTATION_TONE_CLS[annotation.tone]} ${annotation.muted ? "opacity-50" : ""}`}
       title={annotation.title}
     >
-      {annotation.text}
+      <div className="truncate text-[10px] font-bold">{annotation.line1}</div>
+      <div className="truncate text-[9px]">{annotation.line2}</div>
     </div>
   );
 }
@@ -311,6 +342,8 @@ function DotStripRow({ g, bundle, teamMeta, annotation }: { g: Row; bundle: Prob
   const home = String(g.home_team);
   const actual = resultWinner(g);
   const played = g.home_score != null && g.away_score != null;
+  const absSpread = g.spread_line == null ? null : Math.abs(Number(g.spread_line));
+  const isBlowoutSpread = absSpread != null && absSpread > 6;
 
   const logo = (team: string, isWinner: boolean) => {
     const src = teamMeta.get(team)?.logo;
@@ -330,7 +363,10 @@ function DotStripRow({ g, bundle, teamMeta, annotation }: { g: Row; bundle: Prob
   };
 
   return (
-    <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-3 py-3 shadow-sm">
+    <div
+      className={`flex items-center gap-3 rounded-2xl bg-white px-3 py-3 shadow-sm ${isBlowoutSpread ? "border-2 border-emerald-500" : "border border-slate-200"}`}
+      title={isBlowoutSpread ? `Spread ${absSpread!.toFixed(1)} — a wide (>6pt) line` : undefined}
+    >
       {logo(away, played && actual === "away")}
       <div className="min-w-0 flex-1">
         <ModelDotStrip bundle={bundle} away={away} home={home} actual={actual} showEndLabels={false} />
