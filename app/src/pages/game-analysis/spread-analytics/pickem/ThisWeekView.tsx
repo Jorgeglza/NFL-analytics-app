@@ -29,6 +29,7 @@ import { pearsonCorrelation, correlationRead } from "../../../../lib/logic/weekH
 import { getTeamMetaMap, type TeamMeta } from "../../../../lib/team/meta";
 import { TeamLogoLink } from "../../../../components/team/TeamLogoLink";
 import { ModelDotStrip, disagreementOf } from "../../previews/ModelDotStrip";
+import { computeAgreementMatrix, AXIS_KEYS, AXIS_LABELS, type AxisKey } from "../../previews/modelAgreement";
 import {
   buildHist,
   buildGradesIndex,
@@ -130,11 +131,66 @@ function AvgConfidenceStrip({ avg }: { avg: Partial<Record<MetricKey, number>> }
   );
 }
 
-/** One game's card: team logos each side (winner gets a colored ring + bold
- * score), a probability bar split by the selected primary model, a pick
- * badge, and the shared ModelDotStrip below. Modeled on Matchup Previews'
- * WeekPreviewTab.tsx card, minus its "view full matchup" overlay/win-type
- * badge (out of scope here). */
+/** 8×8 heatmap (7 models + "Actual") — cell (A, B) = the % of this week's
+ * games where A and B picked the same side. The Actual row/column is just
+ * that model's straight-up accuracy, so this single matrix answers both
+ * "how do the models compare to each other" and "how does each compare to
+ * the real winner." Modeled on ModelPickerTab.tsx's heatmap shape (category
+ * axes, hidden visualMap) — but color comes from the visualMap's own
+ * `inRange`/`outOfRange`, not an `itemStyle.color` callback: ECharts'
+ * heatmap series always colors cells via the visualMap that targets it
+ * (required — omitting visualMap entirely throws "Heatmap must use with
+ * visualMap"), and an itemStyle color callback does NOT override that,
+ * confirmed live on both this chart and, it turns out, the already-shipped
+ * ModelPickerTab.tsx heatmap (its "no data" cells and 100%-accuracy cells
+ * both render the same washed-out yellow — a pre-existing bug there, out of
+ * scope to fix here). Routing color through `inRange`/`outOfRange` instead
+ * is the combination that actually renders correctly. */
+function buildAgreementChartOption(cells: { a: AxisKey; b: AxisKey; pct: number | null; n: number }[]): EChartsOption {
+  const labels = AXIS_KEYS.map((k) => AXIS_LABELS[k]);
+  const idx = new Map(AXIS_KEYS.map((k, i) => [k, i]));
+  const nByCell = new Map<string, number>();
+  for (const c of cells) nByCell.set(`${idx.get(c.a)},${idx.get(c.b)}`, c.n);
+  // A `null` value (the diagonal, or a pair with zero overlapping games) is
+  // ECharts' own "no data" convention for a heatmap cell — it renders blank
+  // rather than picking up the visualMap's in-range coloring at all, which
+  // is more reliable than trying to push it out of the visualMap's domain
+  // (a -1 sentinel below `min` still got clamped into the in-range red end
+  // rather than triggering `outOfRange`, confirmed live).
+  const data: [number, number, number | null][] = cells.map((c) => [idx.get(c.a)!, idx.get(c.b)!, c.pct == null ? null : Math.round(c.pct * 100)]);
+  return {
+    grid: { left: 90, right: 10, top: 10, bottom: 60, containLabel: false },
+    tooltip: {
+      formatter: (p: unknown) => {
+        const { value } = p as { value: [number, number, number | null] };
+        const [xi, yi, pct] = value;
+        if (pct == null) return labels[xi];
+        const n = nByCell.get(`${xi},${yi}`) ?? 0;
+        return `${labels[xi]} vs ${labels[yi]}<br/>Agree ${pct}% of games (n=${n})`;
+      },
+    },
+    xAxis: { type: "category", data: labels, splitArea: { show: false }, axisLabel: { rotate: 45, fontSize: 9 }, axisTick: { show: false } },
+    yAxis: { type: "category", data: labels, splitArea: { show: false }, axisLabel: { fontSize: 9 }, axisTick: { show: false } },
+    visualMap: {
+      show: false,
+      min: 0,
+      max: 100,
+      // Diverging red→amber→green, amber landing at the domain midpoint
+      // (50% — "no better than a coin flip on this pair") since `continuous`
+      // spaces an inRange color array evenly across [min, max].
+      inRange: { color: ["#c8102e", "#fad34e", "#2ca25f"] },
+    },
+    series: [
+      {
+        type: "heatmap",
+        data,
+        label: { show: true, fontSize: 9, formatter: (p: { value: [number, number, number | null] }) => (p.value[2] == null ? "" : String(p.value[2])) },
+        itemStyle: { borderColor: "#fff", borderWidth: 1, color: "#f1f5f9" },
+      },
+    ],
+  } as EChartsOption;
+}
+
 /** Simplified per-game row for easy side-by-side comparison across a whole
  * season's slate: just the dot-strip (every model, all at once) flanked by
  * the two team logos — no probability bar, no pick badge, no date/text
@@ -377,6 +433,12 @@ export default function ThisWeekView() {
     }
     return out;
   }, [gameModelRows]);
+
+  const agreementChartOption = useMemo<EChartsOption | null>(() => {
+    if (!gameModelRows.length) return null;
+    return buildAgreementChartOption(computeAgreementMatrix(gameModelRows));
+  }, [gameModelRows]);
+  const agreementChartRef = useECharts(agreementChartOption);
 
   // Per-model accuracy across every historical game this week (all seasons) —
   // doubles as the primary-model picker for the card grid below, same pattern
@@ -624,6 +686,12 @@ export default function ThisWeekView() {
                   <span className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Avg. confidence by model</span>
                   <AvgConfidenceStrip avg={avgConfidenceByModel} />
                 </div>
+                {agreementChartOption && (
+                  <div>
+                    <span className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Model agreement — vs. each other &amp; the actual winner</span>
+                    <div ref={agreementChartRef} className="mt-1" style={{ width: 260, height: 260 }} />
+                  </div>
+                )}
               </div>
 
               {anyCompleted && (
