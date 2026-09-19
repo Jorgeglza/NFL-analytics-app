@@ -50,6 +50,7 @@ import {
   buildPredictiveIndex,
   probBundle,
   resultWinner,
+  pickWinner,
   kickoffMs,
   MODEL_KEYS,
   MODEL_COLORS,
@@ -205,21 +206,34 @@ function buildAgreementChartOption(cells: { a: AxisKey; b: AxisKey; pct: number 
 
 const PROB_BIN = 4; // percentage points
 const SPREAD_BIN = 1; // points
+const TOOLTIP_GAME_CAP = 8;
+
+interface ProbSpreadGame {
+  season: number;
+  away: string;
+  home: string;
+  awayScore: number | null;
+  homeScore: number | null;
+  winner: "home" | "away" | null;
+  correct: boolean | null; // null until graded
+}
 
 interface ProbSpreadPoint {
   x: number; // binned P(home wins), 0-100
   y: number; // binned spread_line, home perspective
   count: number;
-  anyPlayed: boolean; // at least one game in this bin has a known winner
+  anyCorrect: boolean; // at least one game in this bin where the model's pick matched the actual winner
+  games: ProbSpreadGame[];
 }
 
 /** Bins each visible model's (P(home wins), spread) pairs to a coarse grid
  * so near-identical games collapse into one marker instead of silently
  * overplotting — `count` then drives marker size/opacity, so overlap reads
- * as "more games here" rather than disappearing. A bin's `anyPlayed` is a
- * deliberate simplification: it's true if *any* game in that bin is graded,
- * not tracked per game, since one marker can represent several games. */
-function buildProbSpreadPoints(rows: { bundle: ProbBundle; winner: "home" | "away" | null; g: Row }[], key: MetricKey): ProbSpreadPoint[] {
+ * as "more games here" rather than disappearing. A bin's `anyCorrect` is a
+ * deliberate simplification: it's true if the model's pick matched the
+ * winner for *any* game in that bin, not tracked per game, since one
+ * marker can represent several games — hovering lists them individually. */
+function buildProbSpreadPoints(rows: { bundle: ProbBundle; winner: "home" | "away" | null; g: Row; season: number }[], key: MetricKey): ProbSpreadPoint[] {
   const bins = new Map<string, ProbSpreadPoint>();
   for (const row of rows) {
     const p = row.bundle[key][1];
@@ -227,12 +241,31 @@ function buildProbSpreadPoints(rows: { bundle: ProbBundle; winner: "home" | "awa
     const x = Math.round((p * 100) / PROB_BIN) * PROB_BIN;
     const y = Math.round(Number(row.g.spread_line) / SPREAD_BIN) * SPREAD_BIN;
     const k = `${x}|${y}`;
-    const cur = bins.get(k) ?? { x, y, count: 0, anyPlayed: false };
+    const cur = bins.get(k) ?? { x, y, count: 0, anyCorrect: false, games: [] };
     cur.count++;
-    if (row.winner != null) cur.anyPlayed = true;
+    const predictedSide = pickWinner([1 - p, p]);
+    const correct = row.winner == null ? null : predictedSide === row.winner;
+    if (correct) cur.anyCorrect = true;
+    cur.games.push({
+      season: row.season,
+      away: String(row.g.away_team),
+      home: String(row.g.home_team),
+      awayScore: row.g.away_score == null ? null : Number(row.g.away_score),
+      homeScore: row.g.home_score == null ? null : Number(row.g.home_score),
+      winner: row.winner,
+      correct,
+    });
     bins.set(k, cur);
   }
   return [...bins.values()];
+}
+
+function gameTooltipLine(g: ProbSpreadGame): string {
+  const prefix = `${g.season} ${g.away} @ ${g.home}`;
+  if (g.winner == null || g.awayScore == null || g.homeScore == null) return `${prefix} — not yet played`;
+  const winnerTeam = g.winner === "home" ? g.home : g.away;
+  const mark = g.correct == null ? "" : g.correct ? " ✓" : " ✗";
+  return `${prefix} — ${g.awayScore}-${g.homeScore}, ${winnerTeam} won${mark}`;
 }
 
 /** One scatter series per currently-visible model — toggled-off models are
@@ -243,13 +276,13 @@ function buildProbSpreadChartOption(pointsByModel: [MetricKey, ProbSpreadPoint[]
   const series = pointsByModel.map(([key, points]) => ({
     name: MODEL_KEYS.find(([k]) => k === key)?.[1] ?? key,
     type: "scatter" as const,
-    data: points.map((p) => ({ value: [p.x, p.y], count: p.count, anyPlayed: p.anyPlayed })),
+    data: points.map((p) => ({ value: [p.x, p.y], count: p.count, anyCorrect: p.anyCorrect, games: p.games })),
     symbolSize: (_val: unknown, params: { data: { count: number } }) => 7 + Math.min(params.data.count - 1, 8) * 2.5,
     itemStyle: {
       color: MODEL_COLORS[key],
       opacity: (params: { data: { count: number } }) => Math.min(1, 0.45 + (params.data.count - 1) * 0.12),
-      borderColor: (params: { data: { anyPlayed: boolean } }) => (params.data.anyPlayed ? "#16a34a" : "transparent"),
-      borderWidth: (params: { data: { anyPlayed: boolean } }) => (params.data.anyPlayed ? 2 : 0),
+      borderColor: (params: { data: { anyCorrect: boolean } }) => (params.data.anyCorrect ? "#16a34a" : "transparent"),
+      borderWidth: (params: { data: { anyCorrect: boolean } }) => (params.data.anyCorrect ? 2 : 0),
     },
   }));
   return {
@@ -257,8 +290,10 @@ function buildProbSpreadChartOption(pointsByModel: [MetricKey, ProbSpreadPoint[]
     tooltip: {
       trigger: "item",
       formatter: (p: unknown) => {
-        const { seriesName, value, data } = p as { seriesName: string; value: [number, number]; data: { count: number; anyPlayed: boolean } };
-        return `${seriesName}<br/>P(home) ≈ ${value[0]}%, spread ≈ ${value[1]}<br/>${data.count} game${data.count === 1 ? "" : "s"}${data.anyPlayed ? " · result known" : ""}`;
+        const { seriesName, value, data } = p as { seriesName: string; value: [number, number]; data: { count: number; games: ProbSpreadGame[] } };
+        const shown = data.games.slice(0, TOOLTIP_GAME_CAP).map(gameTooltipLine).join("<br/>");
+        const extra = data.games.length > TOOLTIP_GAME_CAP ? `<br/>+${data.games.length - TOOLTIP_GAME_CAP} more` : "";
+        return `${seriesName} — P(home) ≈ ${value[0]}%, spread ≈ ${value[1]} · ${data.count} game${data.count === 1 ? "" : "s"}<br/>${shown}${extra}`;
       },
     },
     xAxis: {
@@ -1107,7 +1142,9 @@ export default function ThisWeekView() {
                 <h3 className="mb-1 text-sm font-semibold text-slate-700">Model probability vs. spread</h3>
                 <p className="mb-2 text-xs text-slate-500">
                   Each dot is one model's P(home wins) for a game at that spread. Dots grow (and darken) where several games land in the same
-                  spot; a <span className="font-semibold text-emerald-600">green outline</span> means that game's result is already known.
+                  spot — hover a dot to see which game(s), their score, and the winner. A{" "}
+                  <span className="font-semibold text-emerald-600">green outline</span> means the model correctly predicted the winner in at
+                  least one of those games.
                 </p>
 
                 <div className="mb-2 flex flex-wrap items-center gap-2">
