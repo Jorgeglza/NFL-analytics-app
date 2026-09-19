@@ -21,7 +21,17 @@ const EXPORT_TIGHT_CLASS = "pb-export-tight";
 const EXPORT_PIXEL_RATIO = 2;
 const EXPORT_TIGHT_CSS = `
   .${EXPORT_TIGHT_CLASS} { width: auto; }
-  .${EXPORT_TIGHT_CLASS} .pb-leg-card { gap: 10px; padding: 10px; margin-bottom: 8px; }
+  /* "sticky" only means something while scrolling a live page — baked into a
+     static, unscrolled capture it can instead render as an overlay on top
+     of whatever follows it, so it's neutralized to a normal in-flow block
+     for the export only. */
+  .${EXPORT_TIGHT_CLASS} .pb-sticky-header { position: static !important; top: auto !important; }
+  .${EXPORT_TIGHT_CLASS} .pb-leg-card { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px; margin-bottom: 8px; }
+  .${EXPORT_TIGHT_CLASS} .pb-leg-summary { width: 100%; margin-bottom: 2px; }
+  /* The live chart div is responsively sized (w-full below sm:, 360px
+     above); pin it to one compact size for the export instead. */
+  .${EXPORT_TIGHT_CLASS} .pb-leg-chart { width: 220px !important; height: 100px !important; }
+  .${EXPORT_TIGHT_CLASS} .pb-export-chart-img { width: 100%; height: 100%; object-fit: contain; }
 `;
 
 const EXCLUDE = new Set([
@@ -204,7 +214,7 @@ function LegCard({
 
   return (
     <div className="pb-leg-card mb-3 flex flex-wrap items-center gap-4 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-      <div className="min-w-0 flex-1 sm:min-w-[340px]">
+      <div className="pb-leg-fields min-w-0 flex-1 sm:min-w-[340px]">
         {/* Plain-text readout of the current picks — the only thing that
             survives the export-as-image capture once the selects/inputs
             below are excluded from it (data-export-exclude), so the
@@ -259,7 +269,7 @@ function LegCard({
           }}
         />
       )}
-      <div ref={barRef} className="h-40 w-full sm:w-[360px]" />
+      <div ref={barRef} className="pb-leg-chart h-40 w-full sm:w-[360px]" />
 
       <div className="flex flex-col items-center gap-2">
         <div
@@ -344,8 +354,44 @@ export default function ParlayBuilder() {
     const container = containerRef.current;
     if (!container || copyState === "working") return;
     setCopyState("working");
+    // ECharts renders each leg's bar chart onto a <canvas> (the default
+    // renderer — see useECharts.ts). A canvas's painted bitmap is not part
+    // of the DOM, so native cloneNode(true) below would otherwise come back
+    // with a blank chart for every leg — snapshot each one now, while it's
+    // still live, and swap in an <img> of that snapshot after cloning.
+    const liveCanvases = Array.from(container.querySelectorAll("canvas"));
+    const chartSnapshots = liveCanvases.map((c) => c.toDataURL("image/png"));
     const clone = container.cloneNode(true) as HTMLDivElement;
     clone.classList.add(EXPORT_TIGHT_CLASS);
+    const cloneCanvases = Array.from(clone.querySelectorAll("canvas"));
+    cloneCanvases.forEach((cloneCanvas, i) => {
+      const dataUrl = chartSnapshots[i];
+      if (!dataUrl) return;
+      const img = document.createElement("img");
+      img.src = dataUrl;
+      img.className = "pb-export-chart-img";
+      // ECharts wraps its canvas in its own inline-styled sizing div
+      // (position:relative; width/height set in px to match the *live*
+      // chart's own size) — replacing just the canvas would leave that
+      // wrapper's original pixel dimensions behind to overflow the
+      // constrained .pb-leg-chart box below, so replace the wrapper too.
+      (cloneCanvas.parentElement ?? cloneCanvas).replaceWith(img);
+    });
+    // Real DOM removal (not just excluding these nodes from the toPng
+    // capture) so the ancestor flex layout actually reflows around their
+    // absence instead of leaving the space they used to reserve empty.
+    clone.querySelectorAll("[data-export-exclude]").forEach((el) => el.remove());
+    // Pull each leg's title out of its now-empty (selects removed) fields
+    // wrapper so it reads as a full-width heading above a tight row of
+    // headshot -> chart -> donut, instead of competing for width with them.
+    clone.querySelectorAll(".pb-leg-card").forEach((card) => {
+      const fields = card.querySelector(".pb-leg-fields");
+      const summary = card.querySelector(".pb-leg-summary");
+      if (summary && fields) {
+        card.insertBefore(summary, card.firstChild);
+        fields.remove();
+      }
+    });
     const host = document.createElement("div");
     host.style.cssText = "position:fixed; top:0; left:-10000px; pointer-events:none;";
     host.appendChild(clone);
@@ -357,7 +403,6 @@ export default function ParlayBuilder() {
         pixelRatio: EXPORT_PIXEL_RATIO,
         width: clone.scrollWidth,
         height: clone.scrollHeight,
-        filter: (node) => !(node instanceof HTMLElement && node.dataset.exportExclude != null),
       });
       const outcome = await copyOrDownloadPng(dataUrl, `parlay-${legs.length}-leg.png`);
       setCopyState(outcome);
@@ -387,17 +432,17 @@ export default function ParlayBuilder() {
   return (
     <div ref={containerRef} className="space-y-4">
       <style>{EXPORT_TIGHT_CSS}</style>
-      <div className="sticky top-[53px] z-20 -mx-3 flex flex-wrap items-center justify-between gap-4 border-b border-slate-200/80 bg-white/90 px-3 py-2 backdrop-blur sm:-mx-4 sm:px-4">
+      <div className="pb-sticky-header sticky top-[53px] z-20 -mx-3 flex flex-wrap items-center justify-between gap-4 border-b border-slate-200/80 bg-white/90 px-3 py-2 backdrop-blur sm:-mx-4 sm:px-4">
         <h1 className="flex items-center gap-2.5 text-2xl font-extrabold tracking-tight text-[#002f6c]"><span className="h-6 w-1.5 rounded-full bg-gradient-to-b from-[#002f6c] to-[#164a9c]" />Parlay Builder</h1>
         <div className="flex flex-wrap items-center gap-3">
           <div className="min-w-[calc(50%-2.25rem)] flex-1 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-center shadow-sm sm:min-w-40 sm:flex-none" style={{ borderTop: "3px solid #002f6c" }}>
             <div className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Expected Probability</div>
             <div className="mt-0.5 text-2xl font-bold">{expectedProb == null ? "—" : `${(expectedProb * 100).toFixed(2)}%`}</div>
-            {expectedAmericanOdds && <div className="mt-0.5 text-[11px] font-semibold text-slate-400">{expectedAmericanOdds}</div>}
           </div>
           <div className="min-w-[calc(50%-2.25rem)] flex-1 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-center shadow-sm sm:min-w-40 sm:flex-none" style={{ borderTop: "3px solid #002f6c" }}>
             <div className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Expected Odds</div>
             <div className="mt-0.5 text-2xl font-bold">{expectedOdds == null ? "—" : expectedOdds.toFixed(2)}</div>
+            {expectedAmericanOdds && <div className="mt-0.5 text-[11px] font-semibold text-slate-400">{expectedAmericanOdds}</div>}
           </div>
           <button
             data-export-exclude
