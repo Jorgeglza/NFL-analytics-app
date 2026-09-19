@@ -559,6 +559,13 @@ Full work list, with per-item checkboxes and severities: **`docs/MOBILE_READINES
 
 ## Session notes (newest first)
 
+### 2026-09-19 (cont. x14) — "This Week": similar-weeks ranking now follows the raw/|abs| toggle (default: raw)
+User asked whether the "similar weeks" model should change basis with the raw/|abs| toggle — yes, and default the toggle to raw (was `|Spread|`).
+- `spreadMode` initial state → `"raw"` (was `"abs"`).
+- New `similarityTarget` memo: the current week's aggregate `[mean, median, IQR]` computed from `absSpreads` in abs mode or `spreads` (raw signed) in raw mode — previously `similarWeeks` always scored candidates against the abs-only `spreadStats`, ignoring the toggle entirely. `spreadStats` itself is untouched (still abs-only) since it only feeds the KPI tiles explicitly labeled "Avg/Median |Spread|".
+- `similarWeeks`'s per-candidate stats now derive from `spreadMode === "abs" ? raws.map(Math.abs) : raws` instead of always abs, so raw mode also matches on *direction* (a week of big home favorites won't rank as "similar" to a week of equally-lopsided away favorites, which pure |spread| ranking couldn't distinguish).
+- Verified: `npm run build` green. Dev-server + Playwright: toggle opens on "No change" (raw) by default with one candidate set; clicking `|Spread|` reproduces the exact same 5 matches (S2020 Wk10/S2024 Wk11/S2023 Wk15/S2017 Wk4/S2015 Wk4) that abs-mode ranking always gave in cont. x12/x13, confirming abs-mode behavior is unchanged and raw mode now genuinely picks a different (verified different) set.
+
 ### 2026-09-19 (cont. x13) — "This Week": click-to-see-games popup on the season/similar-weeks box plots
 User asked for the two box plots added in cont. x12 (spread-by-season, similar-weeks) to open a game-details popup on click, reusing the one already built for Win Types' stacked bars instead of a new one.
 - `WinTypesTab.tsx`: exported `classify(r, xKey)` (was module-private) — it's the only piece that turns a raw `schedule.json` row into the `Game` shape `WinTypeDetailModal` renders (category, score, spread, matchup, date).

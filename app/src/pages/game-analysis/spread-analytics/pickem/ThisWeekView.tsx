@@ -654,7 +654,7 @@ export default function ThisWeekView() {
   const [selectedGraphSeasons, setSelectedGraphSeasons] = useState<Set<number>>(new Set());
   const [visibleModels, setVisibleModels] = useState<Set<MetricKey>>(new Set(MODEL_KEYS.map(([k]) => k)));
   const [selectedMomentumTeam, setSelectedMomentumTeam] = useState<string | null>(null);
-  const [spreadMode, setSpreadMode] = useState<"abs" | "raw">("abs");
+  const [spreadMode, setSpreadMode] = useState<"abs" | "raw">("raw");
 
   useEffect(() => {
     setLoadError(null);
@@ -819,14 +819,25 @@ export default function ThisWeekView() {
 
   // ---------- Section 1b: auto-detected similar weeks ----------
   // Every (season, week) combo's spread distribution, ranked by how close its
-  // [mean, median, IQR] of |spread| is to the currently selected week's
-  // aggregate — a normalized-Euclidean distance so mean/median/IQR (different
-  // natural scales) contribute comparably. Similarity is always judged on
-  // |spread| regardless of the raw/abs toggle, since it's measuring how
-  // competitive/lopsided the games were, not which side was favored.
+  // [mean, median, IQR] is to the currently selected week's aggregate — a
+  // normalized-Euclidean distance so mean/median/IQR (different natural
+  // scales) contribute comparably. The stats basis follows the raw/|abs|
+  // toggle: |spread| in abs mode judges pure competitiveness (ignores which
+  // side was favored), raw signed spread in raw mode also matches on
+  // direction (a week of big home favorites isn't "similar" to one of
+  // equally lopsided away favorites).
   const MIN_GAMES_FOR_COMPARISON = 4;
+  const similarityTarget = useMemo(() => {
+    const vals = spreadMode === "abs" ? absSpreads : spreads;
+    if (!vals.length) return null;
+    const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
+    const med = percentile(vals, 50);
+    const iqr = percentile(vals, 75) - percentile(vals, 25);
+    return { mean, med, iqr };
+  }, [spreadMode, absSpreads, spreads]);
+
   const similarWeeks = useMemo(() => {
-    if (!spreadStats) return [];
+    if (!similarityTarget) return [];
     const bySW = new Map<string, { season: number; week: number; rows: Row[] }>();
     for (const r of reg) {
       if (r.spread_line == null || !Number.isFinite(Number(r.spread_line))) continue;
@@ -842,17 +853,17 @@ export default function ThisWeekView() {
     for (const { season, week, rows } of bySW.values()) {
       if (rows.length < MIN_GAMES_FOR_COMPARISON) continue;
       const raws = rows.map((r) => Number(r.spread_line));
-      const abs = raws.map((x) => Math.abs(x));
-      const mean = abs.reduce((a, b) => a + b, 0) / abs.length;
-      const med = percentile(abs, 50);
-      const iqr = percentile(abs, 75) - percentile(abs, 25);
+      const vals = spreadMode === "abs" ? raws.map((x) => Math.abs(x)) : raws;
+      const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
+      const med = percentile(vals, 50);
+      const iqr = percentile(vals, 75) - percentile(vals, 25);
       candidates.push({ season, week, rows, raws, mean, med, iqr });
     }
     if (candidates.length < 2) return [];
 
     const dims: (keyof Pick<Cand, "mean" | "med" | "iqr">)[] = ["mean", "med", "iqr"];
     const stds = dims.map((d) => sampleStd(candidates.map((c) => c[d])) || 1);
-    const target = { mean: spreadStats.mean, med: spreadStats.med, iqr: spreadStats.iqr };
+    const target = similarityTarget;
 
     const scored = candidates
       .map((c) => {
@@ -867,7 +878,7 @@ export default function ThisWeekView() {
       else break;
     }
     return top;
-  }, [reg, spreadStats]);
+  }, [reg, similarityTarget, spreadMode]);
 
   const similarWeeksBoxOption = useMemo<EChartsOption | null>(() => {
     if (!similarWeeks.length) return null;
