@@ -5,9 +5,10 @@
 import { useState } from "react";
 import { Segmented } from "../../../components/ui";
 import RecommendationsView from "./pickem/RecommendationsView";
+import ThisWeekView from "./pickem/ThisWeekView";
 import StoryView from "./pickem/StoryView";
 
-type View = "Recommendations" | "The Story";
+type View = "Recommendations" | "This Week" | "The Story";
 
 export default function PickemRecommendationsTab() {
   const [view, setView] = useState<View>("Recommendations");
@@ -19,10 +20,11 @@ export default function PickemRecommendationsTab() {
         onChange={setView}
         options={[
           { value: "Recommendations", label: "Recommendations" },
+          { value: "This Week", label: "This Week" },
           { value: "The Story", label: "The Story" },
         ]}
       />
-      {view === "Recommendations" ? <RecommendationsView /> : <StoryView />}
+      {view === "Recommendations" ? <RecommendationsView /> : view === "This Week" ? <ThisWeekView /> : <StoryView />}
     </div>
   );
 }
