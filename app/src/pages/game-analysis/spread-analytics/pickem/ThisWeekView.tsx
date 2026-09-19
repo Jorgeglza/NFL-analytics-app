@@ -556,6 +556,22 @@ function DotStripRow({ g, bundle, teamMeta, annotation }: { g: Row; bundle: Prob
           Spread {absSpread.toFixed(1)}
         </span>
       )}
+      {/* Dedicated, always-visible trigger — the row's own onClick still works, but
+          its "blank space" is easily swallowed by the logos/dots/badge next to it,
+          so this guarantees a discoverable, unambiguous way to open the popup. */}
+      <button
+        type="button"
+        title="Compare all 7 models"
+        aria-label="Compare all models for this game"
+        aria-expanded={open}
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((v) => !v);
+        }}
+        className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 bg-white text-[11px] font-bold text-slate-500 shadow-sm hover:border-[#002f6c] hover:text-[#002f6c]"
+      >
+        i
+      </button>
       {logo(away, played && actual === "away")}
       <div className="min-w-0 flex-1">
         <ModelDotStrip bundle={bundle} away={away} home={home} actual={actual} showEndLabels={false} />
