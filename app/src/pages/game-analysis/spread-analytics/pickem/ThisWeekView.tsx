@@ -524,12 +524,20 @@ const ANNOTATION_TONE_CLS: Record<RowAnnotationInfo["tone"], string> = {
   unknown: "border-slate-200 bg-slate-50 text-slate-400",
 };
 
-function RowAnnotation({ annotation }: { annotation: RowAnnotationInfo }) {
+function RowAnnotation({ annotation, correct }: { annotation: RowAnnotationInfo; correct: boolean | null }) {
   return (
     <div
-      className={`w-24 shrink-0 rounded-lg border px-1.5 py-1 text-center leading-tight sm:w-28 ${ANNOTATION_TONE_CLS[annotation.tone]} ${annotation.muted ? "opacity-50" : ""}`}
+      className={`relative w-24 shrink-0 rounded-lg border px-1.5 py-1 text-center leading-tight sm:w-28 ${ANNOTATION_TONE_CLS[annotation.tone]} ${annotation.muted ? "opacity-50" : ""}`}
       title={annotation.title}
     >
+      {correct !== null && (
+        <span
+          className={`absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold leading-none text-white shadow ${correct ? "bg-[#3C9A5F]" : "bg-[#C8102E]"}`}
+          title={correct ? "Recommendation was correct" : "Recommendation missed"}
+        >
+          {correct ? "✓" : "✗"}
+        </span>
+      )}
       <div className="truncate text-[10px] font-bold">{annotation.line1}</div>
       {annotation.team && <div className="truncate text-[12px] font-extrabold">{annotation.team}</div>}
       <div className="truncate text-[9px]">{annotation.line2}</div>
@@ -581,20 +589,30 @@ function DotStripRow({
   const absSpread = g.spread_line == null ? null : Math.abs(Number(g.spread_line));
   const isBlowoutSpread = absSpread != null && absSpread > 6;
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const recoCorrect =
+    !played || !annotation.team ? null : annotation.team === (actual === "home" ? home : actual === "away" ? away : null);
 
   const logo = (team: string, isWinner: boolean, size: "sm" | "lg" = "sm") => {
     const src = teamMeta.get(team)?.logo;
-    const ringColor = teamMeta.get(team)?.color ?? "#16a34a";
     const colCls = size === "lg" ? "w-20" : "w-14 sm:w-16";
     const imgCls = size === "lg" ? "h-12 w-12 object-contain" : "h-8 w-8 object-contain";
     return (
       <div className={`flex shrink-0 flex-col items-center gap-1 text-center ${colCls}`}>
-        <span className="inline-block rounded-full" style={isWinner ? { boxShadow: `0 0 0 3px ${ringColor}, 0 0 0 5px white` } : undefined}>
-          {src ? (
-            <TeamLogoLink to={`/game_analysis/team_comparison?team1=${away}&team2=${home}`} logo={src} alt={team} imgClassName={imgCls} title={`Compare ${away} vs ${home}`} />
-          ) : (
-            <div className="font-bold">{team}</div>
+        <span className="relative inline-flex items-center justify-center rounded-full">
+          {isWinner && (
+            <span
+              aria-hidden
+              className="absolute inset-0 -z-10 scale-[1.7] rounded-full blur-md"
+              style={{ background: "radial-gradient(circle, rgba(34,197,94,0.55) 0%, rgba(34,197,94,0.22) 55%, rgba(34,197,94,0) 75%)" }}
+            />
           )}
+          <span className="inline-flex items-center justify-center rounded-full bg-white p-1 shadow-sm">
+            {src ? (
+              <TeamLogoLink to={`/game_analysis/team_comparison?team1=${away}&team2=${home}`} logo={src} alt={team} imgClassName={imgCls} title={`Compare ${away} vs ${home}`} />
+            ) : (
+              <div className="font-bold">{team}</div>
+            )}
+          </span>
         </span>
         <span className={`text-[10px] font-semibold ${isWinner ? "text-slate-900" : "text-slate-400"}`}>{team}</span>
       </div>
@@ -618,7 +636,7 @@ function DotStripRow({
           <ModelDotStrip bundle={bundle} away={away} home={home} actual={actual} showEndLabels={false} />
         </div>
         {logo(home, played && actual === "home")}
-        <RowAnnotation annotation={annotation} />
+        <RowAnnotation annotation={annotation} correct={recoCorrect} />
       </div>
       {/* Mobile (below sm): logos get their own centered row above, so the dot strip
           and recommendation badge aren't squeezed between two shrink-0 logo columns. */}
@@ -637,7 +655,7 @@ function DotStripRow({
           <div className="min-w-0 flex-1">
             <ModelDotStrip bundle={bundle} away={away} home={home} actual={actual} showEndLabels={false} />
           </div>
-          <RowAnnotation annotation={annotation} />
+          <RowAnnotation annotation={annotation} correct={recoCorrect} />
         </div>
       </div>
       {/* Sole trigger for the popup, as a full-width footer strip in normal document
