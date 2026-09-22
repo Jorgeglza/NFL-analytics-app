@@ -344,10 +344,30 @@ export default function RecommendationsView() {
                           </div>
                         </div>
                       </div>
-                      <div className="text-xs text-slate-500 sm:text-right">
-                        {modelProb != null && <div>Model win prob: {Math.round(modelProb * 100)}%</div>}
+                      <div className="space-y-1 text-xs text-slate-500 sm:text-right">
+                        {modelProb != null && (
+                          <div className="flex items-center gap-1.5 sm:justify-end">
+                            <span>Model win prob: {Math.round(modelProb * 100)}%</span>
+                            <span
+                              className="rounded-full px-1.5 py-0.5 text-[9px] font-bold text-white"
+                              style={{ background: favColor }}
+                              title={`Favors ${favTeam}`}
+                            >
+                              {favTeam}
+                            </span>
+                          </div>
+                        )}
                         {u?.market_home_fair != null && (
-                          <div>Market fair: {Math.round((g.favorite === "home" ? Number(u.market_home_fair) : 1 - Number(u.market_home_fair)) * 100)}%</div>
+                          <div className="flex items-center gap-1.5 sm:justify-end">
+                            <span>Market fair: {Math.round((g.favorite === "home" ? Number(u.market_home_fair) : 1 - Number(u.market_home_fair)) * 100)}%</span>
+                            <span
+                              className="rounded-full px-1.5 py-0.5 text-[9px] font-bold text-white"
+                              style={{ background: favColor }}
+                              title={`Favors ${favTeam}`}
+                            >
+                              {favTeam}
+                            </span>
+                          </div>
                         )}
                       </div>
                     </div>
