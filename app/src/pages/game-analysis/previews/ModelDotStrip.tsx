@@ -36,7 +36,10 @@ function DotPopover({ pH, label, color, away, home, actual }: { pH: number; labe
       </div>
       <div className="tabular-nums">{away} {pctAway}% | {home} {pctHome}%</div>
       <div className="mt-1 flex items-center gap-1.5">
-        <span className="font-semibold text-slate-800">Pick: {pick}</span>
+        <span className="font-semibold text-slate-800">Pick:</span>
+        <span className="rounded-full px-1.5 py-0.5 text-[10px] font-bold text-white" style={{ background: color }} title={`Favors ${pick}`}>
+          {pick}
+        </span>
         {correct != null && (
           <span className={`rounded px-1 py-0.5 text-[10px] font-bold ${correct ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}>
             {correct ? "✓ Correct" : "✗ Incorrect"}

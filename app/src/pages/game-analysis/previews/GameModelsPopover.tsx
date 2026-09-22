@@ -70,6 +70,13 @@ function ModelRow({
         <span className={side === "away" ? "font-bold text-slate-700" : undefined}>{away} {pctAway}%</span> ·{" "}
         <span className={side === "home" ? "font-bold text-slate-700" : undefined}>{home} {pctHome}%</span>
       </span>
+      <span
+        className="w-9 shrink-0 truncate rounded-full px-1.5 py-0.5 text-center text-[9px] font-bold text-white"
+        style={{ background: color }}
+        title={`${label} favors ${side === "home" ? home : away}`}
+      >
+        {side === "home" ? home : away}
+      </span>
       {correct != null ? (
         <span className={`w-5 shrink-0 text-center text-[11px] font-bold ${correct ? "text-emerald-600" : "text-rose-500"}`} title={correct ? "Correct" : "Incorrect"}>
           {correct ? "✓" : "✗"}
