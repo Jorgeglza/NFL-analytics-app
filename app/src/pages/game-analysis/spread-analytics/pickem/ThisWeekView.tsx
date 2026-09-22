@@ -410,6 +410,11 @@ interface RowAnnotationInfo {
   tone: "agree" | "tossup" | "disagree" | "unknown";
   /** Top line: icon + who/what this badge is about. */
   line1: string;
+  /** The actual team this badge's situation is recommending — the fastest
+   * way to read the badge without parsing line1/line2 or opening the full
+   * model comparison. Null only when no single side applies (e.g. a
+   * disagreement with no clear historical edge). */
+  team: string | null;
   /** Bottom line: the win% for this specific split/category, plus the
    * historical sample size it's based on — visible on every card, not just
    * in the hover title. */
@@ -430,15 +435,25 @@ function buildAnnotation(
     tossUpAccuracy: Map<MetricKey, { acc: number | null; n: number }>;
     bestTossUp: MetricKey | null;
   },
+  bundle: ProbBundle,
+  teams: { home: string; away: string },
 ): RowAnnotationInfo {
   const label = (k: MetricKey) => MODEL_KEYS.find(([mk]) => mk === k)?.[1] ?? k;
+  const teamFor = (k: MetricKey | null) => {
+    const side = k ? pickWinner(bundle[k]) : null;
+    return side === "home" ? teams.home : side === "away" ? teams.away : null;
+  };
 
   if (category.kind === "all-agree") {
     const { winRate, n } = ctx.allAgreeStat;
     const pct = winRate != null ? Math.round(winRate * 100) : null;
+    // Any non-consensus model's pick works here — by definition of
+    // "all-agree" they're all the same side.
+    const agreedKey = MODEL_KEYS.find(([k]) => k !== "consensus" && bundle[k][1] != null)?.[0] ?? null;
     return {
       tone: "agree",
       line1: "🤝 All agree",
+      team: teamFor(agreedKey),
       line2: pct != null ? `${pct}% (n=${n})` : "no history yet",
       title:
         pct != null
@@ -450,13 +465,14 @@ function buildAnnotation(
 
   if (category.kind === "toss-up") {
     if (!ctx.bestTossUp) {
-      return { tone: "tossup", line1: "🪙 Toss-up", line2: "no history yet", title: "Toss-up game — not enough history yet to say which model does best here.", muted: true };
+      return { tone: "tossup", line1: "🪙 Toss-up", team: null, line2: "no history yet", title: "Toss-up game — not enough history yet to say which model does best here.", muted: true };
     }
     const { acc, n } = ctx.tossUpAccuracy.get(ctx.bestTossUp) ?? { acc: null, n: 0 };
     const pct = acc != null ? Math.round(acc * 100) : null;
     return {
       tone: "tossup",
       line1: `🪙 ${SHORT_LABEL[ctx.bestTossUp]}`,
+      team: teamFor(ctx.bestTossUp),
       line2: pct != null ? `${pct}% (n=${n})` : "no history yet",
       title: `Toss-up game (all models near 50/50) — ${label(ctx.bestTossUp)} has been the most accurate model in these spots (${pct}%, n=${n}).`,
       muted: n < ANNOTATION_MIN_N,
@@ -469,6 +485,7 @@ function buildAnnotation(
       return {
         tone: "disagree",
         line1: `⚡ ${SHORT_LABEL[category.a]}/${SHORT_LABEL[category.b]}`,
+        team: null,
         line2: "no history yet",
         title: `${label(category.a)} and ${label(category.b)} disagree here — not enough history yet.`,
         muted: true,
@@ -480,6 +497,7 @@ function buildAnnotation(
       return {
         tone: "disagree",
         line1: `⚡ ${SHORT_LABEL[category.a]}/${SHORT_LABEL[category.b]}`,
+        team: null,
         line2: `${pctA}% vs ${pctB}% (n=${res.n})`,
         title: `${label(category.a)} and ${label(category.b)} disagree here — no clear edge historically (${pctA}% vs ${pctB}%, n=${res.n}).`,
         muted: res.n < ANNOTATION_MIN_N,
@@ -489,13 +507,14 @@ function buildAnnotation(
     return {
       tone: "disagree",
       line1: `⚡ ${SHORT_LABEL[res.better]}`,
+      team: teamFor(res.better),
       line2: `${winPct}% (n=${res.n})`,
       title: `${label(category.a)} and ${label(category.b)} disagree here — ${label(res.better)} has been right more often when these two split (${pctA}% vs ${pctB}%, n=${res.n}).`,
       muted: res.n < ANNOTATION_MIN_N,
     };
   }
 
-  return { tone: "unknown", line1: "—", line2: "", title: "Not enough model data for this game.", muted: true };
+  return { tone: "unknown", line1: "—", team: null, line2: "", title: "Not enough model data for this game.", muted: true };
 }
 
 const ANNOTATION_TONE_CLS: Record<RowAnnotationInfo["tone"], string> = {
@@ -512,6 +531,7 @@ function RowAnnotation({ annotation }: { annotation: RowAnnotationInfo }) {
       title={annotation.title}
     >
       <div className="truncate text-[10px] font-bold">{annotation.line1}</div>
+      {annotation.team && <div className="truncate text-[12px] font-extrabold">{annotation.team}</div>}
       <div className="truncate text-[9px]">{annotation.line2}</div>
     </div>
   );
@@ -1189,7 +1209,7 @@ export default function ThisWeekView() {
         const [pL, pR] = r.bundle[primary];
         const conf = pL != null && pR != null ? Math.max(pL, pR) : -1;
         const category = categorizeGame(r.bundle);
-        const annotation = buildAnnotation(category, annotationCtx);
+        const annotation = buildAnnotation(category, annotationCtx, r.bundle, { home: r.home, away: r.away });
         return { ...r, conf, annotation, category };
       });
     const byTime = (a: (typeof rows)[number], b: (typeof rows)[number]) => kickoffMs(a.g) - kickoffMs(b.g) || String(a.g.game_id).localeCompare(String(b.g.game_id));
