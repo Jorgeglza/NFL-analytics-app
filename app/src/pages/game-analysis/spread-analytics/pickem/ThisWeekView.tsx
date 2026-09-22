@@ -6,7 +6,7 @@
 // newest first — reuses the Matchup Previews game-card/dot-strip design), and
 // whether the selected week's actual results correlate with each prior
 // week's (expected to fade the further back you go).
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import * as echarts from "echarts";
 import type { EChartsOption, CustomSeriesOption, CustomSeriesRenderItemAPI, CustomSeriesRenderItemReturn } from "echarts";
 import {
@@ -944,26 +944,28 @@ export default function ThisWeekView() {
     ...similarWeeks.map((c) => ({ label: `Season ${c.season}, Week ${c.week}`, rows: c.rows })),
   ];
 
-  const spreadBoxRef = useECharts(spreadBoxOption, {
-    onInit: (chart) => {
-      chart.on("click", (p: { dataIndex?: number }) => {
-        if (p.dataIndex == null) return;
-        const entry = seasonBoxEntriesRef.current[p.dataIndex];
+  // Click anywhere in a category's column (not just the thin box/whisker
+  // shape ECharts itself hit-tests) -> open that category's games. With up
+  // to 12 boxes crammed into one chart, relying on ECharts' per-shape click
+  // (chart.on("click", ...)) meant missing the box by a few px either did
+  // nothing or, worse, silently landed on an adjacent box — showing the
+  // wrong week's games with no visible sign anything went wrong. Reading the
+  // raw pointer position off zrender and snapping to the nearest category via
+  // convertFromPixel makes the whole column clickable instead.
+  const boxColumnClickHandler =
+    (entriesRef: RefObject<{ label: string; rows: Row[] }[]>) =>
+    (chart: echarts.ECharts) => {
+      chart.getZr().on("click", (e: { offsetX: number; offsetY: number }) => {
+        if (!chart.containPixel({ gridIndex: 0 }, [e.offsetX, e.offsetY])) return;
+        const idx = Math.round(Number(chart.convertFromPixel({ xAxisIndex: 0 }, e.offsetX)));
+        const entry = entriesRef.current?.[idx];
         if (!entry) return;
         setGamesModal({ label: entry.label, games: entry.rows.map((r) => classify(r, "week")) });
       });
-    },
-  });
-  const similarWeeksBoxRef = useECharts(similarWeeksBoxOption, {
-    onInit: (chart) => {
-      chart.on("click", (p: { dataIndex?: number }) => {
-        if (p.dataIndex == null) return;
-        const entry = similarBoxEntriesRef.current[p.dataIndex];
-        if (!entry) return;
-        setGamesModal({ label: entry.label, games: entry.rows.map((r) => classify(r, "week")) });
-      });
-    },
-  });
+    };
+
+  const spreadBoxRef = useECharts(spreadBoxOption, { onInit: boxColumnClickHandler(seasonBoxEntriesRef) });
+  const similarWeeksBoxRef = useECharts(similarWeeksBoxOption, { onInit: boxColumnClickHandler(similarBoxEntriesRef) });
 
   // ---------- Section 2: all models' behavior for this week's games ----------
   const gameModelRows = useMemo<GameModelRow[]>(() => {
