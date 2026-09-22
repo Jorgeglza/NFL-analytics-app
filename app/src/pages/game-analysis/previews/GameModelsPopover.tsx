@@ -2,9 +2,16 @@
 // unlike ModelDotStrip's per-dot DotPopover (one model at a time), this shows
 // every model's win probability for the game at once, framed by the row's
 // situation annotation (agree / toss-up / disagree, per buildAnnotation in
-// ThisWeekView.tsx). Subtle (anchored to the card, not a full-screen modal)
-// but comprehensive.
+// ThisWeekView.tsx). On mobile it opens as the app's standard bottom sheet
+// (Modal) — anchoring it to the row like desktop's compact card meant it
+// could visually spill over neighboring rows, and its outside-touch close
+// listener fired on the *start* of any scroll gesture off the card,
+// dismissing it before a real scroll even began. Desktop keeps the compact
+// anchored/flip-positioned card (no scroll-dismiss issue with a mouse, and
+// plenty of room so overlap isn't a problem there).
 import { useEffect, useRef, useState } from "react";
+import { Modal } from "../../../components/Modal";
+import { useIsMobileViewport } from "../../../lib/useIsMobileViewport";
 import { MODEL_KEYS, MODEL_COLORS, pickWinner, type MetricKey, type ProbBundle } from "./engine";
 import { pairKey, type GameCategory, type AllAgreeStat, type PairwiseResolution, type TossUpAccuracy } from "./modelAgreement";
 
@@ -158,8 +165,48 @@ function HistoricalSection({
   return null;
 }
 
+/** The actual model-comparison content — tone-banded annotation, the
+ * "compared to history" section, and the per-model probability rows.
+ * Shared verbatim by both the desktop anchored card and the mobile bottom
+ * sheet, so the two shells never drift apart. */
+function PopoverContent({
+  bundle,
+  away,
+  home,
+  actual,
+  annotation,
+  category,
+  allAgreeStat,
+  pairwiseResolution,
+  tossUpAccuracy,
+}: {
+  bundle: ProbBundle;
+  away: string;
+  home: string;
+  actual: "home" | "away" | null;
+  annotation: GameModelsAnnotation;
+  category: GameCategory;
+  allAgreeStat: AllAgreeStat;
+  pairwiseResolution: Map<string, PairwiseResolution>;
+  tossUpAccuracy: Map<MetricKey, TossUpAccuracy>;
+}) {
+  const rows = MODEL_KEYS.filter(([k]) => bundle[k][1] != null);
+  return (
+    <>
+      <div className={`mb-1.5 rounded-lg border px-2 py-1.5 text-[11px] leading-snug ${TONE_CLS[annotation.tone]}`}>{annotation.title}</div>
+      <HistoricalSection category={category} allAgreeStat={allAgreeStat} pairwiseResolution={pairwiseResolution} tossUpAccuracy={tossUpAccuracy} />
+      <div className="divide-y divide-slate-100">
+        {rows.map(([k]) => (
+          <ModelRow key={k} label={SHORT_LABEL[k]} color={MODEL_COLORS[k]} away={away} home={home} pH={bundle[k][1]!} actual={actual} emphasize={k === "consensus"} />
+        ))}
+      </div>
+    </>
+  );
+}
+
 /** Card-level popover listing every model's home/away win probability for a
- * game, anchored to (and dismissed independently of) the row it belongs to. */
+ * game — a compact anchored card on desktop, the app's standard bottom
+ * sheet on mobile (see the file header for why). */
 export function GameModelsPopover({
   bundle,
   away,
@@ -190,10 +237,18 @@ export function GameModelsPopover({
   triggerRef?: React.RefObject<HTMLElement>;
   onClose: () => void;
 }) {
+  const isMobile = useIsMobileViewport();
   const ref = useRef<HTMLDivElement>(null);
   const [flip, setFlip] = useState(false);
 
+  // Desktop-only: the anchored card's outside-click/touch + flip-position +
+  // scroll-into-view logic. Explicitly skipped on mobile — not just left to
+  // no-op via `ref` being unmounted there, since `ref.current?.contains(x)`
+  // is falsy when `ref` is null too, which would make onOutside treat every
+  // click (including ones inside the mobile Modal) as "outside" and close it
+  // immediately.
   useEffect(() => {
+    if (isMobile) return;
     const onOutside = (e: MouseEvent | TouchEvent) => {
       const target = e.target as Node;
       if (ref.current?.contains(target)) return;
@@ -211,16 +266,17 @@ export function GameModelsPopover({
       document.removeEventListener("touchstart", onOutside);
       window.removeEventListener("keydown", onKey);
     };
-  }, [onClose]);
+  }, [onClose, isMobile, triggerRef]);
 
   // Flip above the card when there isn't room below (near the bottom of the
   // viewport).
   useEffect(() => {
+    if (isMobile) return;
     const el = ref.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
     setFlip(rect.bottom > window.innerHeight);
-  }, []);
+  }, [isMobile]);
 
   // Scroll the panel itself into view once it's positioned (above or below,
   // per `flip`) — not the trigger, and not on the same tick as the flip
@@ -229,10 +285,27 @@ export function GameModelsPopover({
   // still be taller than the viewport on a short mobile screen — the capped
   // height + its own scroll (in the className below) handles that case.
   useEffect(() => {
+    if (isMobile) return;
     ref.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-  }, [flip]);
+  }, [flip, isMobile]);
 
-  const rows = MODEL_KEYS.filter(([k]) => bundle[k][1] != null);
+  if (isMobile) {
+    return (
+      <Modal title="Compare all 7 models" subtitle={`${away} @ ${home}`} onClose={onClose}>
+        <PopoverContent
+          bundle={bundle}
+          away={away}
+          home={home}
+          actual={actual}
+          annotation={annotation}
+          category={category}
+          allAgreeStat={allAgreeStat}
+          pairwiseResolution={pairwiseResolution}
+          tossUpAccuracy={tossUpAccuracy}
+        />
+      </Modal>
+    );
+  }
 
   return (
     <div
@@ -242,13 +315,17 @@ export function GameModelsPopover({
       onClick={(e) => e.stopPropagation()}
       className={`absolute left-0 right-0 z-30 max-h-[80vh] w-full overflow-y-auto overscroll-contain rounded-2xl border border-slate-200 bg-white p-2.5 shadow-lg sm:left-1/2 sm:right-auto sm:w-[24rem] sm:-translate-x-1/2 ${flip ? "bottom-full mb-2" : "top-full mt-2"}`}
     >
-      <div className={`mb-1.5 rounded-lg border px-2 py-1.5 text-[11px] leading-snug ${TONE_CLS[annotation.tone]}`}>{annotation.title}</div>
-      <HistoricalSection category={category} allAgreeStat={allAgreeStat} pairwiseResolution={pairwiseResolution} tossUpAccuracy={tossUpAccuracy} />
-      <div className="divide-y divide-slate-100">
-        {rows.map(([k]) => (
-          <ModelRow key={k} label={SHORT_LABEL[k]} color={MODEL_COLORS[k]} away={away} home={home} pH={bundle[k][1]!} actual={actual} emphasize={k === "consensus"} />
-        ))}
-      </div>
+      <PopoverContent
+        bundle={bundle}
+        away={away}
+        home={home}
+        actual={actual}
+        annotation={annotation}
+        category={category}
+        allAgreeStat={allAgreeStat}
+        pairwiseResolution={pairwiseResolution}
+        tossUpAccuracy={tossUpAccuracy}
+      />
     </div>
   );
 }
