@@ -116,13 +116,19 @@ export function classify(r: Row, xKey: "week" | "season"): Game {
 }
 
 /** The three block KPIs. Favorite Win % / Home Win % exclude ties entirely
- *  (2026-07-20: ties are their own category now, not a favorite loss). */
+ *  (2026-07-20: ties are their own category now, not a favorite loss).
+ *  Favorite is Home % / Favorite Win % (2026-09-22) only consider games with
+ *  a published spread (spread != null) — a season/week with no spreads set
+ *  yet shouldn't drag those two down with games that have no favorite by
+ *  definition. Home Win % is unaffected — it isn't about the favorite. */
 export function kpis(games: Game[]): Record<KpiKey, number | null> {
+  const withSpread = games.filter((g) => g.spread != null);
+  const spreadPlayed = withSpread.filter((g) => g.played && g.category !== "Tie");
   const played = games.filter((g) => g.played && g.category !== "Tie");
   return {
-    favHomePct: games.length ? (games.filter((g) => g.favorite === "home").length / games.length) * 100 : null,
-    favWinPct: played.length
-      ? (played.filter((g) => g.winner != null && g.winner === g.favorite).length / played.length) * 100
+    favHomePct: withSpread.length ? (withSpread.filter((g) => g.favorite === "home").length / withSpread.length) * 100 : null,
+    favWinPct: spreadPlayed.length
+      ? (spreadPlayed.filter((g) => g.winner != null && g.winner === g.favorite).length / spreadPlayed.length) * 100
       : null,
     homeWinPct: played.length ? (played.filter((g) => g.winner === "home").length / played.length) * 100 : null,
   };
@@ -311,7 +317,13 @@ function Block({ title, rows, xKey }: { title: string; rows: Row[]; xKey: "week"
       counts.set(`${g.x}|${g.category}`, (counts.get(`${g.x}|${g.category}`) ?? 0) + 1);
       totals.set(g.x, (totals.get(g.x) ?? 0) + 1);
     }
-    const homeFav = xs.map((x) => games.filter((g) => g.x === x && g.favorite === "home").length);
+    // null (not 0) when no game at this x has a spread yet — leaves a gap in
+    // the line instead of implying "zero home favorites" for a week/season
+    // whose spreads haven't posted yet
+    const homeFav = xs.map((x) => {
+      const atX = games.filter((g) => g.x === x);
+      return atX.some((g) => g.spread != null) ? atX.filter((g) => g.favorite === "home").length : null;
+    });
 
     return {
       grid: { left: 10, right: 10, top: 60, bottom: 10, containLabel: true },
@@ -334,7 +346,7 @@ function Block({ title, rows, xKey }: { title: string; rows: Row[]; xKey: "week"
             });
           return (
             `<div style="display:flex;justify-content:space-between;gap:14px;font-weight:600;margin-bottom:4px;">` +
-            `<span>${xLabel} ${x}</span><span>Home favorite: ${homeFav[idx] ?? 0}</span></div>` +
+            `<span>${xLabel} ${x}</span><span>Home favorite: ${homeFav[idx] ?? "N/A"}</span></div>` +
             lines.join("")
           );
         },
