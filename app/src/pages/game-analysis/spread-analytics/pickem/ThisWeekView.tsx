@@ -144,25 +144,62 @@ function lerpColor(hexA: string, hexB: string, t: number): string {
  * pooled over all seasons. Home/away position isn't meaningful once pooled
  * across many different matchups, so this reframes the same track as
  * "Toss-up → Lock" instead. */
+// Models' average confidence often clusters within a few points of each
+// other, so plotting every dot on one horizontal line (its literal position)
+// stacked several on top of one another almost perfectly — only the
+// top-painted 2-3 were ever visible. This assigns each dot a vertical "lane"
+// (a simple greedy beeswarm) whenever it would land within MIN_GAP_PCT of an
+// already-placed dot in that lane, so all 7 stay visually distinguishable
+// regardless of how close their confidence values are.
+const MIN_GAP_PCT = 7;
+const LANE_STEP_PX = 13;
+
 function AvgConfidenceStrip({ avg }: { avg: Partial<Record<MetricKey, number>> }) {
-  const entries = MODEL_KEYS.filter(([k]) => avg[k] != null);
+  const entries = MODEL_KEYS.filter(([k]) => avg[k] != null)
+    .map(([k, lbl]) => ({ k, lbl, conf: avg[k]!, pos: Math.max(0, Math.min(1, (avg[k]! - 0.5) / 0.5)) * 100 }))
+    .sort((a, b) => a.pos - b.pos);
   if (!entries.length) return null;
+
+  const laneLastPos: number[] = [];
+  const laned = entries.map((e) => {
+    let lane = 0;
+    while (laneLastPos[lane] != null && e.pos - laneLastPos[lane] < MIN_GAP_PCT) lane++;
+    laneLastPos[lane] = e.pos;
+    return { ...e, lane };
+  });
+  const maxLane = Math.max(0, ...laned.map((e) => e.lane));
+  const trackHeight = 24;
+  const padding = 10;
+  const totalHeight = trackHeight + maxLane * LANE_STEP_PX + padding * 2;
+  // Lane 0 sits centered on the track; higher lanes alternate above/below it
+  // so the swarm grows outward in both directions instead of one-sided.
+  const laneOffset = (lane: number) => (lane === 0 ? 0 : lane % 2 === 1 ? -Math.ceil(lane / 2) * LANE_STEP_PX : Math.ceil(lane / 2) * LANE_STEP_PX);
+
+  const trackMid = padding + trackHeight / 2 + (maxLane * LANE_STEP_PX) / 2;
+
   return (
-    <div className="relative mt-5 h-6 w-full max-w-lg rounded-full bg-slate-100">
-      <span className="absolute -top-4 left-0 text-[10px] font-medium uppercase tracking-wide text-slate-400">Toss-up</span>
-      <span className="absolute -top-4 right-0 text-[10px] font-medium uppercase tracking-wide text-slate-400">Lock</span>
-      {entries.map(([k, lbl]) => {
-        const conf = avg[k]!;
-        const pos = Math.max(0, Math.min(1, (conf - 0.5) / 0.5)) * 100;
-        return (
+    <div className="mt-5 w-full max-w-lg">
+      <div className="relative" style={{ height: totalHeight }}>
+        <span className="absolute -top-4 left-0 text-[10px] font-medium uppercase tracking-wide text-slate-400">Toss-up</span>
+        <span className="absolute -top-4 right-0 text-[10px] font-medium uppercase tracking-wide text-slate-400">Lock</span>
+        <div className="absolute left-0 right-0 rounded-full bg-slate-100" style={{ top: trackMid - trackHeight / 2, height: trackHeight }} />
+        {laned.map((e) => (
           <span
-            key={k}
-            className="absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow"
-            style={{ left: `${pos}%`, background: MODEL_COLORS[k] }}
-            title={`${lbl}: ${Math.round(conf * 100)}% avg. confidence`}
+            key={e.k}
+            className="absolute h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow"
+            style={{ left: `${e.pos}%`, top: trackMid + laneOffset(e.lane), background: MODEL_COLORS[e.k] }}
+            title={`${e.lbl}: ${Math.round(e.conf * 100)}% avg. confidence`}
           />
-        );
-      })}
+        ))}
+      </div>
+      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
+        {entries.map((e) => (
+          <span key={e.k} className="inline-flex items-center gap-1 text-[10px] font-medium text-slate-500">
+            <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: MODEL_COLORS[e.k] }} />
+            {e.lbl} <span className="font-semibold text-slate-700">{Math.round(e.conf * 100)}%</span>
+          </span>
+        ))}
+      </div>
     </div>
   );
 }
@@ -1238,6 +1275,26 @@ export default function ThisWeekView() {
     [allAgreeStat, pairwiseResolution, tossUpAccuracy, bestTossUp],
   );
 
+  // How often the row-level "listening recommendation" badge (the same one
+  // rendered per-card below) has actually been right, pooled across every
+  // graded historical game this week — replaces a plain "games analyzed"
+  // count with the number that actually matters: is the recommendation
+  // itself any good.
+  const recommendationStats = useMemo(() => {
+    let correct = 0;
+    let total = 0;
+    for (const r of gameModelRows) {
+      if (r.winner == null) continue;
+      const category = categorizeGame(r.bundle);
+      const annotation = buildAnnotation(category, annotationCtx, r.bundle, { home: r.home, away: r.away });
+      if (!annotation.team) continue;
+      total++;
+      const actualTeam = r.winner === "home" ? r.home : r.away;
+      if (annotation.team === actualTeam) correct++;
+    }
+    return { correct, total, pct: total ? correct / total : null };
+  }, [gameModelRows, annotationCtx]);
+
   const cardsForSeason = useMemo(() => {
     const rows = gameModelRows
       .filter((r) => r.season === Number(selectedSeason))
@@ -1460,7 +1517,11 @@ export default function ThisWeekView() {
             <div className="space-y-4">
               <div className="flex flex-wrap items-start justify-between gap-6">
                 <div className="flex flex-wrap gap-3">
-                  <Kpi label="Games analyzed" value={section2Kpis.n} sub={section2Kpis.nExcluded ? `${section2Kpis.nExcluded} with <2 models` : undefined} />
+                  <Kpi
+                    label="Recommendation accuracy"
+                    value={recommendationStats.pct != null ? `${Math.round(recommendationStats.pct * 100)}%` : "—"}
+                    sub={`${recommendationStats.correct}/${recommendationStats.total} recommendation${recommendationStats.total === 1 ? "" : "s"}`}
+                  />
                   <Kpi label="Avg. disagreement" value={section2Kpis.avgDisagreement != null ? `${(section2Kpis.avgDisagreement * 100).toFixed(1)}pp` : "—"} />
                   <Kpi label="All-models-agree rate" value={section2Kpis.allAgreeRate != null ? `${Math.round(section2Kpis.allAgreeRate * 100)}%` : "—"} />
                   <Kpi label="Underdog win rate" value={section2Kpis.underdogWinRate != null ? `${Math.round(section2Kpis.underdogWinRate * 100)}%` : "—"} sub="vs. market-calibrated favorite" />
