@@ -693,7 +693,7 @@ export default function ThisWeekView() {
   const [selectedGraphSeasons, setSelectedGraphSeasons] = useState<Set<number>>(new Set());
   const [visibleModels, setVisibleModels] = useState<Set<MetricKey>>(new Set(MODEL_KEYS.map(([k]) => k)));
   const [selectedMomentumTeam, setSelectedMomentumTeam] = useState<string | null>(null);
-  const [spreadMode, setSpreadMode] = useState<"abs" | "raw">("abs");
+  const [spreadMode, setSpreadMode] = useState<"abs" | "raw">("raw");
 
   useEffect(() => {
     setLoadError(null);
@@ -1377,7 +1377,7 @@ export default function ThisWeekView() {
               <div className="flex flex-wrap items-center justify-end gap-2">
                 <span className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Box plots show</span>
                 <div className="flex gap-2">
-                  {([["abs", "|Spread|"], ["raw", "No change"]] as const).map(([m, lbl]) => (
+                  {([["raw", "No change"], ["abs", "|Spread|"]] as const).map(([m, lbl]) => (
                     <button
                       key={m}
                       onClick={() => setSpreadMode(m)}
