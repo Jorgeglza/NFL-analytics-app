@@ -821,8 +821,18 @@ export default function ThisWeekView() {
     if (!seasonsSorted.length) return null;
     const data = seasonsSorted.map((s) => boxStatsFromValues(bySeasonRows.get(s)!.map((r) => spreadValue(Number(r.spread_line)))));
     return {
-      grid: { left: 44, right: 10, top: 20, bottom: 44, containLabel: true },
-      xAxis: { type: "category", data: seasonsSorted.map(String), name: "Season", nameLocation: "middle", nameGap: 30 },
+      grid: { left: 44, right: 10, top: 20, bottom: 50, containLabel: true },
+      // Rotated + small enough that every season fits without ECharts
+      // dropping any to "hideOverlap" — up to 12 categories in ~340px on
+      // mobile leaves no room for horizontal labels.
+      xAxis: {
+        type: "category",
+        data: seasonsSorted.map(String),
+        name: "Season",
+        nameLocation: "middle",
+        nameGap: 34,
+        axisLabel: { rotate: 55, fontSize: 9, hideOverlap: false },
+      },
       yAxis: { type: "value", name: boxYAxisName, nameLocation: "middle", nameGap: 30, nameRotate: 90, splitLine: { lineStyle: { color: "#f1f5f9" } } },
       tooltip: {
         formatter: (p: unknown) => {
@@ -905,8 +915,17 @@ export default function ThisWeekView() {
     const rankLabels = ["This week", "Closest match", "2nd closest", "3rd closest", "4th closest", "5th closest"];
 
     return {
-      grid: { left: 44, right: 10, top: 20, bottom: 56, containLabel: true },
-      xAxis: { type: "category", data: categories, name: "Week", nameLocation: "middle", nameGap: 40, axisLabel: { rotate: categories.length > 4 ? 20 : 0 } },
+      grid: { left: 44, right: 10, top: 20, bottom: 62, containLabel: true },
+      // Same reasoning as the season box plot: rotate + shrink so labels
+      // like "S2020 Wk10" always render instead of getting silently dropped.
+      xAxis: {
+        type: "category",
+        data: categories,
+        name: "Week",
+        nameLocation: "middle",
+        nameGap: 46,
+        axisLabel: { rotate: 55, fontSize: 9, hideOverlap: false },
+      },
       yAxis: { type: "value", name: boxYAxisName, nameLocation: "middle", nameGap: 30, nameRotate: 90, splitLine: { lineStyle: { color: "#f1f5f9" } } },
       tooltip: {
         formatter: (p: unknown) => {

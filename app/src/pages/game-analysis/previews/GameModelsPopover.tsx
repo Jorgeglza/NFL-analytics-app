@@ -59,7 +59,7 @@ function ModelRow({
   const correct = actual != null ? side === actual : null;
 
   return (
-    <div className={`flex items-center gap-2 py-1.5 ${emphasize ? "" : ""}`}>
+    <div className={`flex items-center gap-2 py-1 ${emphasize ? "" : ""}`}>
       <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: color }} />
       <span className={`w-[76px] shrink-0 truncate text-[11px] ${emphasize ? "font-bold text-slate-800" : "font-medium text-slate-600"}`}>{label}</span>
       <div className="relative h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-slate-100">
@@ -126,7 +126,7 @@ function HistoricalSection({
     const res = pairwiseResolution.get(pairKey(category.a, category.b));
     if (!res || res.n === 0) return null;
     return (
-      <div className="mb-2 rounded-lg border border-slate-200 bg-slate-50 p-2">
+      <div className="mb-1.5 rounded-lg border border-slate-200 bg-slate-50 p-1.5">
         <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">When these two have split before</div>
         <HistRow label={SHORT_LABEL[res.a]} color={MODEL_COLORS[res.a]} acc={res.accA} n={res.n} />
         <HistRow label={SHORT_LABEL[res.b]} color={MODEL_COLORS[res.b]} acc={res.accB} n={res.n} />
@@ -139,7 +139,7 @@ function HistoricalSection({
       .sort((a, b) => (b.acc ?? -1) - (a.acc ?? -1));
     if (!rows.length) return null;
     return (
-      <div className="mb-2 rounded-lg border border-slate-200 bg-slate-50 p-2">
+      <div className="mb-1.5 rounded-lg border border-slate-200 bg-slate-50 p-1.5">
         <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Accuracy in toss-up games (near 50/50)</div>
         {rows.map((r) => (
           <HistRow key={r.k} label={SHORT_LABEL[r.k]} color={MODEL_COLORS[r.k]} acc={r.acc} n={r.n} />
@@ -149,7 +149,7 @@ function HistoricalSection({
   }
   if (category.kind === "all-agree" && allAgreeStat.n > 0) {
     return (
-      <div className="mb-2 rounded-lg border border-slate-200 bg-slate-50 p-2">
+      <div className="mb-1.5 rounded-lg border border-slate-200 bg-slate-50 p-1.5">
         <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">When every model agrees like this</div>
         <HistRow label="Agreed side wins" acc={allAgreeStat.winRate} n={allAgreeStat.n} />
       </div>
@@ -213,13 +213,24 @@ export function GameModelsPopover({
     };
   }, [onClose]);
 
-  // Flip above the card when there isn't room below (near the bottom of the viewport).
+  // Flip above the card when there isn't room below (near the bottom of the
+  // viewport).
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
     setFlip(rect.bottom > window.innerHeight);
   }, []);
+
+  // Scroll the panel itself into view once it's positioned (above or below,
+  // per `flip`) — not the trigger, and not on the same tick as the flip
+  // decision above, since scrolling before that re-render lands would use
+  // the panel's about-to-change position. Even after flipping, the panel can
+  // still be taller than the viewport on a short mobile screen — the capped
+  // height + its own scroll (in the className below) handles that case.
+  useEffect(() => {
+    ref.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [flip]);
 
   const rows = MODEL_KEYS.filter(([k]) => bundle[k][1] != null);
 
@@ -229,9 +240,9 @@ export function GameModelsPopover({
       role="dialog"
       aria-label={`Model probabilities for ${away} at ${home}`}
       onClick={(e) => e.stopPropagation()}
-      className={`absolute left-0 right-0 z-30 w-full rounded-2xl border border-slate-200 bg-white p-3 shadow-lg sm:left-1/2 sm:right-auto sm:w-[24rem] sm:-translate-x-1/2 ${flip ? "bottom-full mb-2" : "top-full mt-2"}`}
+      className={`absolute left-0 right-0 z-30 max-h-[80vh] w-full overflow-y-auto overscroll-contain rounded-2xl border border-slate-200 bg-white p-2.5 shadow-lg sm:left-1/2 sm:right-auto sm:w-[24rem] sm:-translate-x-1/2 ${flip ? "bottom-full mb-2" : "top-full mt-2"}`}
     >
-      <div className={`mb-2 rounded-lg border px-2 py-1.5 text-[11px] leading-snug ${TONE_CLS[annotation.tone]}`}>{annotation.title}</div>
+      <div className={`mb-1.5 rounded-lg border px-2 py-1.5 text-[11px] leading-snug ${TONE_CLS[annotation.tone]}`}>{annotation.title}</div>
       <HistoricalSection category={category} allAgreeStat={allAgreeStat} pairwiseResolution={pairwiseResolution} tossUpAccuracy={tossUpAccuracy} />
       <div className="divide-y divide-slate-100">
         {rows.map(([k]) => (
