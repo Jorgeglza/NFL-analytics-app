@@ -555,6 +555,9 @@ function DotStripRow({
   allAgreeStat,
   pairwiseResolution,
   tossUpAccuracy,
+  open,
+  onToggle,
+  onClose,
 }: {
   g: Row;
   bundle: ProbBundle;
@@ -564,6 +567,12 @@ function DotStripRow({
   allAgreeStat: AllAgreeStat;
   pairwiseResolution: Map<string, PairwiseResolution>;
   tossUpAccuracy: Map<MetricKey, TossUpAccuracy>;
+  /** Only one row's popup is open at a time — the parent owns which one via
+   * a single "open game id" instead of each row tracking its own boolean,
+   * so opening a second row's popup automatically closes the first. */
+  open: boolean;
+  onToggle: () => void;
+  onClose: () => void;
 }) {
   const away = String(g.away_team);
   const home = String(g.home_team);
@@ -571,7 +580,6 @@ function DotStripRow({
   const played = g.home_score != null && g.away_score != null;
   const absSpread = g.spread_line == null ? null : Math.abs(Number(g.spread_line));
   const isBlowoutSpread = absSpread != null && absSpread > 6;
-  const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
   const logo = (team: string, isWinner: boolean, size: "sm" | "lg" = "sm") => {
@@ -650,9 +658,16 @@ function DotStripRow({
           // attaches — so without this it re-closes itself immediately on every real
           // click. Same reason DotPopover/InfoDot's triggers stop propagation too.
           e.stopPropagation();
-          setOpen((v) => !v);
+          onToggle();
         }}
-        className="flex w-full touch-manipulation items-center justify-center gap-1 rounded-b-2xl border-t border-slate-100 bg-slate-50 py-2 text-[11px] font-semibold text-slate-500 hover:bg-slate-100 hover:text-[#002f6c]"
+        // relative + z-40: a taller card's open popover (z-30, absolutely
+        // positioned) can visually extend over the rows below it — without
+        // this, that overlap would paint on top of this button and eat the
+        // click (the popover's own onClick stops propagation), making a
+        // covered row's trigger unreachable until the open one is closed
+        // some other way. Staying above it keeps every trigger clickable so
+        // switching between rows' popups always works in one click.
+        className="relative z-40 flex w-full touch-manipulation items-center justify-center gap-1 rounded-b-2xl border-t border-slate-100 bg-slate-50 py-2 text-[11px] font-semibold text-slate-500 hover:bg-slate-100 hover:text-[#002f6c]"
       >
         Compare all 7 models {open ? "▴" : "▾"}
       </button>
@@ -668,7 +683,7 @@ function DotStripRow({
           pairwiseResolution={pairwiseResolution}
           tossUpAccuracy={tossUpAccuracy}
           triggerRef={triggerRef}
-          onClose={() => setOpen(false)}
+          onClose={onClose}
         />
       )}
     </div>
@@ -694,6 +709,9 @@ export default function ThisWeekView() {
   const [visibleModels, setVisibleModels] = useState<Set<MetricKey>>(new Set(MODEL_KEYS.map(([k]) => k)));
   const [selectedMomentumTeam, setSelectedMomentumTeam] = useState<string | null>(null);
   const [spreadMode, setSpreadMode] = useState<"abs" | "raw">("raw");
+  // Which game card's "Compare all 7 models" popup is open — a single id
+  // instead of per-row state, so opening a second one closes the first.
+  const [openCompareGameId, setOpenCompareGameId] = useState<string | null>(null);
 
   useEffect(() => {
     setLoadError(null);
@@ -1511,19 +1529,25 @@ export default function ThisWeekView() {
               </p>
 
               <div className="space-y-4">
-                {cardsForSeason.map((r) => (
-                  <DotStripRow
-                    key={String(r.g.game_id)}
-                    g={r.g}
-                    bundle={r.bundle}
-                    teamMeta={teamMeta}
-                    annotation={r.annotation}
-                    category={r.category}
-                    allAgreeStat={allAgreeStat}
-                    pairwiseResolution={pairwiseResolution}
-                    tossUpAccuracy={tossUpAccuracy}
-                  />
-                ))}
+                {cardsForSeason.map((r) => {
+                  const gameId = String(r.g.game_id);
+                  return (
+                    <DotStripRow
+                      key={gameId}
+                      g={r.g}
+                      bundle={r.bundle}
+                      teamMeta={teamMeta}
+                      annotation={r.annotation}
+                      category={r.category}
+                      allAgreeStat={allAgreeStat}
+                      pairwiseResolution={pairwiseResolution}
+                      tossUpAccuracy={tossUpAccuracy}
+                      open={openCompareGameId === gameId}
+                      onToggle={() => setOpenCompareGameId((cur) => (cur === gameId ? null : gameId))}
+                      onClose={() => setOpenCompareGameId((cur) => (cur === gameId ? null : cur))}
+                    />
+                  );
+                })}
                 {!cardsForSeason.length && <div className="py-8 text-center text-sm text-slate-400">No games found for this season.</div>}
               </div>
 
