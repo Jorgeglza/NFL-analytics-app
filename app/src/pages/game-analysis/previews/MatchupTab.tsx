@@ -642,6 +642,20 @@ export default function MatchupTab({
 
   usePageTitle(away && home ? `${away} @ ${home} — Matchup Previews` : "Matchup Previews — Matchup");
 
+  // Jumped here from a Week Preview card (initialSelection set): land on the model
+  // verdict strip rather than wherever the page happened to be scrolled to (the
+  // Season/Week/Game filters above it, or last scroll position from the previous
+  // tab). `scroll-mt` on the target element (below) keeps it clear of the sticky
+  // top navbar. Only fires on mount from a card jump, not on every filter change —
+  // MatchupTab remounts fresh each time the parent switches into this tab (see
+  // MatchupPreviews.tsx), so a plain mount-time effect is exactly "on card select".
+  const verdictRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!initialSelection) return;
+    verdictRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fire once on mount only
+  }, []);
+
   const recordOf = (team: string): string => {
     const rows = twIdx.rowsFor(team, s).filter((r) => Number(r.week) <= w && r.win != null);
     const wins = rows.reduce((sm, r) => sm + Number(r.win), 0);
@@ -1067,7 +1081,7 @@ export default function MatchupTab({
 
       {/* Model verdict — every model's call for this game, conclusion first */}
       {bundle && (
-        <div className="rounded-2xl border border-slate-200 bg-white shadow-sm" style={{ borderTop: "4px solid #002f6c" }}>
+        <div ref={verdictRef} className="scroll-mt-16 rounded-2xl border border-slate-200 bg-white shadow-sm" style={{ borderTop: "4px solid #002f6c" }}>
           <div className="flex flex-wrap items-stretch gap-2 p-3">
             {modelKeys.map(([k, lbl]) => {
               const [pA, pH] = bundle[k];
