@@ -131,13 +131,13 @@ function TeamPair({ away, home, season, week, meta }: { away: string; home: stri
   return (
     <div className="flex shrink-0 items-center gap-1.5">
       {awayLogo ? (
-        <TeamLogoLink to={to} logo={awayLogo} alt={away} imgClassName="h-8 w-8 object-contain" title={`Compare ${away} vs ${home}`} />
+        <TeamLogoLink to={to} logo={awayLogo} alt={away} imgClassName="h-10 w-10 object-contain sm:h-8 sm:w-8" title={`Compare ${away} vs ${home}`} />
       ) : (
         <span className="text-xs font-bold text-slate-400">{away}</span>
       )}
       <span className="text-[10px] text-slate-300">@</span>
       {homeLogo ? (
-        <TeamLogoLink to={to} logo={homeLogo} alt={home} imgClassName="h-8 w-8 object-contain" title={`Compare ${away} vs ${home}`} />
+        <TeamLogoLink to={to} logo={homeLogo} alt={home} imgClassName="h-10 w-10 object-contain sm:h-8 sm:w-8" title={`Compare ${away} vs ${home}`} />
       ) : (
         <span className="text-xs font-bold text-slate-400">{home}</span>
       )}
@@ -329,7 +329,7 @@ export default function RecommendationsView() {
                 return (
                   <Card key={g.gameId} accent={favColor}>
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="flex items-center gap-3">
+                      <div className="flex flex-col items-center gap-2 text-center sm:flex-row sm:items-center sm:gap-3 sm:text-left">
                         <TeamPair away={g.awayTeam} home={g.homeTeam} season={season} week={week} meta={teamMeta} />
                         <div>
                           <div className="text-xs font-medium uppercase tracking-wider text-slate-400">
@@ -344,7 +344,7 @@ export default function RecommendationsView() {
                           </div>
                         </div>
                       </div>
-                      <div className="space-y-1 text-xs text-slate-500 sm:text-right">
+                      <div className="space-y-1 text-center text-xs text-slate-500 sm:text-right">
                         {modelProb != null && (
                           <div className="flex items-center gap-1.5 sm:justify-end">
                             <span>Model win prob: {Math.round(modelProb * 100)}%</span>
@@ -398,7 +398,7 @@ export default function RecommendationsView() {
                 <Card key={g.gameId} accent={POOL_COLOR}>
                   <div className="space-y-3">
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="flex items-center gap-3">
+                      <div className="flex flex-col items-center gap-2 text-center sm:flex-row sm:items-center sm:gap-3 sm:text-left">
                         <TeamPair away={g.awayTeam} home={g.homeTeam} season={season} week={week} meta={teamMeta} />
                         <div>
                           <div className="text-xs font-medium uppercase tracking-wider text-slate-400">
@@ -408,7 +408,10 @@ export default function RecommendationsView() {
                           <div className="mt-0.5 text-base font-bold text-slate-900 sm:text-lg">Coin flip</div>
                         </div>
                       </div>
-                      <span className="inline-block w-fit rounded-full px-2 py-0.5 text-[10px] font-semibold text-white" style={{ background: POOL_COLOR }}>
+                      <span
+                        className="inline-block w-fit self-center rounded-full px-2 py-0.5 text-[10px] font-semibold text-white sm:self-auto"
+                        style={{ background: POOL_COLOR }}
+                      >
                         |spread| {g.absSpread.toFixed(1)} &le; {threshold}
                       </span>
                     </div>

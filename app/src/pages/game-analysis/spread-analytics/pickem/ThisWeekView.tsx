@@ -554,14 +554,16 @@ function DotStripRow({
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
-  const logo = (team: string, isWinner: boolean) => {
+  const logo = (team: string, isWinner: boolean, size: "sm" | "lg" = "sm") => {
     const src = teamMeta.get(team)?.logo;
     const ringColor = teamMeta.get(team)?.color ?? "#16a34a";
+    const colCls = size === "lg" ? "w-20" : "w-14 sm:w-16";
+    const imgCls = size === "lg" ? "h-12 w-12 object-contain" : "h-8 w-8 object-contain";
     return (
-      <div className="flex w-14 shrink-0 flex-col items-center gap-1 text-center sm:w-16">
+      <div className={`flex shrink-0 flex-col items-center gap-1 text-center ${colCls}`}>
         <span className="inline-block rounded-full" style={isWinner ? { boxShadow: `0 0 0 3px ${ringColor}, 0 0 0 5px white` } : undefined}>
           {src ? (
-            <TeamLogoLink to={`/game_analysis/team_comparison?team1=${away}&team2=${home}`} logo={src} alt={team} imgClassName="h-8 w-8 object-contain" title={`Compare ${away} vs ${home}`} />
+            <TeamLogoLink to={`/game_analysis/team_comparison?team1=${away}&team2=${home}`} logo={src} alt={team} imgClassName={imgCls} title={`Compare ${away} vs ${home}`} />
           ) : (
             <div className="font-bold">{team}</div>
           )}
@@ -571,27 +573,44 @@ function DotStripRow({
     );
   };
 
+  const spreadBadgeCls = `rounded-full border px-2 text-[9px] font-bold leading-[15px] ${
+    isBlowoutSpread ? "border-violet-500 bg-violet-50 text-violet-700" : "border-slate-200 bg-white text-slate-400"
+  }`;
+
   return (
     <div
       className={`relative rounded-2xl bg-white shadow-sm ${isBlowoutSpread ? "border-2 border-violet-500" : "border border-slate-200"}`}
       title={isBlowoutSpread ? `Spread ${absSpread!.toFixed(1)} — a wide (>6pt) line.` : undefined}
     >
-      <div className="relative flex items-center gap-3 px-3 py-3">
-        {absSpread != null && (
-          <span
-            className={`absolute -top-2 left-4 rounded-full border px-2 text-[9px] font-bold leading-[15px] ${
-              isBlowoutSpread ? "border-violet-500 bg-violet-50 text-violet-700" : "border-slate-200 bg-white text-slate-400"
-            }`}
-          >
-            Spread {absSpread.toFixed(1)}
-          </span>
-        )}
+      {/* Desktop (sm and up): logos flank the dot strip in a single row — unchanged from before. */}
+      <div className="relative hidden items-center gap-3 px-3 py-3 sm:flex">
+        {absSpread != null && <span className={`absolute -top-2 left-4 ${spreadBadgeCls}`}>Spread {absSpread.toFixed(1)}</span>}
         {logo(away, played && actual === "away")}
         <div className="min-w-0 flex-1">
           <ModelDotStrip bundle={bundle} away={away} home={home} actual={actual} showEndLabels={false} />
         </div>
         {logo(home, played && actual === "home")}
         <RowAnnotation annotation={annotation} />
+      </div>
+      {/* Mobile (below sm): logos get their own centered row above, so the dot strip
+          and recommendation badge aren't squeezed between two shrink-0 logo columns. */}
+      <div className="flex flex-col gap-2 px-3 pt-3 pb-2 sm:hidden">
+        {absSpread != null && (
+          <div className="flex justify-center">
+            <span className={spreadBadgeCls}>Spread {absSpread.toFixed(1)}</span>
+          </div>
+        )}
+        <div className="flex items-center justify-center gap-4">
+          {logo(away, played && actual === "away", "lg")}
+          <span className="text-xs font-semibold text-slate-300">@</span>
+          {logo(home, played && actual === "home", "lg")}
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="min-w-0 flex-1">
+            <ModelDotStrip bundle={bundle} away={away} home={home} actual={actual} showEndLabels={false} />
+          </div>
+          <RowAnnotation annotation={annotation} />
+        </div>
       </div>
       {/* Sole trigger for the popup, as a full-width footer strip in normal document
           flow — not a small absolutely-positioned corner icon. That corner-icon design
