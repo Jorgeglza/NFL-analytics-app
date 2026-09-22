@@ -761,6 +761,18 @@ export default function ThisWeekView() {
     const q3 = percentile(absSpreads, 75);
     return { n: absSpreads.length, mean, std, med, iqr: q3 - q1, min: Math.min(...absSpreads), max: Math.max(...absSpreads) };
   }, [absSpreads]);
+  // Signed-value counterpart of spreadStats, used only to find "similar
+  // weeks" when the box plots are in raw/signed mode — |Spread| always
+  // drives the KPI tiles above regardless of the toggle, but which weeks
+  // count as "similar" should match whatever the chart is actually plotting.
+  const rawSpreadStats = useMemo(() => {
+    if (!spreads.length) return null;
+    const mean = spreads.reduce((a, b) => a + b, 0) / spreads.length;
+    const q1 = percentile(spreads, 25);
+    const med = percentile(spreads, 50);
+    const q3 = percentile(spreads, 75);
+    return { mean, med, iqr: q3 - q1 };
+  }, [spreads]);
 
   const spreadHistOption = useMemo<EChartsOption | null>(() => {
     if (spreads.length < 2) return null;
@@ -866,14 +878,17 @@ export default function ThisWeekView() {
 
   // ---------- Section 1b: auto-detected similar weeks ----------
   // Every (season, week) combo's spread distribution, ranked by how close its
-  // [mean, median, IQR] of |spread| is to the currently selected week's
-  // aggregate — a normalized-Euclidean distance so mean/median/IQR (different
-  // natural scales) contribute comparably. Similarity is always judged on
-  // |spread| regardless of the raw/abs toggle, since it's measuring how
-  // competitive/lopsided the games were, not which side was favored.
+  // [mean, median, IQR] is to the currently selected week's aggregate — a
+  // normalized-Euclidean distance so mean/median/IQR (different natural
+  // scales) contribute comparably. Judged on |spread| in |Spread| mode
+  // (how competitive/lopsided the games were) and on raw signed spread in
+  // No-change mode (which also captures home/away favorite lean) — the two
+  // modes can genuinely surface different "most similar" weeks, so each
+  // gets its own ranking rather than sharing one abs-only result.
   const MIN_GAMES_FOR_COMPARISON = 4;
   const similarWeeks = useMemo(() => {
-    if (!spreadStats) return [];
+    const target = spreadMode === "abs" ? spreadStats : rawSpreadStats;
+    if (!target) return [];
     const bySW = new Map<string, { season: number; week: number; rows: Row[] }>();
     for (const r of reg) {
       if (r.spread_line == null || !Number.isFinite(Number(r.spread_line))) continue;
@@ -889,17 +904,16 @@ export default function ThisWeekView() {
     for (const { season, week, rows } of bySW.values()) {
       if (rows.length < MIN_GAMES_FOR_COMPARISON) continue;
       const raws = rows.map((r) => Number(r.spread_line));
-      const abs = raws.map((x) => Math.abs(x));
-      const mean = abs.reduce((a, b) => a + b, 0) / abs.length;
-      const med = percentile(abs, 50);
-      const iqr = percentile(abs, 75) - percentile(abs, 25);
+      const vals = spreadMode === "abs" ? raws.map((x) => Math.abs(x)) : raws;
+      const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
+      const med = percentile(vals, 50);
+      const iqr = percentile(vals, 75) - percentile(vals, 25);
       candidates.push({ season, week, rows, raws, mean, med, iqr });
     }
     if (candidates.length < 2) return [];
 
     const dims: (keyof Pick<Cand, "mean" | "med" | "iqr">)[] = ["mean", "med", "iqr"];
     const stds = dims.map((d) => sampleStd(candidates.map((c) => c[d])) || 1);
-    const target = { mean: spreadStats.mean, med: spreadStats.med, iqr: spreadStats.iqr };
 
     const scored = candidates
       .map((c) => {
@@ -914,7 +928,7 @@ export default function ThisWeekView() {
       else break;
     }
     return top;
-  }, [reg, spreadStats]);
+  }, [reg, spreadStats, rawSpreadStats, spreadMode]);
 
   const similarWeeksBoxOption = useMemo<EChartsOption | null>(() => {
     if (!similarWeeks.length) return null;
