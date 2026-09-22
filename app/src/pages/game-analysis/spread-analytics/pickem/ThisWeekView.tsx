@@ -721,6 +721,24 @@ export default function ThisWeekView() {
   const weekSchedRows = useMemo(() => reg.filter((r) => Number(r.week) === selectedWeekNum), [reg, selectedWeekNum]);
   const seasonsCoveredThisWeek = useMemo(() => new Set(weekSchedRows.map((r) => r.season)).size, [weekSchedRows]);
 
+  // The single season "This week" actually refers to — the live upcoming
+  // season/week when they match, else the most recent season that had this
+  // week number. weekSchedRows itself pools every season for the selected
+  // week (by design, for the aggregate stats above); this is what scopes
+  // "This week" down to one real instance of it, same as every other
+  // season/week box on this page.
+  const currentSeasonForThisWeek = useMemo(() => {
+    if (upcomingMeta?.week === selectedWeekNum && upcomingMeta.n_games > 0 && upcomingMeta.season != null) {
+      return upcomingMeta.season;
+    }
+    const seasonsPresent = weekSchedRows.map((r) => Number(r.season));
+    return seasonsPresent.length ? Math.max(...seasonsPresent) : null;
+  }, [weekSchedRows, upcomingMeta, selectedWeekNum]);
+  const thisWeekRows = useMemo(
+    () => (currentSeasonForThisWeek == null ? weekSchedRows : weekSchedRows.filter((r) => Number(r.season) === currentSeasonForThisWeek)),
+    [weekSchedRows, currentSeasonForThisWeek],
+  );
+
   // ---------- shared prediction engine indices (reused from Matchup Previews) ----------
   const hist = useMemo(() => buildHist(reg), [reg]);
   const gradesIdx = useMemo(() => buildGradesIndex(grades), [grades]);
@@ -959,7 +977,7 @@ export default function ThisWeekView() {
 
   const similarBoxEntriesRef = useRef<{ label: string; rows: Row[] }[]>([]);
   similarBoxEntriesRef.current = [
-    { label: "This week", rows: weekSchedRows },
+    { label: currentSeasonForThisWeek == null ? "This week" : `This week (Season ${currentSeasonForThisWeek})`, rows: thisWeekRows },
     ...similarWeeks.map((c) => ({ label: `Season ${c.season}, Week ${c.week}`, rows: c.rows })),
   ];
 
