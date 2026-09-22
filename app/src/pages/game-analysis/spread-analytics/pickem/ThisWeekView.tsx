@@ -639,11 +639,13 @@ function DotStripRow({
           {isWinner && (
             <span
               aria-hidden
-              className="absolute inset-0 -z-10 scale-[1.7] rounded-full blur-md"
-              style={{ background: "radial-gradient(circle, rgba(34,197,94,0.55) 0%, rgba(34,197,94,0.22) 55%, rgba(34,197,94,0) 75%)" }}
+              className="absolute inset-0 -z-10 scale-[1.9] rounded-full blur-[2px]"
+              style={{
+                background: "radial-gradient(circle, rgba(134,239,172,0.95) 0%, rgba(134,239,172,0.7) 40%, rgba(134,239,172,0.25) 65%, rgba(134,239,172,0) 82%)",
+              }}
             />
           )}
-          <span className="inline-flex items-center justify-center rounded-full bg-white p-1 shadow-sm">
+          <span className={`inline-flex items-center justify-center rounded-full p-1 shadow-sm ${isWinner ? "bg-emerald-50" : "bg-white"}`}>
             {src ? (
               <TeamLogoLink to={`/game_analysis/team_comparison?team1=${away}&team2=${home}`} logo={src} alt={team} imgClassName={imgCls} title={`Compare ${away} vs ${home}`} />
             ) : (
