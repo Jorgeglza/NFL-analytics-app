@@ -313,7 +313,7 @@ export function GameModelsPopover({
       role="dialog"
       aria-label={`Model probabilities for ${away} at ${home}`}
       onClick={(e) => e.stopPropagation()}
-      // z-50: higher than every row's own "Compare all 7 models" trigger
+      // z-[42]: higher than every row's own "Compare all 7 models" trigger
       // button (z-40, see ThisWeekView.tsx) — a taller open popover can
       // extend down over several rows below it, and those rows' full-width
       // footer bars used to paint over (visually slice through) the popover
@@ -323,7 +323,14 @@ export function GameModelsPopover({
       // clicking through the open popover's own bounds is still blocked by
       // its onClick stopPropagation, which is fine: the side of the row
       // outside the popover's (narrower, centered) width is still reachable.
-      className={`absolute left-0 right-0 z-50 max-h-[80vh] w-full overflow-y-auto overscroll-contain rounded-2xl border border-slate-200 bg-white p-2.5 shadow-lg sm:left-1/2 sm:right-auto sm:w-[24rem] sm:-translate-x-1/2 ${flip ? "bottom-full mb-2" : "top-full mt-2"}`}
+      // Deliberately kept below the sticky Navbar's z-[45] (this popover is
+      // `absolute`, not `fixed`/portaled, so it shares the root stacking
+      // context with the navbar) — it previously used z-50 and ended up
+      // painting over the sticky header/its dropdowns when open near the top
+      // of the viewport. True full-viewport overlays (Modal, FilterSheet,
+      // FloatingTooltip) stay at z-50, above the navbar, since those are
+      // meant to cover it.
+      className={`absolute left-0 right-0 z-[42] max-h-[80vh] w-full overflow-y-auto overscroll-contain rounded-2xl border border-slate-200 bg-white p-2.5 shadow-lg sm:left-1/2 sm:right-auto sm:w-[24rem] sm:-translate-x-1/2 ${flip ? "bottom-full mb-2" : "top-full mt-2"}`}
     >
       <PopoverContent
         bundle={bundle}

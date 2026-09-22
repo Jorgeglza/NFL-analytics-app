@@ -24,7 +24,13 @@ export default function Navbar() {
   }, []);
 
   return (
-    <header className="sticky top-0 z-40 bg-[#002f6c] text-white shadow-lg">
+    // z-45: above every in-page absolutely-positioned element (row cards,
+    // trigger buttons at z-40, GameModelsPopover at z-[42]) so the sticky
+    // header and its dropdown menus (plain descendants, capped at this same
+    // stacking context) never get painted over while scrolled — but still
+    // below the app's true fixed full-viewport overlays (Modal/FilterSheet/
+    // FloatingTooltip, all z-50), which are meant to cover the navbar too.
+    <header className="sticky top-0 z-[45] bg-[#002f6c] text-white shadow-lg">
       <div ref={ref} className="mx-auto flex max-w-screen-2xl items-center gap-4 px-4 py-2.5">
         <NavLink to="/" className="flex items-center gap-2.5 text-lg font-bold tracking-tight">
           {/* 256px source rendered at 36px keeps it crisp on retina displays */}
