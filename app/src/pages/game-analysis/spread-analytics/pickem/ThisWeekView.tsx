@@ -1513,7 +1513,7 @@ export default function ThisWeekView() {
                       type="button"
                       onClick={() => setSimilarWinTypesOpen(true)}
                       title="See win types for this week + comparable weeks"
-                      className="mb-1 text-sm font-semibold text-slate-700 underline decoration-dotted underline-offset-2 hover:text-[#002f6c]"
+                      className="mb-1 text-left text-sm font-semibold text-slate-700 hover:text-[#002f6c] hover:underline hover:decoration-dotted hover:underline-offset-2"
                     >
                       Similar weeks (auto-detected)
                     </button>

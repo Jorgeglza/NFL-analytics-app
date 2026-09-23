@@ -49,6 +49,11 @@ export default function SimilarWeeksWinTypesModal({
     ) as Record<(typeof CORE_WIN_TYPES)[number], number | null>;
   }, [groupsWithGames]);
 
+  // Same avg %, translated into an actual game count against THIS week's
+  // slate size (groups[0], "This week") — e.g. "29% -> ~5 of 16 games this
+  // week" reads a lot more concretely than the bare percentage alone.
+  const thisWeekGameCount = groupsWithGames[0]?.games.length ?? 0;
+
   const barOption = useMemo<EChartsOption | null>(() => {
     if (!groupsWithGames.some((g) => g.games.length)) return null;
     const present = CATEGORY_ORDER.filter((c) => groupsWithGames.some((g) => g.games.some((x) => x.category === c)));
@@ -102,15 +107,23 @@ export default function SimilarWeeksWinTypesModal({
     >
       <div className="space-y-5">
         <div className="flex flex-wrap gap-3">
-          {CORE_WIN_TYPES.map((cat) => (
-            <Kpi
-              key={cat}
-              label={cat}
-              value={avgShare[cat] == null ? "—" : `${Math.round(avgShare[cat]!)}%`}
-              accent={WIN_TYPE_COLORS[cat]}
-              sub={`avg across ${groupsWithGames.length} weeks`}
-            />
-          ))}
+          {CORE_WIN_TYPES.map((cat) => {
+            const share = avgShare[cat];
+            const gamesEquiv = share == null || !thisWeekGameCount ? null : Math.round((share / 100) * thisWeekGameCount);
+            return (
+              <Kpi
+                key={cat}
+                label={cat}
+                value={share == null ? "—" : `${Math.round(share)}%`}
+                accent={WIN_TYPE_COLORS[cat]}
+                sub={
+                  gamesEquiv == null
+                    ? `avg across ${groupsWithGames.length} weeks`
+                    : `≈ ${gamesEquiv} of ${thisWeekGameCount} games this week`
+                }
+              />
+            );
+          })}
         </div>
 
         {barOption ? (
