@@ -856,18 +856,6 @@ export default function ThisWeekView() {
     const q3 = percentile(absSpreads, 75);
     return { n: absSpreads.length, mean, std, med, iqr: q3 - q1, min: Math.min(...absSpreads), max: Math.max(...absSpreads) };
   }, [absSpreads]);
-  // Signed-value counterpart of spreadStats, used only to find "similar
-  // weeks" when the box plots are in raw/signed mode — |Spread| always
-  // drives the KPI tiles above regardless of the toggle, but which weeks
-  // count as "similar" should match whatever the chart is actually plotting.
-  const rawSpreadStats = useMemo(() => {
-    if (!spreads.length) return null;
-    const mean = spreads.reduce((a, b) => a + b, 0) / spreads.length;
-    const q1 = percentile(spreads, 25);
-    const med = percentile(spreads, 50);
-    const q3 = percentile(spreads, 75);
-    return { mean, med, iqr: q3 - q1 };
-  }, [spreads]);
 
   const spreadHistOption = useMemo<EChartsOption | null>(() => {
     if (spreads.length < 2) return null;
@@ -971,18 +959,36 @@ export default function ThisWeekView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bySeasonRows, spreadMode]);
 
+  // The [mean, median, IQR] the similar-weeks ranking below actually matches
+  // against — this actual current-season week's own games (same rows as the
+  // "This week" box), not the pooled-across-every-season spreadStats/
+  // rawSpreadStats above (those stay pooled on purpose, for the "over the
+  // years" KPIs/histogram/season box plot). Otherwise the ranking would be
+  // picking weeks that resemble the all-time-average shape of this week
+  // number instead of weeks that resemble the actual "This week" box drawn
+  // next to them.
+  const thisWeekTarget = useMemo(() => {
+    const raws = thisWeekRows.map((r) => (r.spread_line == null ? null : Number(r.spread_line))).filter((v): v is number => v != null && Number.isFinite(v));
+    if (!raws.length) return null;
+    const vals = spreadMode === "abs" ? raws.map(Math.abs) : raws;
+    const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
+    const med = percentile(vals, 50);
+    const iqr = percentile(vals, 75) - percentile(vals, 25);
+    return { mean, med, iqr };
+  }, [thisWeekRows, spreadMode]);
+
   // ---------- Section 1b: auto-detected similar weeks ----------
   // Every (season, week) combo's spread distribution, ranked by how close its
-  // [mean, median, IQR] is to the currently selected week's aggregate — a
-  // normalized-Euclidean distance so mean/median/IQR (different natural
-  // scales) contribute comparably. Judged on |spread| in |Spread| mode
-  // (how competitive/lopsided the games were) and on raw signed spread in
-  // No-change mode (which also captures home/away favorite lean) — the two
-  // modes can genuinely surface different "most similar" weeks, so each
-  // gets its own ranking rather than sharing one abs-only result.
+  // [mean, median, IQR] is to this actual week's — a normalized-Euclidean
+  // distance so mean/median/IQR (different natural scales) contribute
+  // comparably. Judged on |spread| in |Spread| mode (how competitive/
+  // lopsided the games were) and on raw signed spread in No-change mode
+  // (which also captures home/away favorite lean) — the two modes can
+  // genuinely surface different "most similar" weeks, so each gets its own
+  // ranking rather than sharing one abs-only result.
   const MIN_GAMES_FOR_COMPARISON = 4;
   const similarWeeks = useMemo(() => {
-    const target = spreadMode === "abs" ? spreadStats : rawSpreadStats;
+    const target = thisWeekTarget;
     if (!target) return [];
     const bySW = new Map<string, { season: number; week: number; rows: Row[] }>();
     for (const r of reg) {
@@ -1024,7 +1030,7 @@ export default function ThisWeekView() {
       else break;
     }
     return top;
-  }, [reg, spreadStats, rawSpreadStats, spreadMode, currentSeasonForThisWeek, selectedWeekNum]);
+  }, [reg, thisWeekTarget, spreadMode, currentSeasonForThisWeek, selectedWeekNum]);
 
   const similarWeeksBoxOption = useMemo<EChartsOption | null>(() => {
     if (!similarWeeks.length) return null;
