@@ -131,7 +131,12 @@ export function ModelDotStrip({
             // models list (Average, ML Fair, Market-calibrated, ...) — MODEL_KEYS.length - i so
             // earlier-ranked models get a higher z-index and paint on top; consensus (always
             // rendered last, below) gets the highest of all via MODEL_KEYS.length itself.
-            style={{ left: `${100 * pH}%`, zIndex: MODEL_KEYS.length - 1 - i }}
+            // While its tooltip is open, a dot jumps to z-41 — each dot button is its own
+            // stacking context (absolute + explicit zIndex), so the tooltip's own z-20 only
+            // wins locally; without this, ThisWeekView's "Compare all N models" footer
+            // button (z-40, deliberately high — see its own comment) paints over the
+            // tooltip. 41 stays under GameModelsPopover's z-[42] and the Navbar's z-[45].
+            style={{ left: `${100 * pH}%`, zIndex: visible ? 41 : MODEL_KEYS.length - 1 - i }}
           >
             <span className="h-2.5 w-2.5 rounded-full border border-white shadow-sm" style={{ background: MODEL_COLORS[k] }} />
             {visible && <DotPopover pH={pH} label={lbl} color={MODEL_COLORS[k]} away={away} home={home} actual={actual} />}
@@ -145,7 +150,7 @@ export function ModelDotStrip({
           aria-expanded={openKey === "consensus" || hoverKey === "consensus"}
           {...dotHandlers("consensus")}
           className="absolute top-1/2 flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center"
-          style={{ left: `${100 * bundle.consensus[1]}%`, zIndex: MODEL_KEYS.length }}
+          style={{ left: `${100 * bundle.consensus[1]}%`, zIndex: openKey === "consensus" || hoverKey === "consensus" ? 41 : MODEL_KEYS.length }}
         >
           <span className="h-3.5 w-1 rounded-sm" style={{ background: MODEL_COLORS.consensus }} />
           {(openKey === "consensus" || hoverKey === "consensus") && (
