@@ -997,6 +997,7 @@ export default function ThisWeekView() {
     type Cand = { season: number; week: number; rows: Row[]; raws: number[]; mean: number; med: number; iqr: number };
     const candidates: Cand[] = [];
     for (const { season, week, rows } of bySW.values()) {
+      if (season === currentSeasonForThisWeek && week === selectedWeekNum) continue;
       if (rows.length < MIN_GAMES_FOR_COMPARISON) continue;
       const raws = rows.map((r) => Number(r.spread_line));
       const vals = spreadMode === "abs" ? raws.map((x) => Math.abs(x)) : raws;
@@ -1023,11 +1024,16 @@ export default function ThisWeekView() {
       else break;
     }
     return top;
-  }, [reg, spreadStats, rawSpreadStats, spreadMode]);
+  }, [reg, spreadStats, rawSpreadStats, spreadMode, currentSeasonForThisWeek, selectedWeekNum]);
 
   const similarWeeksBoxOption = useMemo<EChartsOption | null>(() => {
     if (!similarWeeks.length) return null;
-    const currentVals = weekSchedRows
+    // Must match thisWeekRows (the single current-season instance of this
+    // week, same rows the click handler below opens) — not weekSchedRows
+    // (pooled across every season), or the "This week" box would plot the
+    // all-time aggregate for this week number instead of this week's actual
+    // games, while every other box here is a single real (season, week).
+    const currentVals = thisWeekRows
       .map((r) => (r.spread_line == null ? null : Number(r.spread_line)))
       .filter((v): v is number => v != null && Number.isFinite(v))
       .map(spreadValue);
@@ -1069,7 +1075,7 @@ export default function ThisWeekView() {
       ],
     } as EChartsOption;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [similarWeeks, weekSchedRows, spreadMode]);
+  }, [similarWeeks, thisWeekRows, spreadMode]);
 
   const spreadHistRef = useECharts(spreadHistOption);
 
