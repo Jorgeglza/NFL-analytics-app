@@ -56,7 +56,13 @@ export default function SpreadAnalytics() {
         <InfoDot text="For the season's full outlook, see Season Outlook. For a specific upcoming game, see what the model recommends on Matchup Previews." />
       </h1>
 
-      <TabBar tabs={TABS.map(([t, , icon, desc]) => [t, icon, desc] as const)} active={tab} onChange={setTab} gridClassName="sm:grid-cols-2 lg:grid-cols-4" />
+      <TabBar
+        tabs={TABS.map(([t, , icon, desc]) => [t, icon, desc] as const)}
+        active={tab}
+        onChange={setTab}
+        gridClassName="sm:grid-cols-2 lg:grid-cols-4"
+        hrefFor={(t) => `/game_analysis/spread_win_percentage/${TABS.find(([label]) => label === t)![1]}`}
+      />
 
       {tab === "Win Rate & Calibration" ? (
         <WinRateTab />
