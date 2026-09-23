@@ -34,6 +34,7 @@ import { GameModelsPopover } from "../../previews/GameModelsPopover";
 import TeamMomentumDetail from "./TeamMomentumDetail";
 import { classify, type Game } from "../WinTypesTab";
 import WinTypeDetailModal from "../WinTypeDetailModal";
+import SimilarWeeksWinTypesModal from "./SimilarWeeksWinTypesModal";
 import {
   computeAgreementMatrix,
   computeAllAgreeStat,
@@ -769,6 +770,7 @@ export default function ThisWeekView() {
   // Which game card's "Compare all 7 models" popup is open — a single id
   // instead of per-row state, so opening a second one closes the first.
   const [openCompareGameId, setOpenCompareGameId] = useState<string | null>(null);
+  const [similarWinTypesOpen, setSimilarWinTypesOpen] = useState(false);
 
   useEffect(() => {
     setLoadError(null);
@@ -1506,7 +1508,18 @@ export default function ThisWeekView() {
                   <div ref={spreadBoxRef} className="h-[340px] cursor-pointer" />
                 </div>
                 <div>
-                  <h3 className="mb-1 text-sm font-semibold text-slate-700">Similar weeks (auto-detected)</h3>
+                  {similarWeeksBoxOption ? (
+                    <button
+                      type="button"
+                      onClick={() => setSimilarWinTypesOpen(true)}
+                      title="See win types for this week + comparable weeks"
+                      className="mb-1 text-sm font-semibold text-slate-700 underline decoration-dotted underline-offset-2 hover:text-[#002f6c]"
+                    >
+                      Similar weeks (auto-detected)
+                    </button>
+                  ) : (
+                    <h3 className="mb-1 text-sm font-semibold text-slate-700">Similar weeks (auto-detected)</h3>
+                  )}
                   {similarWeeksBoxOption ? (
                     <>
                       <div className="mb-1 text-[11px] text-slate-400">Click a box to see those games.</div>
@@ -1524,6 +1537,10 @@ export default function ThisWeekView() {
 
           {gamesModal && (
             <WinTypeDetailModal x="" xLabel={gamesModal.label} games={gamesModal.games} onClose={() => setGamesModal(null)} />
+          )}
+
+          {similarWinTypesOpen && (
+            <SimilarWeeksWinTypesModal groups={similarBoxEntriesRef.current} onClose={() => setSimilarWinTypesOpen(false)} />
           )}
 
           {/* Section 2 */}

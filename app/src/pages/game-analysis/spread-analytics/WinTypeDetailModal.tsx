@@ -112,17 +112,12 @@ function SpreadStrip({ games }: { games: Game[] }) {
   );
 }
 
-export default function WinTypeDetailModal({
-  x,
-  xLabel,
-  games,
-  onClose,
-}: {
-  x: number | string;
-  xLabel: string;
-  games: Game[];
-  onClose: () => void;
-}) {
+/** KPIs + spread strip + biggest-upset callout + per-category games tables
+ * for one set of games — the reusable body both `WinTypeDetailModal` (a
+ * single week/season's games) and `SimilarWeeksWinTypesModal` (a selected
+ * comparable week from the "Similar weeks" pool) render inside their own
+ * `Modal`. */
+export function WinTypeBreakdown({ games }: { games: Game[] }) {
   const [teamMeta, setTeamMeta] = useState<Map<string, TeamMeta> | null>(null);
   useEffect(() => {
     let cancelled = false;
@@ -149,97 +144,115 @@ export default function WinTypeDetailModal({
   );
 
   return (
+    <div className="space-y-5">
+      <div className="flex flex-wrap gap-3">
+        <Kpi label="Favorite Win %" value={pct(favWinPct)} accent="#2459A7" />
+        <Kpi label="Home Win %" value={pct(homeWinPct)} accent="#C8102E" />
+        <Kpi label="Favorite is Home %" value={pct(favHomePct)} accent="#3C9A5F" />
+        <Kpi label="Upsets" value={`${upsets.length} / ${played.length}`} accent="#E87722" sub="Underdog wins / played games" />
+        <Kpi label="Avg |spread|" value={avgSpread == null ? "—" : avgSpread.toFixed(1)} accent="#002f6c" />
+        <Kpi
+          label="Home vs away favorites"
+          value={`${pct(homeFavWinPct)} / ${pct(awayFavWinPct)}`}
+          accent="#7c3aed"
+          sub="Favorite win % by side"
+        />
+      </div>
+
+      <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm" style={{ borderTop: "3px solid #94a3b8" }}>
+        <div className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Spread distribution</div>
+        <div className="mt-2">
+          <SpreadStrip games={games} />
+        </div>
+      </div>
+
+      {biggestUpset && (
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs text-slate-600">
+          <span className="font-semibold text-slate-800">Biggest upset:</span>{" "}
+          <TeamBadge abbr={biggestUpset.winnerTeam ?? "?"} meta={teamMeta?.get(biggestUpset.winnerTeam ?? "")} /> won as a{" "}
+          {Math.abs(biggestUpset.spread!)}-point underdog ({biggestUpset.awayTeam} {biggestUpset.awayScore}–{biggestUpset.homeScore}{" "}
+          {biggestUpset.homeTeam}).
+        </div>
+      )}
+
+      <div className="space-y-4">
+        {groups.map(({ cat, list }) => (
+          <div key={cat} className="overflow-hidden rounded-2xl border border-slate-200">
+            <div
+              className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-white"
+              style={{ background: CATEGORY_COLORS[cat] }}
+            >
+              <span className="rounded-full bg-white/20 px-1.5 py-0.5 text-[10px]">{CATEGORY_CODES[cat]}</span>
+              <span>{cat}</span>
+              <span className="ml-auto font-normal opacity-90">
+                {list.length} game{list.length === 1 ? "" : "s"}
+              </span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead className={theadCls}>
+                  <tr>
+                    {["Matchup", "Score", "Spread", "Date"].map((h) => (
+                      <th key={h} className="px-3 py-2">
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {list.map((g) => (
+                    <tr key={g.gameId} className={trCls}>
+                      <td className="px-3 py-1.5">
+                        <div className="flex items-center gap-1.5">
+                          <TeamBadge abbr={g.awayTeam} meta={teamMeta?.get(g.awayTeam)} />
+                          <span className="text-slate-400">@</span>
+                          <TeamBadge abbr={g.homeTeam} meta={teamMeta?.get(g.homeTeam)} />
+                        </div>
+                      </td>
+                      <td className="px-3 py-1.5">
+                        {g.played ? (
+                          <span className={g.winnerTeam ? "font-semibold text-slate-800" : "text-slate-500"}>
+                            {g.awayScore}–{g.homeScore}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400">—</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-1.5">{g.spread == null ? "—" : g.spread > 0 ? `+${g.spread}` : g.spread}</td>
+                      <td className="px-3 py-1.5 text-slate-500">{g.gameday ?? "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export default function WinTypeDetailModal({
+  x,
+  xLabel,
+  games,
+  onClose,
+}: {
+  x: number | string;
+  xLabel: string;
+  games: Game[];
+  onClose: () => void;
+}) {
+  const groups = CATEGORY_ORDER.filter((cat) => games.some((g) => g.category === cat));
+
+  return (
     <Modal
       onClose={onClose}
       wide
       title={`${xLabel}${x !== "" ? ` ${x}` : ""} — win-type breakdown`}
       subtitle={`${games.length} game${games.length === 1 ? "" : "s"} across ${groups.length} win type${groups.length === 1 ? "" : "s"}`}
     >
-      <div className="space-y-5">
-        <div className="flex flex-wrap gap-3">
-          <Kpi label="Favorite Win %" value={pct(favWinPct)} accent="#2459A7" />
-          <Kpi label="Home Win %" value={pct(homeWinPct)} accent="#C8102E" />
-          <Kpi label="Favorite is Home %" value={pct(favHomePct)} accent="#3C9A5F" />
-          <Kpi label="Upsets" value={`${upsets.length} / ${played.length}`} accent="#E87722" sub="Underdog wins / played games" />
-          <Kpi label="Avg |spread|" value={avgSpread == null ? "—" : avgSpread.toFixed(1)} accent="#002f6c" />
-          <Kpi
-            label="Home vs away favorites"
-            value={`${pct(homeFavWinPct)} / ${pct(awayFavWinPct)}`}
-            accent="#7c3aed"
-            sub="Favorite win % by side"
-          />
-        </div>
-
-        <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm" style={{ borderTop: "3px solid #94a3b8" }}>
-          <div className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Spread distribution</div>
-          <div className="mt-2">
-            <SpreadStrip games={games} />
-          </div>
-        </div>
-
-        {biggestUpset && (
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs text-slate-600">
-            <span className="font-semibold text-slate-800">Biggest upset:</span>{" "}
-            <TeamBadge abbr={biggestUpset.winnerTeam ?? "?"} meta={teamMeta?.get(biggestUpset.winnerTeam ?? "")} /> won as a{" "}
-            {Math.abs(biggestUpset.spread!)}-point underdog ({biggestUpset.awayTeam} {biggestUpset.awayScore}–{biggestUpset.homeScore}{" "}
-            {biggestUpset.homeTeam}).
-          </div>
-        )}
-
-        <div className="space-y-4">
-          {groups.map(({ cat, list }) => (
-            <div key={cat} className="overflow-hidden rounded-2xl border border-slate-200">
-              <div
-                className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-white"
-                style={{ background: CATEGORY_COLORS[cat] }}
-              >
-                <span className="rounded-full bg-white/20 px-1.5 py-0.5 text-[10px]">{CATEGORY_CODES[cat]}</span>
-                <span>{cat}</span>
-                <span className="ml-auto font-normal opacity-90">
-                  {list.length} game{list.length === 1 ? "" : "s"}
-                </span>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead className={theadCls}>
-                    <tr>
-                      {["Matchup", "Score", "Spread", "Date"].map((h) => (
-                        <th key={h} className="px-3 py-2">
-                          {h}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {list.map((g) => (
-                      <tr key={g.gameId} className={trCls}>
-                        <td className="px-3 py-1.5">
-                          <div className="flex items-center gap-1.5">
-                            <TeamBadge abbr={g.awayTeam} meta={teamMeta?.get(g.awayTeam)} />
-                            <span className="text-slate-400">@</span>
-                            <TeamBadge abbr={g.homeTeam} meta={teamMeta?.get(g.homeTeam)} />
-                          </div>
-                        </td>
-                        <td className="px-3 py-1.5">
-                          {g.played ? (
-                            <span className={g.winnerTeam ? "font-semibold text-slate-800" : "text-slate-500"}>
-                              {g.awayScore}–{g.homeScore}
-                            </span>
-                          ) : (
-                            <span className="text-slate-400">—</span>
-                          )}
-                        </td>
-                        <td className="px-3 py-1.5">{g.spread == null ? "—" : g.spread > 0 ? `+${g.spread}` : g.spread}</td>
-                        <td className="px-3 py-1.5 text-slate-500">{g.gameday ?? "—"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
+      <WinTypeBreakdown games={games} />
     </Modal>
   );
 }
