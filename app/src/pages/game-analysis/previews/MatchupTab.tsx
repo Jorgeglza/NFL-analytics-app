@@ -476,6 +476,152 @@ function MarginBars({
   return <div ref={ref} className="h-24 w-full min-w-0" />;
 }
 
+type RecentGame = {
+  week: number;
+  opp: string;
+  oppTeam: string;
+  res: "W" | "L" | "T";
+  pf: number | null;
+  pa: number | null;
+  yf: number | null;
+  ya: number | null;
+  to: number | null;
+  epa: number | null;
+};
+
+const numOrNull = (v: unknown): number | null => (v == null || !Number.isFinite(Number(v)) ? null : Number(v));
+const avgOf = (xs: (number | null)[]): number | null => {
+  const v = xs.filter((x): x is number => x != null);
+  return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null;
+};
+const signedInt = (v: number | null) => (v == null ? "—" : v > 0 ? `+${Math.round(v)}` : String(Math.round(v)));
+const signedCls = (v: number | null) => (v == null || Math.abs(v) < 1e-9 ? "text-slate-500" : v > 0 ? "text-[#3C9A5F]" : "text-[#C8102E]");
+const RES_BG = { W: "#3C9A5F", L: "#C8102E", T: "#94a3b8" } as const;
+
+/** For/Against pair: the side that "won" the stat is bold, the other muted. */
+function PairCells({ f, a, digits = 0 }: { f: number | null; a: number | null; digits?: number }) {
+  const fmt = (v: number | null) => (v == null ? "—" : v.toFixed(digits));
+  const fWins = f != null && a != null && f > a;
+  const aWins = f != null && a != null && a > f;
+  return (
+    <>
+      <td className={`px-1.5 py-1.5 text-right tabular-nums ${fWins ? "font-bold text-slate-800" : "text-slate-500"}`}>{fmt(f)}</td>
+      <td className={`border-r border-slate-100 px-1.5 py-1.5 text-right tabular-nums ${aWins ? "font-bold text-[#C8102E]" : "text-slate-500"}`}>{fmt(a)}</td>
+    </>
+  );
+}
+
+/** Recent-form panel for one team: form dots + last-N averages + per-game
+ * table (most recent first) with points/yards for & against, TO and EPA diffs. */
+function RecentFormTeam({ team, games, meta }: { team: string; games: RecentGame[]; meta: Map<string, TeamMeta> }) {
+  const m = meta.get(team);
+  const w = games.filter((g) => g.res === "W").length;
+  const l = games.filter((g) => g.res === "L").length;
+  const t = games.filter((g) => g.res === "T").length;
+  const pf = avgOf(games.map((g) => g.pf));
+  const pa = avgOf(games.map((g) => g.pa));
+  const yf = avgOf(games.map((g) => g.yf));
+  const ya = avgOf(games.map((g) => g.ya));
+  const toSum = games.some((g) => g.to != null) ? games.reduce((sm, g) => sm + (g.to ?? 0), 0) : null;
+  const margin = pf != null && pa != null ? pf - pa : null;
+  const kpis: { label: string; value: string; sub: string; cls?: string }[] = [
+    { label: "Pts / gm", value: pf == null ? "—" : pf.toFixed(1), sub: pa == null ? "" : `allowed ${pa.toFixed(1)}` },
+    { label: "Yds / gm", value: yf == null ? "—" : yf.toFixed(0), sub: ya == null ? "" : `allowed ${ya.toFixed(0)}` },
+    { label: "Margin", value: margin == null ? "—" : fmtSigned(margin), sub: "pts / gm", cls: signedCls(margin) },
+    { label: "TO ±", value: signedInt(toSum), sub: "total", cls: signedCls(toSum) },
+  ];
+  return (
+    <div className="min-w-0">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5 text-xs font-bold" style={{ color: m?.color }}>
+          {m?.logo && <img src={m.logo} alt={team} className="h-5" loading="lazy" decoding="async" />}
+          {team}
+          {games.length > 0 && (
+            <span className="ml-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
+              {w}–{l}{t > 0 ? `–${t}` : ""} last {games.length}
+            </span>
+          )}
+        </div>
+        {games.length > 0 && (
+          <div className="flex items-center gap-1" title="Most recent first">
+            {games.map((g) => (
+              <span
+                key={g.week}
+                className="grid h-5 w-5 place-items-center rounded-full text-[10px] font-bold text-white"
+                style={{ background: RES_BG[g.res] }}
+              >
+                {g.res}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+      {games.length === 0 ? (
+        <div className="py-4 text-center text-[11px] italic text-slate-400">No games played yet this season</div>
+      ) : (
+        <>
+          <div className="mb-2 grid grid-cols-4 gap-1.5">
+            {kpis.map((k) => (
+              <div key={k.label} className="rounded-lg bg-slate-50 px-2 py-1.5 text-center">
+                <div className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">{k.label}</div>
+                <div className={`text-sm font-extrabold tabular-nums ${k.cls ?? "text-slate-800"}`}>{k.value}</div>
+                <div className="text-[9px] text-slate-400">{k.sub}</div>
+              </div>
+            ))}
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="bg-slate-50 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                <tr>
+                  <th colSpan={3} className="border-r border-slate-100 px-1.5 pt-1.5 text-left">Game</th>
+                  <th colSpan={2} className="border-r border-slate-100 px-1.5 pt-1.5 text-center">Points</th>
+                  <th colSpan={2} className="border-r border-slate-100 px-1.5 pt-1.5 text-center">Yards</th>
+                  <th colSpan={2} className="px-1.5 pt-1.5 text-center">Diff</th>
+                </tr>
+                <tr className="text-[9px]">
+                  <th className="px-1.5 pb-1.5 text-left">Wk</th>
+                  <th className="px-1.5 pb-1.5 text-left">Opp</th>
+                  <th className="border-r border-slate-100 px-1.5 pb-1.5 text-left">Res</th>
+                  <th className="px-1.5 pb-1.5 text-right" title="Points scored">For</th>
+                  <th className="border-r border-slate-100 px-1.5 pb-1.5 text-right" title="Points allowed">Agst</th>
+                  <th className="px-1.5 pb-1.5 text-right" title="Total yards gained">For</th>
+                  <th className="border-r border-slate-100 px-1.5 pb-1.5 text-right" title="Total yards allowed">Agst</th>
+                  <th className="px-1.5 pb-1.5 text-right" title="Turnover margin (takeaways − giveaways)">TO</th>
+                  <th className="px-1.5 pb-1.5 text-right" title="EPA differential (offense − defense)">EPA</th>
+                </tr>
+              </thead>
+              <tbody>
+                {games.map((g) => {
+                  const diff = g.pf != null && g.pa != null ? g.pf - g.pa : null;
+                  return (
+                    <tr key={g.week} className="border-t border-slate-100">
+                      <td className="px-1.5 py-1.5 text-slate-500">{g.week}</td>
+                      <td className="px-1.5 py-1.5 font-medium">
+                        <span className="inline-flex items-center gap-1 whitespace-nowrap">
+                          {meta.get(g.oppTeam)?.logo && <img src={meta.get(g.oppTeam)!.logo} alt="" className="h-4" loading="lazy" decoding="async" />}
+                          {g.opp}
+                        </span>
+                      </td>
+                      <td className="whitespace-nowrap border-r border-slate-100 px-1.5 py-1.5">
+                        <span className="font-bold" style={{ color: RES_BG[g.res] }}>{g.res}</span>{" "}
+                        <span className={`text-[10px] tabular-nums ${signedCls(diff)}`}>{signedInt(diff)}</span>
+                      </td>
+                      <PairCells f={g.pf} a={g.pa} />
+                      <PairCells f={g.yf} a={g.ya} />
+                      <td className={`px-1.5 py-1.5 text-right tabular-nums ${signedCls(g.to)}`}>{signedInt(g.to)}</td>
+                      <td className={`px-1.5 py-1.5 text-right tabular-nums ${signedCls(g.epa)}`}>{g.epa == null ? "—" : fmtSigned(g.epa)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 /** One model's breakdown card: pick header + how-it-got-there visual. */
 function ModelBlock({
   color,
@@ -991,18 +1137,29 @@ export default function MatchupTab({
   }, [ranks, s, wkPlayed, away, home, stat]);
 
   // ---- recent + h2h ----
-  const recent = (team: string) =>
+  // Most recent first.
+  const recent = (team: string): RecentGame[] =>
     twIdx
       .rowsFor(team, s)
       .filter((r) => Number(r.week) <= w)
       .slice(-3)
-      .map((r) => ({
-        week: Number(r.week),
-        opp: opponentLabel(String(r.game_id ?? ""), team),
-        wl: Number(r.win) === 1 ? "W" : "L",
-        pts: r.points == null ? "" : String(Math.round(Number(r.points))),
-        yds: r.total_yards == null ? "" : String(Math.round(Number(r.total_yards))),
-      }));
+      .reverse()
+      .map((r) => {
+        const pf = numOrNull(r.points);
+        const pa = numOrNull(r.points_allowed);
+        return {
+          week: Number(r.week),
+          opp: opponentLabel(String(r.game_id ?? ""), team),
+          oppTeam: String(r.opponent_team ?? ""),
+          res: pf != null && pa != null && pf === pa ? "T" : Number(r.win) === 1 ? "W" : "L",
+          pf,
+          pa,
+          yf: numOrNull(r.total_yards),
+          ya: numOrNull(r.total_yards_allowed),
+          to: numOrNull(r.turnover_margin),
+          epa: numOrNull(r.epa_diff),
+        };
+      });
 
   const h2h = useMemo(() => {
     if (!selGame) return null;
@@ -1599,36 +1756,18 @@ export default function MatchupTab({
 
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="mb-2 text-sm font-semibold text-slate-700">
+          <div className="mb-3 text-sm font-semibold text-slate-700">
             Recent form — last 3 games <span className="font-normal text-slate-400">(@ = away game)</span>
           </div>
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="divide-y divide-slate-100">
             {[away, home].map((t) => (
-              <div key={t}>
-                <div className="mb-1 flex items-center gap-1.5 text-xs font-bold" style={{ color: meta.get(t)?.color }}>
-                  {meta.get(t)?.logo && <img src={meta.get(t)!.logo} alt={t} className="h-5" loading="lazy" decoding="async" />}
-                  {t}
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
-                    <thead className="bg-slate-50 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                      <tr>{["Wk", "Opp", "W/L", "Pts", "Yds"].map((h) => <th key={h} className="px-2 py-1.5">{h}</th>)}</tr>
-                    </thead>
-                    <tbody>
-                      {recent(t).map((r) => (
-                        <tr key={`${t}${r.week}`} className="border-t border-slate-100">
-                          <td className="px-2 py-1.5 text-slate-500">{r.week}</td>
-                          <td className="px-2 py-1.5 font-medium">{r.opp}</td>
-                          <td className={`px-2 py-1.5 font-bold ${r.wl === "W" ? "text-[#3C9A5F]" : "text-[#C8102E]"}`}>{r.wl}</td>
-                          <td className="px-2 py-1.5 tabular-nums">{r.pts}</td>
-                          <td className="px-2 py-1.5 tabular-nums">{r.yds}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+              <div key={t} className="py-3 first:pt-0 last:pb-0">
+                <RecentFormTeam team={t} games={recent(t)} meta={meta} />
               </div>
             ))}
+          </div>
+          <div className="mt-2 text-[10px] text-slate-400">
+            Most recent first. Bold = side that won the stat; red Agst = opponent out-gained/out-scored them. TO = turnover margin, EPA = EPA differential.
           </div>
         </div>
 
