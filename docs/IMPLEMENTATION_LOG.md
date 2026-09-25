@@ -559,6 +559,11 @@ Full work list, with per-item checkboxes and severities: **`docs/MOBILE_READINES
 
 ## Session notes (newest first)
 
+### 2026-09-25 — Similar-weeks win-type popup: spread scatter beside the stacked bars
+- `WinTypesTab.tsx`: the per-group Block's spread scatter is now an exported `spreadScatterOption({ games, categories, xOf, xTitle, axisName?, axisLabel?, grid? })` builder (logic unchanged, including ×N overlap collapsing); Block calls it. Tooltips now also show the final score for played games (singles: "Final: AWY n – HOM n"; overlap groups: "(a–h)" after the winner).
+- `pickem/SimilarWeeksWinTypesModal.tsx`: the stacked bar sits in `lg:col-span-2` with the scatter in the third column (stacked below on mobile), one column per comparable week. Both charts use compact x labels ("This wk", "2023 W5"), and the full week label heads each tooltip. Clicking a scatter dot selects that week's games breakdown, the same as clicking a bar. Both grids use `top: 60` so the plot areas line up, and the "Games" axis name no longer overlaps the legend.
+- Verified: `npm run build` green; Playwright screenshots of the modal at 1440px (side-by-side, aligned) and 390px (stacked).
+
 ### 2026-09-19 (cont. x13) — "This Week": click-to-see-games popup on the season/similar-weeks box plots
 User asked for the two box plots added in cont. x12 (spread-by-season, similar-weeks) to open a game-details popup on click, reusing the one already built for Win Types' stacked bars instead of a new one.
 - `WinTypesTab.tsx`: exported `classify(r, xKey)` (was module-private) — it's the only piece that turns a raw `schedule.json` row into the `Game` shape `WinTypeDetailModal` renders (category, score, spread, matchup, date).

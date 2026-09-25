@@ -299,6 +299,113 @@ function MixChart({
   return <div ref={ref} className="h-[300px]" />;
 }
 
+/** Spread-vs-group scatter: one dot per game at (group, spread), colored by
+ *  win type; games sharing a (group, spread) cell collapse into one ringed
+ *  "×N" dot (majority category fill, runner-up border), like the old page.
+ *  Shared by the per-group Block below and the Similar-weeks modal. */
+export function spreadScatterOption({
+  games,
+  categories,
+  xOf,
+  xTitle,
+  axisName,
+  axisLabel,
+  grid,
+}: {
+  games: Game[];
+  /** x-axis categories, in display order */
+  categories: string[];
+  /** which category a game plots under */
+  xOf: (g: Game) => string;
+  /** tooltip header for a game's group */
+  xTitle: (g: Game) => string;
+  axisName?: string;
+  axisLabel?: Record<string, unknown>;
+  grid?: Record<string, unknown>;
+}): EChartsOption | null {
+  const pts = games.filter((g) => g.spread != null);
+  if (!pts.length) return null;
+
+  // collide points at same (x, spread rounded to 2), like the old page
+  const groups = new Map<string, Game[]>();
+  for (const g of pts) {
+    const key = `${xOf(g)}|${g.spread!.toFixed(2)}`;
+    groups.set(key, [...(groups.get(key) ?? []), g]);
+  }
+  const singles: Game[] = [];
+  const overlaps: Game[][] = [];
+  for (const grp of groups.values()) (grp.length > 1 ? overlaps.push(grp) : singles.push(grp[0]));
+
+  const majorityColors = (grp: Game[]) => {
+    const c = new Map<Category, number>();
+    for (const g of grp) c.set(g.category, (c.get(g.category) ?? 0) + 1);
+    const sorted = [...c.entries()].sort((a, b) => b[1] - a[1]);
+    const fill = CATEGORY_COLORS[sorted[0][0]];
+    const border = sorted.length > 1 ? CATEGORY_COLORS[sorted[1][0]] : fill;
+    return { fill, border };
+  };
+
+  return {
+    grid: { left: 10, right: 20, top: 10, bottom: 10, containLabel: true, ...grid },
+    tooltip: { trigger: "item" as const },
+    xAxis: {
+      type: "category" as const,
+      data: categories,
+      name: axisName,
+      nameLocation: "middle" as const,
+      nameGap: axisName ? 26 : 0,
+      ...(axisLabel ? { axisLabel } : {}),
+    },
+    yAxis: { type: "value" as const, name: "Spread" },
+    series: [
+      {
+        type: "scatter" as const,
+        symbolSize: 8,
+        data: singles.map((g) => ({
+          value: [xOf(g), g.spread],
+          itemStyle: { color: CATEGORY_COLORS[g.category], opacity: 0.7 },
+          tooltip: {
+            formatter: () =>
+              `<div style="font-weight:600;">${g.awayTeam} @ ${g.homeTeam}</div>` +
+              `<div style="display:flex;align-items:center;gap:6px;margin-top:2px;">` +
+              `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${CATEGORY_COLORS[g.category]};"></span>` +
+              `${g.category}</div>` +
+              (g.played ? `<div style="margin-top:2px;">Final: ${g.awayTeam} ${g.awayScore} – ${g.homeTeam} ${g.homeScore}</div>` : "") +
+              `<div style="color:#94a3b8;margin-top:2px;">${xTitle(g)} · Spread ${g.spread}</div>`,
+          },
+        })),
+      },
+      {
+        type: "scatter" as const,
+        symbolSize: 9,
+        data: overlaps.map((grp) => {
+          const { fill, border } = majorityColors(grp);
+          return {
+            value: [xOf(grp[0]), grp[0].spread],
+            itemStyle: { color: fill, borderColor: border, borderWidth: 2, opacity: 0.95 },
+            label: { show: true, position: "top" as const, fontSize: 7, formatter: `×${grp.length}` },
+            tooltip: {
+              formatter: () =>
+                `<div style="font-weight:600;margin-bottom:4px;">${xTitle(grp[0])} · Spread ${grp[0].spread}</div>` +
+                grp
+                  .map(
+                    (g) =>
+                      `<div style="margin-bottom:4px;"><div style="font-weight:600;">${g.awayTeam} @ ${g.homeTeam}</div>` +
+                      `<div style="display:flex;align-items:center;gap:6px;">` +
+                      `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${CATEGORY_COLORS[g.category]};"></span>` +
+                      `${g.category} — Winner: ${g.winnerTeam ?? "None"}` +
+                      (g.played ? ` (${g.awayScore}–${g.homeScore})` : "") +
+                      `</div></div>`,
+                  )
+                  .join(""),
+            },
+          };
+        }),
+      },
+    ],
+  };
+}
+
 /** One bordered block (a season or a week): KPIs + stacked bar + spread scatter. */
 function Block({ title, rows, xKey }: { title: string; rows: Row[]; xKey: "week" | "season" }) {
   const games = useMemo(() => rows.map((r) => classify(r, xKey)), [rows, xKey]);
@@ -386,79 +493,17 @@ function Block({ title, rows, xKey }: { title: string; rows: Row[]; xKey: "week"
     } as unknown as EChartsOption;
   }, [games, xs, xLabel]);
 
-  const scatterOption = useMemo(() => {
-    const pts = games.filter((g) => g.spread != null);
-    if (!pts.length) return null;
-
-    // collide points at same (x, spread rounded to 2), like the old page
-    const groups = new Map<string, Game[]>();
-    for (const g of pts) {
-      const key = `${g.x}|${g.spread!.toFixed(2)}`;
-      groups.set(key, [...(groups.get(key) ?? []), g]);
-    }
-    const singles: Game[] = [];
-    const overlaps: Game[][] = [];
-    for (const grp of groups.values()) (grp.length > 1 ? overlaps.push(grp) : singles.push(grp[0]));
-
-    const majorityColors = (grp: Game[]) => {
-      const c = new Map<Category, number>();
-      for (const g of grp) c.set(g.category, (c.get(g.category) ?? 0) + 1);
-      const sorted = [...c.entries()].sort((a, b) => b[1] - a[1]);
-      const fill = CATEGORY_COLORS[sorted[0][0]];
-      const border = sorted.length > 1 ? CATEGORY_COLORS[sorted[1][0]] : fill;
-      return { fill, border };
-    };
-
-    return {
-      grid: { left: 10, right: 20, top: 10, bottom: 10, containLabel: true },
-      tooltip: { trigger: "item" as const },
-      xAxis: { type: "category" as const, data: xs.map(String), name: xLabel, nameLocation: "middle" as const, nameGap: 26 },
-      yAxis: { type: "value" as const, name: "Spread" },
-      series: [
-        {
-          type: "scatter" as const,
-          symbolSize: 8,
-          data: singles.map((g) => ({
-            value: [String(g.x), g.spread],
-            itemStyle: { color: CATEGORY_COLORS[g.category], opacity: 0.7 },
-            tooltip: {
-              formatter: () =>
-                `<div style="font-weight:600;">${g.awayTeam} @ ${g.homeTeam}</div>` +
-                `<div style="display:flex;align-items:center;gap:6px;margin-top:2px;">` +
-                `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${CATEGORY_COLORS[g.category]};"></span>` +
-                `${g.category}</div>` +
-                `<div style="color:#94a3b8;margin-top:2px;">${xLabel} ${g.x} · Spread ${g.spread}</div>`,
-            },
-          })),
-        },
-        {
-          type: "scatter" as const,
-          symbolSize: 9,
-          data: overlaps.map((grp) => {
-            const { fill, border } = majorityColors(grp);
-            return {
-              value: [String(grp[0].x), grp[0].spread],
-              itemStyle: { color: fill, borderColor: border, borderWidth: 2, opacity: 0.95 },
-              label: { show: true, position: "top" as const, fontSize: 7, formatter: `×${grp.length}` },
-              tooltip: {
-                formatter: () =>
-                  `<div style="font-weight:600;margin-bottom:4px;">${xLabel} ${grp[0].x} · Spread ${grp[0].spread}</div>` +
-                  grp
-                    .map(
-                      (g) =>
-                        `<div style="margin-bottom:4px;"><div style="font-weight:600;">${g.awayTeam} @ ${g.homeTeam}</div>` +
-                        `<div style="display:flex;align-items:center;gap:6px;">` +
-                        `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${CATEGORY_COLORS[g.category]};"></span>` +
-                        `${g.category} — Winner: ${g.winnerTeam ?? "None"}</div></div>`,
-                    )
-                    .join(""),
-              },
-            };
-          }),
-        },
-      ],
-    };
-  }, [games, xs, xLabel]);
+  const scatterOption = useMemo(
+    () =>
+      spreadScatterOption({
+        games,
+        categories: xs.map(String),
+        xOf: (g) => String(g.x),
+        xTitle: (g) => `${xLabel} ${g.x}`,
+        axisName: xLabel,
+      }),
+    [games, xs, xLabel],
+  );
 
   const [selectedX, setSelectedX] = useState<number | null>(null);
   const barRef = useECharts(barOption, {
