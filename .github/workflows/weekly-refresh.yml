@@ -2,9 +2,14 @@ name: weekly-data-refresh
 
 on:
   schedule:
-    - cron: "7 6 * * 2" # Tuesday 06:07 UTC / 12:07 AM Monterrey (after Monday Night Football)
-    - cron: "7 6 * * 5" # Friday 06:07 UTC / 12:07 AM Monterrey (after Thursday Night Football)
-    - cron: "7 6 * * 1" # Monday 06:07 UTC / 12:07 AM Monterrey (after Sunday Night Football)
+    # Pinned to US Eastern (games' own clock) so the run tracks the NFL across DST:
+    # 01:07 ET = 11:07 PM Monterrey while the US is on EDT, 12:07 AM Monterrey on EST.
+    - cron: "7 1 * * 2" # Tuesday 01:07 ET (after Monday Night Football)
+      timezone: "America/New_York"
+    - cron: "7 1 * * 5" # Friday 01:07 ET (after Thursday Night Football)
+      timezone: "America/New_York"
+    - cron: "7 1 * * 1" # Monday 01:07 ET (after Sunday Night Football)
+      timezone: "America/New_York"
   workflow_dispatch:
 
 permissions:
