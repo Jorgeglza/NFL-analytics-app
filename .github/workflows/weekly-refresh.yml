@@ -29,7 +29,7 @@ jobs:
 
       - name: Install pinned dependencies
         run: |
-          pip install pandas==3.0.0 numpy==1.26.4 scikit-learn==1.8.0 nflreadpy==0.1.2 pyarrow joblib
+          pip install pandas==3.0.0 numpy==1.26.4 scikit-learn==1.8.0 nflreadpy==0.1.2 pyarrow==25.0.1 polars==1.44.2 joblib
           pip install --no-deps nfl_data_py==0.3.3 appdirs fastparquet
 
       - name: Run pipeline

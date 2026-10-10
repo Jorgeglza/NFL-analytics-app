@@ -559,6 +559,10 @@ Full work list, with per-item checkboxes and severities: **`docs/MOBILE_READINES
 
 ## Session notes (newest first)
 
+### 2026-10-10 — Refresh workflows failing: unpinned pyarrow 26 needs NumPy 2
+- Both scheduled runs on 2026-10-09 (weekly-refresh #21, predictive-refresh #22) failed at their first Python step with `ImportError: pyarrow requires NumPy 2.0 or newer, found 1.26.4`. `pyarrow` was unpinned, so the new 26.0.0 was installed next to our pinned numpy 1.26.4. The weekly pipeline hit it in the nflreadpy fallback (`polars.to_pandas()`), and the predictive export hit it on `import sklearn`. polars 2.0.0 (unpinned, via nflreadpy) shipped at the same time.
+- Fix: pinned `pyarrow==25.0.1` and `polars==1.44.2` in both workflows and `pipeline/requirements.lock.txt`. Checked in a Python 3.11 venv: sklearn imports, and the weekly player fetch (nfl_data_py + nflreadpy fallback for 2025/2026) succeeds. A full local run could not finish because this sandbox can't resolve the plain-http schedules URL, which is a sandbox limit, not CI.
+
 ### 2026-09-25 — Similar-weeks win-type popup: spread scatter beside the stacked bars
 - `WinTypesTab.tsx`: the per-group Block's spread scatter is now an exported `spreadScatterOption({ games, categories, xOf, xTitle, axisName?, axisLabel?, grid? })` builder (logic unchanged, including ×N overlap collapsing); Block calls it. Tooltips now also show the final score for played games (singles: "Final: AWY n – HOM n"; overlap groups: "(a–h)" after the winner).
 - `pickem/SimilarWeeksWinTypesModal.tsx`: the stacked bar sits in `lg:col-span-2` with the scatter in the third column (stacked below on mobile), one column per comparable week. Both charts use compact x labels ("This wk", "2023 W5"), and the full week label heads each tooltip. Clicking a scatter dot selects that week's games breakdown, the same as clicking a bar. Both grids use `top: 60` so the plot areas line up, and the "Games" axis name no longer overlaps the legend.
