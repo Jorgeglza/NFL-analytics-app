@@ -27,6 +27,7 @@ import { buildHistogramBins, sturgesBinCount, type HistogramBins } from "../../.
 import { percentile, sampleStd } from "../../../../lib/logic/contributions";
 import { pearsonCorrelation, correlationRead } from "../../../../lib/logic/weekHistory";
 import { getTeamMetaMap, type TeamMeta } from "../../../../lib/team/meta";
+import { useIsMobileViewport } from "../../../../lib/useIsMobileViewport";
 import { TeamLogoLink } from "../../../../components/team/TeamLogoLink";
 import { InfoDot } from "../../../../components/InfoDot";
 import { ModelDotStrip, disagreementOf } from "../../previews/ModelDotStrip";
@@ -771,6 +772,7 @@ export default function ThisWeekView() {
   // instead of per-row state, so opening a second one closes the first.
   const [openCompareGameId, setOpenCompareGameId] = useState<string | null>(null);
   const [similarWinTypesOpen, setSimilarWinTypesOpen] = useState(false);
+  const isMobile = useIsMobileViewport();
 
   useEffect(() => {
     setLoadError(null);
@@ -791,16 +793,34 @@ export default function ThisWeekView() {
 
   // team_week is one file per season — fetch every season once the season
   // list is known. loader.ts caches by path, so this is cheap on re-runs.
+  // On mobile the latest season loads first (so its rows render quickly on a
+  // slow connection) and the rest follow — the same isMobile-aware split as
+  // MatchupPreviews.tsx/GamePicks.tsx. teamWeekLoaded (which gates the
+  // all-season similar-weeks views) still only flips once every season is in.
+  // Desktop is untouched: one eager Promise.all over every season.
   useEffect(() => {
     if (!seasons.length) return;
+    let cancelled = false;
     setTeamWeekLoaded(false);
-    Promise.all(seasons.map((s) => getTeamWeek(s).then((rows) => [s, rows] as const)))
-      .then((pairs) => {
+    const load = (ss: number[]) => Promise.all(ss.map((s) => getTeamWeek(s).then((rows) => [s, rows] as const)));
+    const priority = isMobile ? seasons.slice(-1) : seasons;
+    const deferred = isMobile ? seasons.slice(0, -1) : [];
+    load(priority)
+      .then(async (pairs) => {
+        if (cancelled) return;
         setTeamWeekBySeason(new Map(pairs));
+        if (deferred.length) {
+          const rest = await load(deferred);
+          if (cancelled) return;
+          setTeamWeekBySeason((prev) => new Map([...prev, ...rest]));
+        }
         setTeamWeekLoaded(true);
       })
-      .catch((err) => setLoadError(err instanceof Error ? err.message : "Failed to load"));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+      .catch((err) => !cancelled && setLoadError(err instanceof Error ? err.message : "Failed to load"));
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- isMobile read once per load, not a live dependency
   }, [seasons.join(",")]);
 
   const weekOptions = useMemo(() => [...new Set(reg.map((r) => Number(r.week)))].sort((a, b) => a - b), [reg]);

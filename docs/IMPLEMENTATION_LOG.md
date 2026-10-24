@@ -559,6 +559,11 @@ Full work list, with per-item checkboxes and severities: **`docs/MOBILE_READINES
 
 ## Session notes (newest first)
 
+### 2026-10-24 — Mobile: app wouldn't open on 5G (memory + stalled-download fix)
+- Cause: memory, not bandwidth (JSON is gzipped on Pages). `toRecords` built ~300-key rows key by key, which puts them in dictionary mode (all `team_week` seasons: 77 MB of heap). Each call expanded the data again, and the raw frames were cached next to the rows. Separately, the 15 s fetch timeout covered the whole download, so a weak connection with 12–24 parallel season files aborted and retried large files that were still downloading.
+- Fix (frontend only, data unchanged): object-literal row factory (16 MB for the same data, same objects); an LRU-bounded (1.5M cells) cache of expanded rows instead of raw frames; an idle/stall fetch timeout; mobile-first season priority in Pick'em `ThisWeekView.tsx`. Details and measurements are in `docs/MOBILE_READINESS.md` Phase 9.
+- Verified: lint, 68/68 tests (new `lib/data/loader.test.ts` checks parity against the old expansion) and build are green. Playwright before/after: heavy-page heap is down 10–40% at 375px, and rendered text is the same on 11/12 routes at desktop and mobile widths (Prop Bets varies between runs even on the old build). The slow-download test loaded in 24 s, where the old build was still stuck after 93 s.
+
 ### 2026-10-10 — Refresh workflows failing: unpinned pyarrow 26 needs NumPy 2
 - Both scheduled runs on 2026-10-09 (weekly-refresh #21, predictive-refresh #22) failed at their first Python step with `ImportError: pyarrow requires NumPy 2.0 or newer, found 1.26.4`. `pyarrow` was unpinned, so the new 26.0.0 was installed next to our pinned numpy 1.26.4. The weekly pipeline hit it in the nflreadpy fallback (`polars.to_pandas()`), and the predictive export hit it on `import sklearn`. polars 2.0.0 (unpinned, via nflreadpy) shipped at the same time.
 - Fix: pinned `pyarrow==25.0.1` and `polars==1.44.2` in both workflows and `pipeline/requirements.lock.txt`. Checked in a Python 3.11 venv: sklearn imports, and the weekly player fetch (nfl_data_py + nflreadpy fallback for 2025/2026) succeeds. A full local run could not finish because this sandbox can't resolve the plain-http schedules URL, which is a sandbox limit, not CI.

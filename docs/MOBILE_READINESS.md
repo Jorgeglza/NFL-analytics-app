@@ -2,7 +2,7 @@
 
 Status legend: ☐ not started · ◐ in progress · ✅ done · ⛔ blocked
 
-**Overall status: ✅ complete** — audit complete 2026-07-29; Phase 1 (shared infrastructure) complete 2026-07-29; Phase 2 (charts: size/axes/legends) complete 2026-07-30; Phase 3 (bin correctness) complete 2026-07-30; Phase 4 (touch & interaction) complete 2026-07-30; Phase 5 (per-page layout) complete 2026-07-30; Phase 6 (tables) complete 2026-07-30; Phase 7 (mobile performance) complete 2026-08-01; full route audit + 3 close-out bug fixes complete 2026-08-01 (see "M6 close-out" section below); Phase 8 (data loading reliability & payload, a post-close-out follow-up) complete 2026-08-02.
+**Overall status: ✅ complete** — audit complete 2026-07-29; Phase 1 (shared infrastructure) complete 2026-07-29; Phase 2 (charts: size/axes/legends) complete 2026-07-30; Phase 3 (bin correctness) complete 2026-07-30; Phase 4 (touch & interaction) complete 2026-07-30; Phase 5 (per-page layout) complete 2026-07-30; Phase 6 (tables) complete 2026-07-30; Phase 7 (mobile performance) complete 2026-08-01; full route audit + 3 close-out bug fixes complete 2026-08-01 (see "M6 close-out" section below); Phase 8 (data loading reliability & payload, a post-close-out follow-up) complete 2026-08-02; Phase 9 (mobile memory & stalled downloads) complete 2026-10-24.
 
 ---
 
@@ -312,6 +312,23 @@ M6 closed out layout/interaction/performance work, but users report that on mobi
   **Fixed:** same `loadError`/`retryTick`/`ErrorRetry` pattern as P8.4/P8.5 applied to all 7 — every top-level loader effect that feeds each page's loading gate now catches and re-runs on `retryTick`. `WinTypes.tsx` is the one structural variant: its gate is an inline `{!reg.length && <Loading/>}` (not an early `return`), so it got `{loadError && <ErrorRetry .../>}` alongside a `!loadError` guard added to the existing Loading condition, rather than a pre-gate `if` like the other 8 pages.
 
   Verified: `tsc --noEmit`/`npm run build`/60-test suite all green. Browser-pane check confirmed all 7 render real data normally at 375px (zero console errors) and one spot-check at 1280px. Live failure-path test performed on `TeamTrends.tsx` (block `/data/team_week/` → switch season to force a fresh, uncached fetch → `ErrorRetry` renders → unblock → Retry recovers with real 2024 data) — this run also surfaced a pure browser-automation-tooling artifact worth noting for future sessions: a transient dev-server HMR reconnect (visible in `read_console_messages` as "vite server connection lost… reconnected") left the `computer` tool's cached element ref/coordinates stale, so a coordinate-based click on the Retry button silently did nothing (0 `fetch` calls observed via a temporary fetch-logging patch) until a direct `element.click()` dispatched via `javascript_tool` confirmed the underlying retry mechanism itself was working correctly all along.
+
+
+---
+
+## Phase 9 — Mobile memory & stalled downloads ✅ (2026-10-24)
+
+User report: after the recent Pick'em/This Week updates, the app on a phone over 5G "won't even open". Network size was not the cause: GitHub Pages gzips the JSON, e.g. `team_week/2025.json` is 812 KB raw and 190 KB on the wire. Memory and the download timeout were. No pipeline/export changes, and the data files are unchanged.
+
+- [x] **P9.1** `BLOCKING`: **Fast-shape row expansion in `toRecords`.** `loader.ts` built each row by assigning ~307 keys one at a time onto `{}`, which puts every row into the engine's slow "dictionary mode". Expanding all 12 `team_week` seasons took 77 MB of heap and 254 ms in Node. A per-frame object-literal factory (`new Function`) produces the same plain objects (same own keys, order, values and prototype) in 16 MB and 90 ms. If a column is named `__proto__` or a CSP forbids `new Function`, it falls back to the old loop. `src/lib/data/loader.test.ts` deep-compares it against the old loop on real `team_week`/`team_week_ranks`/`schedule`/`player_week` frames, with and without a `cols` projection, and on awkward column names.
+- [x] **P9.2** `BLOCKING`: **Cache expanded rows, not raw frames (LRU-bounded).** Whole-frame getters (everything except `getPlayerWeek`, which keeps the frame cache for its per-page `cols` projection) now cache the expanded `Row[]`. A file is expanded once instead of once per caller, and its arrays-of-arrays aren't kept alive next to the rows. Each caller gets its own `.slice()` copy. Rows are shared, and I checked by grep that no page modifies them in place. The cache is bounded to 1.5M cells (LRU), so a long session doesn't accumulate every file it has touched. At the end of the 12-page session below the heap was 39 MB, against 37 MB before.
+- [x] **P9.3** `BLOCKING`: **Stall-based fetch timeout.** `fetchOnce`'s 15 s timeout covered the whole download, body included. When a page fetches 12–24 season files at once on a weak connection, it aborted files that were still downloading and retried them, so the page never finished. The timer now resets on headers and on every body chunk. A dead connection still fails after 15 s of silence and is retried and shows `ErrorRetry` as before.
+- [x] **P9.4** `POLISH`: **Pick'em This Week: mobile-gated season priority.** `ThisWeekView.tsx` fetched every season's `team_week` at once with no mobile gate. On mobile it now loads the latest season first and the rest right after, the same split as `GamePicks.tsx`/`MatchupPreviews.tsx`. `teamWeekLoaded` (which gates the similar-weeks views) still flips only once every season is in. Desktop keeps the single eager `Promise.all`.
+
+**Phase 9 verification** (Playwright against `vite preview`, pre-change build compared with post-change build). `npm run lint`, 68/68 tests and `npm run build` are green.
+- Peak/live heap on a fresh load at 375px with 4× CPU throttle: Pick'em This Week 85→60 MB, opening in 7.5→5.2 s; Matchup Previews 109→68; Models Guide 74→59; Game Picks 80→55; Model Backtest 88→80; Value Bets 40→21; Scorecards 33→22.
+- Rendered `main` text was compared by hash on 12 routes in one in-app session at both 1280px and 375px. It is identical on 11. Prop Bets differs between runs even on the old build alone (1857 vs 1666 characters, from headshot loading), so that difference isn't a regression.
+- Slow-download test: a local server sent `team_week/*` in pieces over 20 s. The old build aborted the request 6 times and was still not loaded after 93 s. The new build loaded in 24 s with 0 aborts. A fully stalled server still gets aborted after 15 s of silence and retried.
 
 ---
 
