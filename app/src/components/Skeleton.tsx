@@ -1,3 +1,5 @@
+import { LoadingOverlay } from "./Loading";
+
 /** Pulsing placeholder block — building unit for per-page skeletons (M6 P7.6).
  *  Used instead of a bare spinner for data-loading states so a route change on
  *  a slow connection shows page structure, not spinner → spinner (the route
@@ -12,6 +14,15 @@ export function Skeleton({ className = "" }: { className?: string }) {
  *  KPI/summary cards, one or two large chart/table blocks) without needing a
  *  bespoke layout per page. */
 export function PageSkeleton({ cards = 3, blocks = 2 }: { cards?: number; blocks?: number }) {
+  return (
+    <div className="relative">
+      <PageSkeletonBlocks cards={cards} blocks={blocks} />
+      <LoadingOverlay />
+    </div>
+  );
+}
+
+function PageSkeletonBlocks({ cards, blocks }: { cards: number; blocks: number }) {
   return (
     <div className="space-y-4" aria-hidden="true">
       <div className="flex flex-wrap items-end gap-3">

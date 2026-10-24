@@ -8,9 +8,25 @@
     <link rel="icon" type="image/png" sizes="64x64" href="/branding/jga-icon-64.png" />
     <link rel="apple-touch-icon" href="/branding/jga-icon-256.png" />
     <title>NFL Analytics</title>
+    <!-- Startup splash: plain CSS (Tailwind isn't loaded yet). React's first
+         render replaces #root's contents, so it disappears on its own. -->
+    <style>
+      .boot { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; background: linear-gradient(135deg, #002f6c, #164a9c); color: rgba(255,255,255,.8); font: 600 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
+      .boot-spin { position: relative; width: 88px; height: 88px; }
+      .boot-spin img { position: absolute; inset: 14px; width: 60px; height: 60px; border-radius: 50%; }
+      .boot-spin::before { content: ""; position: absolute; inset: 0; border-radius: 50%; border: 3px solid rgba(255,255,255,.2); border-top-color: #fff; animation: boot-spin .9s linear infinite; }
+      @keyframes boot-spin { to { transform: rotate(360deg); } }
+      @keyframes boot-pulse { 50% { opacity: .5; } }
+      @media (prefers-reduced-motion: reduce) { .boot-spin::before { animation: boot-pulse 1.6s ease-in-out infinite; } }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div class="boot" role="status" aria-live="polite">
+        <div class="boot-spin"><img src="/branding/jga-icon-64.png" alt="" /></div>
+        Loading NFL Analytics…
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

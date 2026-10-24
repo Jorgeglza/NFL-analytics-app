@@ -559,6 +559,11 @@ Full work list, with per-item checkboxes and severities: **`docs/MOBILE_READINES
 
 ## Session notes (newest first)
 
+### 2026-10-24 (cont.) — Branded loading spinner + phone opens on Home
+- Startup splash in `index.html` (no more blank screen while the bundle loads). `Loading` and `PageSkeleton` now use a shared branded `BrandSpinner`, plus a "Still working…" line after 8 s.
+- On phones (<640px) every fresh open or reload starts on Home (`main.tsx`). In-app navigation, Back/Forward, and desktop deep links are unchanged. Details are in `docs/MOBILE_READINESS.md` P9.5–P9.6.
+- Verified: lint, 68/68 tests and build are green; Playwright redirect/back/forward/desktop checks pass; screenshots of each loading state at 375px.
+
 ### 2026-10-24 — Mobile: app wouldn't open on 5G (memory + stalled-download fix)
 - Cause: memory, not bandwidth (JSON is gzipped on Pages). `toRecords` built ~300-key rows key by key, which puts them in dictionary mode (all `team_week` seasons: 77 MB of heap). Each call expanded the data again, and the raw frames were cached next to the rows. Separately, the 15 s fetch timeout covered the whole download, so a weak connection with 12–24 parallel season files aborted and retried large files that were still downloading.
 - Fix (frontend only, data unchanged): object-literal row factory (16 MB for the same data, same objects); an LRU-bounded (1.5M cells) cache of expanded rows instead of raw frames; an idle/stall fetch timeout; mobile-first season priority in Pick'em `ThisWeekView.tsx`. Details and measurements are in `docs/MOBILE_READINESS.md` Phase 9.
