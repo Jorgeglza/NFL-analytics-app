@@ -29,6 +29,9 @@ jobs:
           cache-dependency-path: app/package-lock.json
       - run: npm ci
         working-directory: app
+      # Unit tests gate the deploy (audit P2: they previously never ran in CI).
+      - run: npm test
+        working-directory: app
       - run: npm run build
         working-directory: app
         env:

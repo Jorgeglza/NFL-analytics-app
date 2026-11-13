@@ -1,0 +1,7 @@
+# Installed with `pip install --no-deps -r pipeline/requirements.nodeps.txt`
+# AFTER requirements.lock.txt. nfl_data_py 0.3.3 declares pandas<3, which
+# would otherwise downgrade the pinned pandas 3.0.0; its other runtime needs
+# are listed here explicitly.
+nfl_data_py==0.3.3
+appdirs==1.4.4
+fastparquet==2026.9.0

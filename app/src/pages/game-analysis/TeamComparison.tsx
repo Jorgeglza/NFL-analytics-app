@@ -50,7 +50,7 @@ interface StatSummary {
 
 export default function TeamComparison() {
   const [searchParams] = useSearchParams();
-  const { season, week, setSeason, setWeek } = useSeasonWeek();
+  const { season, week: sharedWeek, setSeason, setWeek } = useSeasonWeek();
   const [meta, setMeta] = useState<Map<string, TeamMeta> | null>(null);
   const [grades, setGrades] = useState<Row[]>([]);
   const [seasons, setSeasons] = useState<number[]>([]);
@@ -103,14 +103,14 @@ export default function TeamComparison() {
   // season/week's games, re-randomized every time the page is opened fresh
   // (not persisted, and skipped entirely when deep-linked with explicit teams).
   useEffect(() => {
-    if (randomizedRef.current || !schedule.length || !season || !week) return;
-    const games = schedule.filter((r) => String(r.season) === season && String(r.week) === week);
+    if (randomizedRef.current || !schedule.length || !season || !sharedWeek) return;
+    const games = schedule.filter((r) => String(r.season) === season && String(r.week) === sharedWeek);
     if (!games.length) return;
     randomizedRef.current = true;
     const g = games[Math.floor(Math.random() * games.length)];
     setTeam1(String(g.away_team));
     setTeam2(String(g.home_team));
-  }, [schedule, season, week]);
+  }, [schedule, season, sharedWeek]);
 
   useSeasonFallback(
     season,
@@ -127,12 +127,12 @@ export default function TeamComparison() {
   const weeks = useMemo(() => [...new Set(teamWeek.map((r) => Number(r.week)))].sort((a, b) => a - b), [teamWeek]);
 
   // This page's team_week data can lag schedule.json by a week (or a season
-  // fallback above just forced week to "0"); fall back to the latest week
-  // this season's data actually has rather than showing an invalid selection
-  // (without overwriting the shared season/week context otherwise).
-  useEffect(() => {
-    if (weeks.length && !weeks.includes(Number(week))) setWeek(String(weeks[weeks.length - 1]));
-  }, [weeks, week, setWeek]);
+  // fallback above just forced week to "0"); show the latest week this
+  // season's data actually has rather than an invalid selection. Derived
+  // locally — NOT written back to the shared context, otherwise Game Picks /
+  // Weekly Breakdown / Season Outlook would reopen on last week (audit B4).
+  // Picking a week from the dropdown still updates the shared selection.
+  const week = weeks.length && !weeks.includes(Number(sharedWeek)) ? String(weeks[weeks.length - 1]) : sharedWeek;
   const teams = useMemo(() => [...new Set(teamWeek.map((r) => String(r.team)))].sort(), [teamWeek]);
   const wk = Number(week);
 

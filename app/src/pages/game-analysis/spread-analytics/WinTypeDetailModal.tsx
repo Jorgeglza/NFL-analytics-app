@@ -121,9 +121,12 @@ export function WinTypeBreakdown({ games }: { games: Game[] }) {
   const [teamMeta, setTeamMeta] = useState<Map<string, TeamMeta> | null>(null);
   useEffect(() => {
     let cancelled = false;
-    getTeamMetaMap().then((m) => {
-      if (!cancelled) setTeamMeta(m);
-    });
+    // Logos only — on failure the tables just render without them.
+    getTeamMetaMap()
+      .then((m) => {
+        if (!cancelled) setTeamMeta(m);
+      })
+      .catch(() => {});
     return () => {
       cancelled = true;
     };

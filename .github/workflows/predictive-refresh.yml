@@ -10,6 +10,11 @@ permissions:
   contents: write
   actions: write # to trigger deploy.yml after the data commit
 
+# Shared with weekly-refresh.yml — see the comment there.
+concurrency:
+  group: data-refresh
+  cancel-in-progress: false
+
 jobs:
   refresh:
     runs-on: ubuntu-latest
@@ -23,8 +28,8 @@ jobs:
 
       - name: Install pinned dependencies
         run: |
-          pip install pandas==3.0.0 numpy==1.26.4 scikit-learn==1.8.0 nflreadpy==0.1.2 pyarrow==25.0.1 polars==1.44.2 joblib scipy
-          pip install --no-deps nfl_data_py==0.3.3 appdirs fastparquet
+          pip install -r pipeline/requirements.lock.txt
+          pip install --no-deps -r pipeline/requirements.nodeps.txt
 
       - name: Run predictive-model export (historical backtest)
         run: python pipeline/predictive_model/export_page.py

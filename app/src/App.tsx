@@ -2,6 +2,7 @@ import { Suspense, lazy, type ComponentType, type LazyExoticComponent } from "re
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import Navbar from "./components/Navbar";
 import { Loading } from "./components/Loading";
+import { ErrorBoundary, NotFound } from "./components/ErrorBoundary";
 import Home from "./pages/Home";
 import { NAV_GROUPS } from "./nav";
 import { usePageTitle } from "./lib/hooks/usePageTitle";
@@ -13,6 +14,8 @@ const TITLE_OVERRIDES: Record<string, string> = {
   "/": "NFL Analytics",
   "/glossary": "Glossary",
   "/game_analysis/models_guide": "Models Guide",
+  // Not in NAV_GROUPS (reached from Value Bets), so it needs its own entry (audit B7).
+  "/player_analysis/matchup_bets": "Matchup Bets",
 };
 const PAGE_TITLES: Record<string, string> = Object.fromEntries(
   NAV_GROUPS.flatMap((g) => g.pages).map((p) => [p.path, p.label]),
@@ -66,12 +69,15 @@ function Placeholder({ name, description }: { name: string; description: string 
 }
 
 export default function App() {
+  const { pathname } = useLocation();
   return (
     <div className="min-h-screen overflow-x-clip">
       <Navbar />
       <RouteTitle />
       <main className="safe-bottom mx-auto max-w-screen-2xl px-3 py-6 sm:px-4">
         <SeasonWeekProvider>
+          {/* resetKey: navigating away from a crashed page recovers. */}
+          <ErrorBoundary resetKey={pathname}>
           <Suspense fallback={<Loading />}>
             <Routes>
               <Route path="/" element={<Home />} />
@@ -120,8 +126,11 @@ export default function App() {
                   />
                 );
               })}
+              {/* Unknown / stale URLs (audit B6) */}
+              <Route path="*" element={<NotFound />} />
             </Routes>
           </Suspense>
+          </ErrorBoundary>
         </SeasonWeekProvider>
       </main>
     </div>

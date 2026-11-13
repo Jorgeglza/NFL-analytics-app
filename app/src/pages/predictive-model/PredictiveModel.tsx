@@ -14,6 +14,7 @@ import {
   getPredictiveModelMeta,
   getPredictiveModelUpcoming,
   getPredictiveModelUpcomingMeta,
+  getSchedule,
   type Row,
   type PredictiveModelCalibration,
   type PredictiveModelMeta,
@@ -22,6 +23,7 @@ import {
 import { Loading, ErrorRetry } from "../../components/Loading";
 import { TabBar } from "../../components/TabBar";
 import { usePageTitle } from "../../lib/hooks/usePageTitle";
+import { isUpcomingStale } from "../../lib/logic/defaultWeek";
 import OverviewTab from "./OverviewTab";
 import PerformanceTab from "./PerformanceTab";
 import ExplanationTab from "./ExplanationTab";
@@ -86,6 +88,9 @@ export default function PredictiveModel() {
   // Matchup Previews' predIdx load.
   const [upcoming, setUpcoming] = useState<Row[]>([]);
   const [upcomingMeta, setUpcomingMeta] = useState<PredictiveModelUpcomingMeta | null>(null);
+  // The upcoming export is refreshed by its own workflow and lags the
+  // schedule after each week finishes (audit B2).
+  const [upcomingStale, setUpcomingStale] = useState(false);
 
   usePageTitle(`Predictive Model — ${tab}`);
 
@@ -106,10 +111,11 @@ export default function PredictiveModel() {
         setMeta(m);
       })
       .catch((err) => setLoadError(err instanceof Error ? err.message : "Failed to load"));
-    Promise.all([getPredictiveModelUpcoming(), getPredictiveModelUpcomingMeta()])
-      .then(([rows, m]) => {
+    Promise.all([getPredictiveModelUpcoming(), getPredictiveModelUpcomingMeta(), getSchedule()])
+      .then(([rows, m, sched]) => {
         setUpcoming(rows);
         setUpcomingMeta(m);
+        setUpcomingStale(isUpcomingStale(m, sched));
       })
       .catch(() => {
         // Best-effort: the Overview tab's "This week" card just stays hidden.
@@ -150,7 +156,7 @@ export default function PredictiveModel() {
       ) : (
         <>
           {tab === "Overview" && (
-            <OverviewTab seasonSummary={seasonSummary} testSeasons={meta!.test_seasons} upcoming={upcoming} upcomingMeta={upcomingMeta} />
+            <OverviewTab seasonSummary={seasonSummary} testSeasons={meta!.test_seasons} upcoming={upcoming} upcomingMeta={upcomingMeta} upcomingStale={upcomingStale} />
           )}
           {tab === "Performance" && <PerformanceTab games={games} />}
           {tab === "Explanation" && (

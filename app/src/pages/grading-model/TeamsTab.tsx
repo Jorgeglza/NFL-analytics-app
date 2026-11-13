@@ -11,6 +11,7 @@ import { weekContributions, type GradeType } from "../../lib/logic/contributions
 import { buildStatGroups, statLabel } from "../player-analysis/statPicker";
 import { teamPalette, opponentLabel } from "./shared";
 import { InfoDot } from "../../components/InfoDot";
+import { ErrorRetry } from "../../components/Loading";
 import { stickyColCls, stickyColHeadCls, ScrollHint } from "../../components/ui";
 
 const GRADE_OPTS: GradeType[] = ["Overall Grade", "Offensive Grade", "Defensive Grade"];
@@ -40,10 +41,16 @@ export default function TeamsTab({
   const [topN, setTopN] = useState(7);
   const [throughWeek, setThroughWeek] = useState<number | null>(null);
   const [teamWeek, setTeamWeek] = useState<Row[]>([]);
+  const [teamWeekError, setTeamWeekError] = useState(false);
+  const [teamWeekRetry, setTeamWeekRetry] = useState(0);
 
   useEffect(() => {
-    if (sel) getTeamWeek(Number(sel)).then(setTeamWeek);
-  }, [sel]);
+    if (!sel) return;
+    setTeamWeekError(false);
+    getTeamWeek(Number(sel))
+      .then(setTeamWeek)
+      .catch(() => setTeamWeekError(true));
+  }, [sel, teamWeekRetry]);
 
   const teamGrades = useMemo(
     () =>
@@ -339,6 +346,7 @@ export default function TeamsTab({
 
   return (
     <div className="space-y-4">
+      {teamWeekError && <ErrorRetry message="Couldn't load this season's team stats — check your connection and try again." onRetry={() => setTeamWeekRetry((t) => t + 1)} />}
       <div className="flex flex-wrap items-end gap-4">
         <Select label="Season" value={sel} onChange={onSeasonChange} options={seasons.map((s) => ({ value: String(s), label: String(s) }))} />
         <Select label="Team" value={team} onChange={onTeamChange} options={teams.map((t) => ({ value: t, label: meta.get(t)?.name ?? t }))} />

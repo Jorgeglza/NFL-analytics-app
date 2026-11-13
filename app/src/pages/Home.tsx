@@ -27,11 +27,16 @@ function gameLabel(g: Row): string {
 function ThisWeek({ cw }: { cw: CurrentWeek }) {
   const played = cw.games.filter((g) => g.home_score != null).length;
   const days = [...new Set(cw.games.map((g) => String(g.gameday ?? "")).filter(Boolean))].sort();
+  // gameday is a date-only "YYYY-MM-DD" string; `new Date()` would parse it as UTC
+  // midnight and render the previous day west of UTC. Anchor at local noon instead
+  // (same approach as WeekPreviewTab).
+  const fmtDay = (d: string) =>
+    new Date(`${d}T12:00`).toLocaleDateString(undefined, { month: "short", day: "numeric" });
   const dateRange =
     days.length > 1
-      ? `${new Date(days[0]).toLocaleDateString(undefined, { month: "short", day: "numeric" })} – ${new Date(days[days.length - 1]).toLocaleDateString(undefined, { month: "short", day: "numeric" })}`
+      ? `${fmtDay(days[0])} – ${fmtDay(days[days.length - 1])}`
       : days[0]
-        ? new Date(days[0]).toLocaleDateString(undefined, { month: "short", day: "numeric" })
+        ? fmtDay(days[0])
         : null;
 
   return (

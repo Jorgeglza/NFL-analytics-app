@@ -4,9 +4,30 @@ Ports the source-access logic of the old app's data_utils.py
 (_load_player_week_year_with_fallback). All network access lives here so a
 future nflverse library switch touches only this module.
 """
+import time
+
 import pandas as pd
 
 from .config import RAW_CACHE_DIR, SEASONS
+
+
+def _retry(fn, *, label: str, attempts: int = 3, base_delay: float = 5.0):
+    """Run fn() with retries (same helper as predictive_model/fetch.py).
+
+    nflverse release downloads occasionally drop mid-transfer. Without a retry,
+    a transient blip on the newest season lands in the "not published yet"
+    skip branch below and the season silently vanishes from the export.
+    Re-raises the last error once attempts are exhausted.
+    """
+    for attempt in range(1, attempts + 1):
+        try:
+            return fn()
+        except Exception as e:
+            if attempt == attempts:
+                raise
+            delay = base_delay * attempt
+            print(f"WARNING: {label} failed (attempt {attempt}/{attempts}): {e} -- retrying in {delay:.0f}s")
+            time.sleep(delay)
 
 
 def _cache_path(name: str):
@@ -71,7 +92,7 @@ def fetch_weekly(years=None, refresh=False) -> pd.DataFrame:
             frames.append(_normalize_weekly(pd.read_parquet(path)))
             continue
         try:
-            df = _load_player_week_year_with_fallback(year)
+            df = _retry(lambda: _load_player_week_year_with_fallback(year), label=f"weekly {year}")
         except Exception as e:
             # Early September: the newest season may not be published yet.
             # Skip it with a warning; any other season failing is fatal.
@@ -100,7 +121,7 @@ def fetch_schedules(years=None, refresh=False) -> pd.DataFrame:
             frames.append(pd.read_parquet(path))
             continue
         try:
-            df = nfl.import_schedules([year])
+            df = _retry(lambda: nfl.import_schedules([year]), label=f"schedule {year}")
         except Exception as e:
             # New season's schedule may not be published yet right at the
             # August cutover. Skip it with a warning; any other year failing
@@ -119,6 +140,6 @@ def fetch_team_desc(refresh=False) -> pd.DataFrame:
     if path.exists() and not refresh:
         return pd.read_parquet(path)
     import nfl_data_py as nfl
-    df = nfl.import_team_desc()
+    df = _retry(nfl.import_team_desc, label="team_desc")
     df.to_parquet(path, index=False)
     return df

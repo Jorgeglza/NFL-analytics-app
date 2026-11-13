@@ -46,6 +46,20 @@ def run_model(team_week_df):
     return grade_models, feature_importance_df, contrib
 
 
+def _committed_meta_seasons():
+    """Seasons listed in meta.json at git HEAD, or None if unavailable
+    (no git, first export, unparseable)."""
+    import json
+    import subprocess
+    try:
+        rel = (config.EXTRACTS_DIR / "meta.json").relative_to(config.REPO_ROOT).as_posix()
+        out = subprocess.run(["git", "show", f"HEAD:{rel}"], cwd=config.REPO_ROOT,
+                             capture_output=True, text=True, check=True).stdout
+        return [int(s) for s in json.loads(out).get("seasons", [])]
+    except Exception:
+        return None
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--stage", default="all",
@@ -136,6 +150,25 @@ def main():
                 problems.append(
                     f"newest season {max(seasons) if seasons else None} is stale "
                     f"(expected >= {config.current_season() - 1})")
+            # A season that has played games in the schedule must have
+            # exported team_week data. Catches a failed weekly fetch on the
+            # current season (fetch.py's "not published yet" skip branch).
+            sched_path = config.EXTRACTS_DIR / "schedule.json"
+            if sched_path.exists():
+                sched = json.loads(sched_path.read_text())
+                si, hi = sched["cols"].index("season"), sched["cols"].index("home_score")
+                played_seasons = {int(r[si]) for r in sched["rows"] if r[hi] is not None}
+                missing = sorted(played_seasons - set(seasons))
+                if missing:
+                    problems.append(f"seasons {missing} have played games in schedule but no team_week data")
+            # A season present in the last committed meta.json must not
+            # disappear. Catches the case where the schedule fetch for that
+            # season failed too (so the check above can't see it).
+            prev = _committed_meta_seasons()
+            if prev is not None:
+                dropped = sorted(set(prev) - set(seasons))
+                if dropped:
+                    problems.append(f"seasons {dropped} were in the committed meta.json but are now missing")
         grades_path = config.EXTRACTS_DIR / "grades.json"
         if grades_path.exists():
             g = json.loads(grades_path.read_text())

@@ -28,11 +28,14 @@ export default function OverviewTab({
   testSeasons,
   upcoming,
   upcomingMeta,
+  upcomingStale = false,
 }: {
   seasonSummary: Row[];
   testSeasons: number[];
   upcoming: Row[];
   upcomingMeta: PredictiveModelUpcomingMeta | null;
+  /** The export still holds a week that has already been played (refresh pending). */
+  upcomingStale?: boolean;
 }) {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const pooled = seasonSummary.find((r) => r.season === "pooled");
@@ -67,9 +70,17 @@ export default function OverviewTab({
     <div className="space-y-4">
       {upcomingMeta && upcomingMeta.n_games > 0 && (
         <Card
-          accent="#6B7280"
-          title={`This week — Season ${upcomingMeta.season}, Week ${upcomingMeta.week}`}
-          subtitle="Live predictions for the next scheduled-but-unplayed week, refit on every completed game through last week and scored twice weekly (see docs/predictive-model.md — no confirmed edge over the market, so read these as exploration, not picks)."
+          accent={upcomingStale ? "#d97706" : "#6B7280"}
+          title={
+            upcomingStale
+              ? `Last week's predictions — Season ${upcomingMeta.season}, Week ${upcomingMeta.week} · refresh pending`
+              : `This week — Season ${upcomingMeta.season}, Week ${upcomingMeta.week}`
+          }
+          subtitle={
+            upcomingStale
+              ? "These games have already been played. The next week's predictions appear once the predictive-model refresh runs (scheduled twice weekly)."
+              : "Live predictions for the next scheduled-but-unplayed week, refit on every completed game through last week and scored twice weekly (see docs/predictive-model.md — no confirmed edge over the market, so read these as exploration, not picks)."
+          }
         >
           <div className={`overflow-x-auto ${tableWrapCls}`}>
             <table className="w-full text-sm">

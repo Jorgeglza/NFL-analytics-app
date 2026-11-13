@@ -32,3 +32,23 @@ export function currentWeek(schedule: Row[]): CurrentWeek | null {
   const games = cur.filter((r) => Number(r.week) === week);
   return { season, week, games };
 }
+
+/**
+ * True when the predictive model's "upcoming" export (refreshed by its own
+ * workflow) still points at a week the schedule says is already over —
+ * i.e. its week is behind `currentWeek(schedule)`, or every game in it has a
+ * score. Happens every Monday night → Tuesday refresh, and for longer when
+ * that refresh fails. Callers should then label the block as last week's and
+ * default to the schedule's current week instead.
+ */
+export function isUpcomingStale(
+  meta: { season: number | null; week: number | null; n_games: number } | null,
+  schedule: Row[],
+): boolean {
+  if (!meta || !meta.n_games || meta.season == null || meta.week == null) return false;
+  const cw = currentWeek(schedule);
+  if (!cw) return false;
+  if (meta.season < cw.season || (meta.season === cw.season && meta.week < cw.week)) return true;
+  const rows = schedule.filter((r) => Number(r.season) === meta.season && Number(r.week) === meta.week);
+  return rows.length > 0 && rows.every((r) => r.home_score != null);
+}

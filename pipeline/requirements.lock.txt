@@ -1,14 +1,20 @@
 # Pinned to match the old app's conda env (pda-ie) for exact model parity.
 # Python 3.11.x
-# NOTE: nfl_data_py 0.3.3 declares pandas<3, but the reference env runs pandas 3.0.0.
-# Install in two steps (see README/runbook):
-#   pip install pandas==3.0.0 numpy==1.26.4 scikit-learn==1.8.0 nflreadpy==0.1.2 pyarrow==25.0.1 polars==1.44.2 joblib
-#   pip install --no-deps nfl_data_py==0.3.3 appdirs fastparquet
+# Both CI refresh workflows install from these two files (single source of truth):
+#   pip install -r pipeline/requirements.lock.txt
+#   pip install --no-deps -r pipeline/requirements.nodeps.txt
+# nfl_data_py lives in the second file because it declares pandas<3 while the
+# reference env runs pandas 3.0.0, so it must be installed with --no-deps.
+#
+# Versions below = what the CI runs actually resolved in Nov 2026 (previously
+# unpinned: joblib, scipy, threadpoolctl). Grade reproducibility depends on
+# sklearn's stack (scikit-learn, numpy, scipy, joblib, threadpoolctl).
 pandas==3.0.0
 numpy==1.26.4
 scikit-learn==1.8.0
-nfl_data_py==0.3.3
+scipy==1.17.1
+joblib==1.6.0
+threadpoolctl==3.8.0
 nflreadpy==0.1.2
 pyarrow==25.0.1  # 26.x requires numpy>=2; we pin numpy 1.26.4
 polars==1.44.2  # via nflreadpy; pinned so a major bump cannot break the refresh
-joblib

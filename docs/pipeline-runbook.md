@@ -3,11 +3,12 @@
 ## Local setup (once)
 ```bash
 python -m venv pipeline/.venv
-pipeline/.venv/Scripts/pip install pandas==3.0.0 numpy==1.26.4 scikit-learn==1.8.0 nflreadpy==0.1.2 pyarrow joblib
-pipeline/.venv/Scripts/pip install --no-deps nfl_data_py==0.3.3 appdirs fastparquet
+pipeline/.venv/Scripts/pip install -r pipeline/requirements.lock.txt
+pipeline/.venv/Scripts/pip install --no-deps -r pipeline/requirements.nodeps.txt
 ```
 (Two steps because nfl_data_py 0.3.3 declares `pandas<3` while the reference
-environment runs pandas 3.0.0 — same combination as the old `pda-ie` conda env.)
+environment runs pandas 3.0.0 — same combination as the old `pda-ie` conda env.
+The CI refresh workflows install from the same two files.)
 
 ## Weekly manual run
 ```bash

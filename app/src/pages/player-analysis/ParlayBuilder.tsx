@@ -88,11 +88,17 @@ function LegCard({
 }) {
   const [rows, setRows] = useState<Row[]>([]);
   const [teamMeta, setTeamMeta] = useState<Map<string, TeamMeta> | null>(null);
+  const [rowsError, setRowsError] = useState(false);
+  const [rowsRetry, setRowsRetry] = useState(0);
   useEffect(() => {
-    if (leg.season) loadSeason(Number(leg.season)).then(setRows);
-  }, [leg.season]);
+    if (!leg.season) return;
+    setRowsError(false);
+    loadSeason(Number(leg.season))
+      .then(setRows)
+      .catch(() => setRowsError(true));
+  }, [leg.season, rowsRetry]);
   useEffect(() => {
-    getTeamMetaMap().then(setTeamMeta);
+    getTeamMetaMap().then(setTeamMeta).catch(() => {}); // logos only
   }, []);
 
   const seasonTypes = useMemo(() => [...new Set(rows.map((r) => String(r.season_type)))].sort(), [rows]);
@@ -211,6 +217,14 @@ function LegCard({
   const barRef = useECharts(barOption);
 
   const set = (patch: Partial<Leg>) => onChange({ ...leg, ...patch, team, stat, player, ...patch });
+
+  if (rowsError) {
+    return (
+      <div className="pb-leg-card mb-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+        <ErrorRetry message={`Couldn't load ${leg.season} player stats for this leg — check your connection and try again.`} onRetry={() => setRowsRetry((t) => t + 1)} />
+      </div>
+    );
+  }
 
   return (
     <div className="pb-leg-card mb-3 flex flex-wrap items-center gap-4 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">

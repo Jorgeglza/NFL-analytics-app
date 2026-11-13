@@ -40,6 +40,9 @@ export function SeasonWeekProvider({ children }: { children: ReactNode }) {
       // has already set a value first.
       setSeason((s) => s || String(cw.season));
       setWeek((w) => w || String(cw.week));
+    }).catch(() => {
+      // Pages that need the schedule load it themselves and show ErrorRetry;
+      // they also fall back to their own default when this stays empty.
     });
   }, []);
 

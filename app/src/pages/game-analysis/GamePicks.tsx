@@ -182,7 +182,13 @@ export default function GamePicks() {
   usePageTitle(season && week ? `Game Picks — Wk ${week}, ${season}` : "Game Picks");
 
   useEffect(() => {
-    localStorage.setItem(LS_KEY, JSON.stringify(manual));
+    // Guarded like the read: storage can throw (private mode, quota, blocked
+    // site data) and picks should still work in-memory (audit B11).
+    try {
+      localStorage.setItem(LS_KEY, JSON.stringify(manual));
+    } catch {
+      /* ignore */
+    }
   }, [manual]);
 
   // A different week's picks aren't the ones a prior prefill produced.

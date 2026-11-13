@@ -23,6 +23,30 @@ export default function Navbar() {
     return () => document.removeEventListener("mousedown", onClick);
   }, []);
 
+  // Escape closes whichever menu is open (audit B3).
+  useEffect(() => {
+    if (!open && !mobileOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setOpen(null);
+        setMobileOpen(false);
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, mobileOpen]);
+
+  // Lock page scroll behind the open mobile menu, so swipes scroll the menu
+  // itself rather than the page underneath (audit B3).
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [mobileOpen]);
+
   return (
     // z-45: above every in-page absolutely-positioned element (row cards,
     // trigger buttons at z-40, GameModelsPopover at z-[42]) so the sticky
@@ -54,6 +78,8 @@ export default function Navbar() {
                     active ? "bg-white/15" : "hover:bg-white/10"
                   } ${isOpen ? "bg-white/15" : ""}`}
                   onClick={() => setOpen(isOpen ? null : group.label)}
+                  aria-expanded={isOpen}
+                  aria-haspopup="true"
                 >
                   {group.label}
                   <svg
@@ -99,6 +125,8 @@ export default function Navbar() {
           className="ml-auto rounded-lg p-2 hover:bg-white/10 md:hidden"
           onClick={() => setMobileOpen(!mobileOpen)}
           aria-label="Menu"
+          aria-expanded={mobileOpen}
+          aria-controls="mobile-nav"
         >
           <svg className="h-5 w-5" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8">
             {mobileOpen ? (
@@ -112,7 +140,13 @@ export default function Navbar() {
 
       {/* Mobile menu */}
       {mobileOpen && (
-        <div className="border-t border-white/10 bg-[#00275a] px-4 pb-4 md:hidden">
+        // Capped to the space below the header bar (~57px) and scrollable, so
+        // every link stays reachable on short / landscape phones (audit B3).
+        // dvh tracks the visible viewport when mobile browser toolbars show.
+        <div
+          id="mobile-nav"
+          className="max-h-[calc(100dvh-57px)] overflow-y-auto overscroll-contain border-t border-white/10 bg-[#00275a] px-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:hidden"
+        >
           {NAV_GROUPS.map((group) => (
             <div key={group.label} className="pt-3">
               <div className="px-1 text-[11px] font-bold uppercase tracking-wider text-white/50">

@@ -13,7 +13,7 @@ import {
   getPredictiveModelUpcomingMeta,
   type Row,
 } from "../../../../lib/data/loader";
-import { currentWeek } from "../../../../lib/logic/defaultWeek";
+import { currentWeek, isUpcomingStale } from "../../../../lib/logic/defaultWeek";
 import { toGame, bucketOf, historicFavRate, type Game } from "../../../../lib/logic/spreadPicks";
 import { WIN_TYPE_COLORS } from "../../../../lib/logic/winType";
 import { getTeamMetaMap, type TeamMeta } from "../../../../lib/team/meta";
@@ -205,8 +205,9 @@ export default function RecommendationsView() {
         setUpcomingMeta(meta);
       })
       .catch((err) => setLoadError(err instanceof Error ? err.message : "Failed to load"));
-    getTeamMetaMap().then(setTeamMeta);
-    getGrades().then(setGrades);
+    // Best-effort extras (logos, grade inputs): the page works without them.
+    getTeamMetaMap().then(setTeamMeta).catch(() => {});
+    getGrades().then(setGrades).catch(() => {});
   }, [retryTick]);
 
   const reg = useMemo(() => schedule.filter((r) => r.game_type === "REG"), [schedule]);
@@ -220,11 +221,12 @@ export default function RecommendationsView() {
   );
 
   // Seed the default week once data is in: prefer the live upcoming export's
-  // week, else this app's shared "current week" rule.
+  // week (unless it's stale — already played, refresh pending), else this
+  // app's shared "current week" rule.
   useEffect(() => {
     if (seededRef.current || !reg.length) return;
     seededRef.current = true;
-    if (upcomingMeta?.n_games && upcomingMeta.season && upcomingMeta.week) {
+    if (upcomingMeta?.n_games && upcomingMeta.season && upcomingMeta.week && !isUpcomingStale(upcomingMeta, reg)) {
       setSeason(String(upcomingMeta.season));
       setWeek(String(upcomingMeta.week));
     } else {

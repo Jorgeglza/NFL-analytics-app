@@ -32,6 +32,7 @@ import { InfoDot } from "../../../../components/InfoDot";
 import { ModelDotStrip, disagreementOf } from "../../previews/ModelDotStrip";
 import { GameModelsPopover } from "../../previews/GameModelsPopover";
 import TeamMomentumDetail from "./TeamMomentumDetail";
+import { currentWeek, isUpcomingStale } from "../../../../lib/logic/defaultWeek";
 import { classify, type Game } from "../WinTypesTab";
 import WinTypeDetailModal from "../WinTypeDetailModal";
 import SimilarWeeksWinTypesModal from "./SimilarWeeksWinTypesModal";
@@ -783,7 +784,7 @@ export default function ThisWeekView() {
         setUpcomingMeta(meta);
       })
       .catch((err) => setLoadError(err instanceof Error ? err.message : "Failed to load"));
-    getTeamMetaMap().then(setTeamMeta);
+    getTeamMetaMap().then(setTeamMeta).catch(() => {}); // logos only
   }, [retryTick]);
 
   const reg = useMemo(() => schedule.filter((r) => r.game_type === "REG"), [schedule]);
@@ -807,12 +808,18 @@ export default function ThisWeekView() {
 
   useEffect(() => {
     if (selectedWeek || !weekOptions.length) return;
-    if (upcomingMeta?.week != null && upcomingMeta.n_games > 0 && weekOptions.includes(upcomingMeta.week)) {
+    // Prefer the live upcoming export's week unless it's stale (already
+    // played, predictive refresh pending) — then fall back to the schedule's
+    // current week, and only then to week 1.
+    const cw = currentWeek(reg);
+    if (upcomingMeta?.week != null && upcomingMeta.n_games > 0 && weekOptions.includes(upcomingMeta.week) && !isUpcomingStale(upcomingMeta, reg)) {
       setSelectedWeek(String(upcomingMeta.week));
+    } else if (cw && weekOptions.includes(cw.week)) {
+      setSelectedWeek(String(cw.week));
     } else {
       setSelectedWeek(String(weekOptions[0]));
     }
-  }, [selectedWeek, weekOptions, upcomingMeta]);
+  }, [selectedWeek, weekOptions, upcomingMeta, reg]);
 
   const selectedWeekNum = Number(selectedWeek);
   const weekSchedRows = useMemo(() => reg.filter((r) => Number(r.week) === selectedWeekNum), [reg, selectedWeekNum]);
