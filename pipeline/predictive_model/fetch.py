@@ -7,9 +7,30 @@ data is already correct and there's no reason to duplicate the M1 pipeline's
 network calls. This module only pulls the genuinely new sources: play-by-play,
 injuries, snap counts.
 """
+import time
+
 import pandas as pd
 
 from .config import RAW_CACHE_DIR, SEASONS
+
+
+def _retry(fn, *, label: str, attempts: int = 3, base_delay: float = 5.0):
+    """Runs fn() with retries — nflverse-data release downloads occasionally
+    drop the connection mid-transfer (GitHub release-asset flakiness, not a
+    real "data not published" case), which would otherwise be mistaken for
+    that and silently skip a season. Exponential backoff between attempts;
+    re-raises the last error once attempts are exhausted so the existing
+    per-season/per-year fallback logic in this module still applies."""
+    for attempt in range(1, attempts + 1):
+        try:
+            return fn()
+        except Exception as e:
+            if attempt == attempts:
+                raise
+            delay = base_delay * attempt
+            print(f"WARNING: {label} failed (attempt {attempt}/{attempts}): {e} -- retrying in {delay:.0f}s")
+            time.sleep(delay)
+
 
 PBP_COLS = [
     "game_id", "play_id", "season", "week", "posteam", "defteam",
@@ -42,7 +63,7 @@ def fetch_pbp(years=None, refresh=False) -> pd.DataFrame:
             frames.append(pd.read_parquet(path))
             continue
         try:
-            df = nr.load_pbp([year]).to_pandas()
+            df = _retry(lambda: nr.load_pbp([year]).to_pandas(), label=f"pbp {year}")
         except Exception as e:
             if year == max(years):
                 print(f"WARNING: no play-by-play for newest season {year} yet, skipping ({e})")
@@ -65,7 +86,7 @@ def _load_bulk_with_fallback(loader, years, label) -> pd.DataFrame:
     years = sorted(years)
     while years:
         try:
-            return loader(years).to_pandas()
+            return _retry(lambda: loader(years).to_pandas(), label=label)
         except Exception as e:
             if len(years) == 1:
                 raise
@@ -112,7 +133,7 @@ def fetch_ngs(stat_type: str, years=None, refresh=False) -> pd.DataFrame:
     if path.exists() and not refresh:
         df = pd.read_parquet(path)
     else:
-        df = nr.load_nextgen_stats(stat_type=stat_type, seasons=True).to_pandas()
+        df = _retry(lambda: nr.load_nextgen_stats(stat_type=stat_type, seasons=True).to_pandas(), label=f"ngs {stat_type}")
         df.to_parquet(path, index=False)
     return df[df["season"].isin(years)].copy()
 
@@ -132,7 +153,7 @@ def fetch_ftn(years=None, refresh=False) -> pd.DataFrame:
             frames.append(pd.read_parquet(path))
             continue
         try:
-            df = nr.load_ftn_charting([year]).to_pandas()
+            df = _retry(lambda: nr.load_ftn_charting([year]).to_pandas(), label=f"ftn {year}")
         except Exception as e:
             print(f"WARNING: no FTN charting for {year} (likely pre-2022 or unpublished), skipping ({e})")
             continue
