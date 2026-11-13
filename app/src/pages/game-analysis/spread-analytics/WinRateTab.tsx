@@ -63,7 +63,7 @@ interface BinRow {
 function Kpi({ title, value }: { title: string; value: string }) {
   return (
     <div className="min-w-36 flex-1 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm" style={{ borderTop: "3px solid #002f6c" }}>
-      <div className="text-[11px] font-medium uppercase tracking-wider text-slate-400">{title}</div>
+      <div className="text-[11px] font-medium uppercase tracking-wider text-slate-500">{title}</div>
       <div className="text-[22px] font-bold text-slate-900">{value}</div>
     </div>
   );
@@ -539,7 +539,7 @@ export default function WinRateTab() {
       <div className="flex flex-wrap items-end gap-4 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
         <MultiSelect label="Season" values={seasonsSel} options={allSeasons.map((s) => ({ value: String(s), label: String(s) }))} onChange={setSeasonsSel} />
         <MultiSelect label="Week" values={weeksSel} options={allWeeks.map((w) => ({ value: String(w), label: String(w) }))} onChange={setWeeksSel} />
-        <div className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
+        <div className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-500">
           Win Types
           <div className="flex flex-wrap gap-3 rounded-lg border border-slate-300 bg-white px-3 py-2">
             {WIN_TYPE_CATS.map((wt) => (
@@ -556,7 +556,7 @@ export default function WinRateTab() {
             ))}
           </div>
         </div>
-        <div className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
+        <div className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-500">
           <span className="inline-flex items-center">
             Bin size
             <InfoDot text="Width of each spread bucket in points. Smaller bins = finer curve but fewer games per bin." />
@@ -569,7 +569,7 @@ export default function WinRateTab() {
             ))}
           </div>
         </div>
-        <div className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
+        <div className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-500">
           <span className="inline-flex items-center">
             Spread mode
             <InfoDot text="Signed keeps home favorites (negative) and away favorites (positive) in separate buckets; Absolute pools them by spread size only." />
@@ -582,12 +582,14 @@ export default function WinRateTab() {
             ))}
           </div>
         </div>
-        <label className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
+        <label className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-500">
           <span className="inline-flex items-center">
             Min N per bin
             <InfoDot text="Buckets with fewer games than this are hidden from charts and greyed in the table — tiny samples are noise, not signal." />
           </span>
-          <input type="number" min={1} step={1} value={minN} onChange={(e) => setMinN(Math.max(1, Number(e.target.value) || 1))} className="w-24 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
+          {/* Explicit name: the wrapping <label> associates with its FIRST labelable
+              descendant, which is the InfoDot button, not this input (audit A5). */}
+          <input aria-label="Min N per bin" type="number" min={1} step={1} value={minN} onChange={(e) => setMinN(Math.max(1, Number(e.target.value) || 1))} className="w-24 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
         </label>
         <label className="flex items-center gap-2 pb-2 text-sm text-slate-700">
           <input type="checkbox" checked={showCi} onChange={(e) => setShowCi(e.target.checked)} />
@@ -603,7 +605,7 @@ export default function WinRateTab() {
         <div className="rounded-2xl border border-slate-200 bg-white shadow-sm" style={{ borderTop: "4px solid #002f6c" }}>
           <div className="flex flex-wrap items-start gap-x-8 gap-y-3 p-4">
             <div className="min-w-64 flex-1">
-              <div className="text-[11px] font-medium uppercase tracking-wider text-slate-400">What the spread trend says ({verdict.n.toLocaleString()} games in selection)</div>
+              <div className="text-[11px] font-medium uppercase tracking-wider text-slate-500">What the spread trend says ({verdict.n.toLocaleString()} games in selection)</div>
               <ul className="mt-1.5 space-y-1 text-sm text-slate-700">
                 {verdict.lines.map((l, i) => (
                   <li key={i} className="flex gap-1.5">
@@ -622,11 +624,11 @@ export default function WinRateTab() {
             <div className="flex flex-wrap gap-3">
               {verdict.tiers.map((t) => (
                 <div key={t.short} className="w-28 rounded-xl border border-slate-200 px-2 py-2 text-center" title={`${t.label}: ${t.n.toLocaleString()} games${t.ci ? ` — 95% CI ${(100 * t.ci.low).toFixed(0)}–${(100 * t.ci.high).toFixed(0)}%` : ""}`}>
-                  <div className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Fav {t.short}</div>
+                  <div className="text-[10px] font-medium uppercase tracking-wider text-slate-500">Fav {t.short}</div>
                   <div className={`text-xl font-bold tabular-nums ${t.p != null && t.p >= 0.62 ? "text-[#3C9A5F]" : t.p != null && t.p < 0.55 ? "text-[#C8102E]" : "text-slate-800"}`}>
                     {t.p == null ? "—" : `${(100 * t.p).toFixed(0)}%`}
                   </div>
-                  <div className="text-[10px] text-slate-400">{t.n.toLocaleString()} gms</div>
+                  <div className="text-[10px] text-slate-500">{t.n.toLocaleString()} gms</div>
                 </div>
               ))}
             </div>
@@ -647,10 +649,10 @@ export default function WinRateTab() {
       {/* Charts */}
       <div className="grid gap-4 lg:grid-cols-2">
         <Box title="Calibration — favorite win % by spread bucket">
-          {chartBins.length ? <div ref={calRef} className="h-[420px]" /> : <div className="grid h-[420px] place-items-center text-sm text-slate-400">No bins meet Min N</div>}
+          {chartBins.length ? <div ref={calRef} className="h-[420px]" /> : <div className="grid h-[420px] place-items-center text-sm text-slate-500">No bins meet Min N</div>}
         </Box>
         <Box title="Lift — favorite hit rate vs |spread| threshold">
-          {liftOption ? <div ref={liftRef} className="h-[420px]" /> : <div className="grid h-[420px] place-items-center text-sm text-slate-400">No data</div>}
+          {liftOption ? <div ref={liftRef} className="h-[420px]" /> : <div className="grid h-[420px] place-items-center text-sm text-slate-500">No data</div>}
         </Box>
       </div>
       <Box>
@@ -670,14 +672,14 @@ export default function WinRateTab() {
               <div ref={stackedRef} className="h-[380px]" />
             </LazyMount>
           ) : (
-            <div className="grid h-[380px] place-items-center text-sm text-slate-400">No bins meet Min N</div>
+            <div className="grid h-[380px] place-items-center text-sm text-slate-500">No bins meet Min N</div>
           )
         ) : heatOption ? (
           <LazyMount minHeight={380}>
             <div ref={heatRef} className="h-[380px]" />
           </LazyMount>
         ) : (
-          <div className="grid h-[380px] place-items-center text-sm text-slate-400">No bins meet Min N</div>
+          <div className="grid h-[380px] place-items-center text-sm text-slate-500">No bins meet Min N</div>
         )}
       </Box>
 
@@ -685,7 +687,7 @@ export default function WinRateTab() {
       <Box title="Bucket details (all bins — greyed rows below Min N)">
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
-            <thead className="bg-slate-50 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+            <thead className="bg-slate-50 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
               <tr>
                 {["Bucket", "N", "Fav wins", "Fav win %", "Underdog wins", "CI low", "CI high", "Season span"].map((h) => (
                   <th key={h} className="px-3 py-2">{h}</th>
@@ -726,7 +728,7 @@ export default function WinRateTab() {
             </div>
             {reco?.record && (
               <div className="flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold shadow-sm sm:self-center" title="How these recommendations scored against final results">
-                <span className="uppercase tracking-wider text-slate-400">Graded</span>
+                <span className="uppercase tracking-wider text-slate-500">Graded</span>
                 <span className="text-[#3C9A5F]">{reco.record.correct}✓</span>
                 <span className="text-[#C8102E]">{reco.record.total - reco.record.correct}✗</span>
                 <span className="text-slate-600">({reco.record.pct}%)</span>
@@ -735,7 +737,7 @@ export default function WinRateTab() {
           </div>
           {reco?.chips && (
             <div className="flex flex-col items-start gap-1">
-              <div className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Recommended distribution</div>
+              <div className="text-[11px] font-medium uppercase tracking-wider text-slate-500">Recommended distribution</div>
               <div className="flex flex-wrap gap-2">
                 {reco.chips.map((c) => (
                   <div key={c.label} className="min-w-32 rounded-2xl px-3 py-2 text-white shadow-sm" style={{ background: WIN_TYPE_COLORS[c.label as WinType] }}>
@@ -755,7 +757,7 @@ export default function WinRateTab() {
           <div className="mb-1 flex items-baseline justify-between gap-2">
             <div className="text-xs font-semibold text-slate-600">Recommended vs Actual vs Historic — Week {recoWeek}, {recoSeason}</div>
             {backtest && (
-              <div className="text-[11px] text-slate-400">
+              <div className="text-[11px] text-slate-500">
                 {backtest.gradedCount}/{backtest.totalGames} games graded{backtest.gradedCount < backtest.totalGames ? " so far" : ""}
               </div>
             )}
@@ -765,13 +767,13 @@ export default function WinRateTab() {
               <div ref={backtestRef} className="h-[220px]" />
             </LazyMount>
           ) : (
-            <div className="grid h-[220px] place-items-center text-sm text-slate-400">No data for this week</div>
+            <div className="grid h-[220px] place-items-center text-sm text-slate-500">No data for this week</div>
           )}
         </div>
 
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
-            <thead className="bg-slate-50 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+            <thead className="bg-slate-50 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
               <tr>
                 {["Game", "Spread", "Fav side", "Bucket", "N", "Hist Fav %", "Recommended Pick", "Pick (team)", "Result", "Confidence %", "Note"].map((h) => (
                   <th key={h} className="px-3 py-2">{h}</th>
@@ -795,7 +797,7 @@ export default function WinRateTab() {
                   <td className="px-3 py-1.5">{r.winner}</td>
                   <td className="px-3 py-1.5">
                     {r.result === "pending" ? (
-                      <span className="text-slate-400">—</span>
+                      <span className="text-slate-500">—</span>
                     ) : r.result === "correct" ? (
                       <span className="font-bold text-[#3C9A5F]" title={`Winner: ${r.actualTeam}`}>✓</span>
                     ) : (
@@ -835,7 +837,7 @@ export default function WinRateTab() {
             <div ref={seasonTrendRef} className="h-[260px]" />
           </LazyMount>
         ) : (
-          <div className="grid h-[260px] place-items-center text-sm text-slate-400">No graded weeks yet this season</div>
+          <div className="grid h-[260px] place-items-center text-sm text-slate-500">No graded weeks yet this season</div>
         )}
       </Box>
     </div>

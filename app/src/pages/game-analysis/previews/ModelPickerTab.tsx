@@ -430,7 +430,7 @@ export default function ModelPickerTab({
               </div>
               <div className="mt-0.5 text-xl font-extrabold leading-none tabular-nums text-slate-800">{m.pct == null ? "—" : `${m.pct.toFixed(1)}%`}</div>
               <div className="mt-1 text-[11px] text-slate-500">{m.n ? `${m.correct}/${m.n} correct` : "no results yet"}</div>
-              <div className="mt-1.5 flex justify-between text-[10px] text-slate-400">
+              <div className="mt-1.5 flex justify-between text-[10px] text-slate-500">
                 <span className="inline-flex items-center">
                   avg conf {m.avgConf == null ? "—" : `${Math.round(100 * m.avgConf)}%`}
                   <InfoDot text="Average pick confidence" />
@@ -447,7 +447,7 @@ export default function ModelPickerTab({
 
       <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
         <div className="mb-1.5 text-sm font-semibold text-slate-700">Best model, by scenario — all seasons</div>
-        <p className="mb-2 text-[11px] text-slate-400">Accuracy % within each slice; darker green/red = further from a coin flip. Hover a cell for the exact record.</p>
+        <p className="mb-2 text-[11px] text-slate-500">Accuracy % within each slice; darker green/red = further from a coin flip. Hover a cell for the exact record.</p>
         <div className="relative overflow-x-auto">
           <table className="w-full border-collapse text-xs">
             <thead className="bg-slate-50">
@@ -475,7 +475,7 @@ export default function ModelPickerTab({
                       }
                     >
                       {c.pct == null ? "—" : `${c.pct.toFixed(0)}%`}
-                      <div className="text-[9px] font-normal text-slate-400">{c.n ? `n=${c.n}` : ""}</div>
+                      <div className="text-[10px] font-normal text-slate-500">{c.n ? `n=${c.n}` : ""}</div>
                     </td>
                   ))}
                 </tr>
@@ -490,7 +490,7 @@ export default function ModelPickerTab({
                 type="button"
                 onClick={() => setActiveScenarioTip(null)}
                 aria-label="Close"
-                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-slate-400 hover:bg-slate-200 hover:text-slate-600"
+                className="tap-expand relative flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-slate-500 hover:bg-slate-200 hover:text-slate-600"
               >
                 ✕
               </button>
@@ -522,19 +522,19 @@ export default function ModelPickerTab({
         {axisMode === "week" && (
           <>
             <div className="mb-1.5 text-xs font-semibold text-slate-600">Line — accuracy % per model, week by week ({sel})</div>
-            {lineOption ? <div ref={lineRef} className="h-[300px]" /> : <div className="grid h-[300px] place-items-center text-sm text-slate-400">No games this season</div>}
+            {lineOption ? <div ref={lineRef} className="h-[300px]" /> : <div className="grid h-[300px] place-items-center text-sm text-slate-500">No games this season</div>}
           </>
         )}
         {axisMode === "weekAllSeasons" && (
           <>
             <div className="mb-1.5 text-xs font-semibold text-slate-600">Line — accuracy % per model, by week # (every Week 1 pooled together, every Week 2 pooled together, …)</div>
-            {weekAllSeasonsOption ? <div ref={weekAllSeasonsRef} className="h-[300px]" /> : <div className="grid h-[300px] place-items-center text-sm text-slate-400">No graded games</div>}
+            {weekAllSeasonsOption ? <div ref={weekAllSeasonsRef} className="h-[300px]" /> : <div className="grid h-[300px] place-items-center text-sm text-slate-500">No graded games</div>}
           </>
         )}
         {axisMode === "season" && (
           <>
             <div className="mb-1.5 text-xs font-semibold text-slate-600">Line — accuracy % per model, full season by full season</div>
-            {seasonLineOption ? <div ref={seasonLineRef} className="h-[300px]" /> : <div className="grid h-[300px] place-items-center text-sm text-slate-400">No graded seasons</div>}
+            {seasonLineOption ? <div ref={seasonLineRef} className="h-[300px]" /> : <div className="grid h-[300px] place-items-center text-sm text-slate-500">No graded seasons</div>}
           </>
         )}
       </div>
@@ -545,10 +545,10 @@ export default function ModelPickerTab({
           {heat ? (
             <>
               <div ref={heatRef} style={{ height: Math.max(220, rowChartH(modelKeys.length, 34, 60)) }} />
-              <div className="mt-1.5 text-[10px] text-slate-400">Color scale stretched to this view's spread ({Math.round(heat.domainLo)}%–{Math.round(heat.domainHi)}%) — values outside it clamp to the end colors.</div>
+              <div className="mt-1.5 text-[10px] text-slate-500">Color scale stretched to this view's spread ({Math.round(heat.domainLo)}%–{Math.round(heat.domainHi)}%) — values outside it clamp to the end colors.</div>
             </>
           ) : (
-            <div className="grid h-[260px] place-items-center text-sm text-slate-400">No games this season</div>
+            <div className="grid h-[260px] place-items-center text-sm text-slate-500">No games this season</div>
           )}
         </div>
       )}
@@ -559,14 +559,14 @@ export default function ModelPickerTab({
           {seasonHeat ? (
             <>
               <div ref={seasonHeatRef} style={{ height: Math.max(220, rowChartH(modelKeys.length, 34, 60)) }} />
-              <div className="mt-1.5 text-[10px] text-slate-400">Color scale stretched to this view's spread ({Math.round(seasonHeat.domainLo)}%–{Math.round(seasonHeat.domainHi)}%) — values outside it clamp to the end colors.</div>
+              <div className="mt-1.5 text-[10px] text-slate-500">Color scale stretched to this view's spread ({Math.round(seasonHeat.domainLo)}%–{Math.round(seasonHeat.domainHi)}%) — values outside it clamp to the end colors.</div>
             </>
           ) : (
-            <div className="grid h-[260px] place-items-center text-sm text-slate-400">No graded seasons</div>
+            <div className="grid h-[260px] place-items-center text-sm text-slate-500">No graded seasons</div>
           )}
         </div>
       )}
-      <p className="text-[11px] text-slate-400">
+      <p className="text-[11px] text-slate-500">
         {predictiveUnavailable
           ? "⚠ Predictive model: data unavailable this session — excluded from every chart/table above."
           : `⚠ Predictive model: historical only${predictiveCoverage ? ` (seasons ${predictiveCoverage.min}–${predictiveCoverage.max})` : ""}; no prediction yet for upcoming games — excluded automatically where it has no data.`}

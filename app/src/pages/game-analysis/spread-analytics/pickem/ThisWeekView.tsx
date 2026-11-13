@@ -182,8 +182,8 @@ function AvgConfidenceStrip({ avg }: { avg: Partial<Record<MetricKey, number>> }
   return (
     <div className="mt-5 w-full max-w-lg">
       <div className="relative" style={{ height: totalHeight }}>
-        <span className="absolute -top-4 left-0 text-[10px] font-medium uppercase tracking-wide text-slate-400">Toss-up</span>
-        <span className="absolute -top-4 right-0 text-[10px] font-medium uppercase tracking-wide text-slate-400">Lock</span>
+        <span className="absolute -top-4 left-0 text-[10px] font-medium uppercase tracking-wide text-slate-500">Toss-up</span>
+        <span className="absolute -top-4 right-0 text-[10px] font-medium uppercase tracking-wide text-slate-500">Lock</span>
         <div className="absolute left-0 right-0 rounded-full bg-slate-100" style={{ top: trackMid - trackHeight / 2, height: trackHeight }} />
         {laned.map((e) => (
           <span
@@ -560,7 +560,7 @@ const ANNOTATION_TONE_CLS: Record<RowAnnotationInfo["tone"], string> = {
   agree: "border-emerald-200 bg-emerald-50 text-emerald-700",
   tossup: "border-amber-200 bg-amber-50 text-amber-700",
   disagree: "border-sky-200 bg-sky-50 text-sky-700",
-  unknown: "border-slate-200 bg-slate-50 text-slate-400",
+  unknown: "border-slate-200 bg-slate-50 text-slate-500",
 };
 
 function RowAnnotation({ annotation, correct }: { annotation: RowAnnotationInfo; correct: boolean | null }) {
@@ -579,7 +579,7 @@ function RowAnnotation({ annotation, correct }: { annotation: RowAnnotationInfo;
       )}
       <div className="truncate text-[10px] font-bold">{annotation.line1}</div>
       {annotation.team && <div className="truncate text-[12px] font-extrabold">{annotation.team}</div>}
-      <div className="truncate text-[9px]">{annotation.line2}</div>
+      <div className="truncate text-[10px]">{annotation.line2}</div>
     </div>
   );
 }
@@ -655,13 +655,13 @@ function DotStripRow({
             )}
           </span>
         </span>
-        <span className={`text-[10px] font-semibold ${isWinner ? "text-slate-900" : "text-slate-400"}`}>{team}</span>
+        <span className={`text-[10px] font-semibold ${isWinner ? "text-slate-900" : "text-slate-500"}`}>{team}</span>
       </div>
     );
   };
 
-  const spreadBadgeCls = `rounded-full border px-2 text-[9px] font-bold leading-[15px] ${
-    isBlowoutSpread ? "border-violet-500 bg-violet-50 text-violet-700" : "border-slate-200 bg-white text-slate-400"
+  const spreadBadgeCls = `rounded-full border px-2 text-[10px] font-bold leading-[15px] ${
+    isBlowoutSpread ? "border-violet-500 bg-violet-50 text-violet-700" : "border-slate-200 bg-white text-slate-500"
   }`;
 
   return (
@@ -1491,7 +1491,7 @@ export default function ThisWeekView() {
                 <p className="text-xs text-amber-600">Only {seasonsCoveredThisWeek} season(s) of data for this week — read with caution.</p>
               )}
               <div className="flex flex-wrap items-center justify-end gap-2">
-                <span className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Box plots show</span>
+                <span className="text-[11px] font-medium uppercase tracking-wider text-slate-500">Box plots show</span>
                 <div className="flex gap-2">
                   {([["raw", "No change"], ["abs", "|Spread|"]] as const).map(([m, lbl]) => (
                     <button
@@ -1511,7 +1511,7 @@ export default function ThisWeekView() {
                 </div>
                 <div>
                   <h3 className="mb-1 text-sm font-semibold text-slate-700">Spread by season (box plot)</h3>
-                  <div className="mb-1 text-[11px] text-slate-400">Click a box to see that season's games.</div>
+                  <div className="mb-1 text-[11px] text-slate-500">Click a box to see that season's games.</div>
                   <div ref={spreadBoxRef} className="h-[340px] cursor-pointer" />
                 </div>
                 <div>
@@ -1529,11 +1529,11 @@ export default function ThisWeekView() {
                   )}
                   {similarWeeksBoxOption ? (
                     <>
-                      <div className="mb-1 text-[11px] text-slate-400">Click a box to see those games.</div>
+                      <div className="mb-1 text-[11px] text-slate-500">Click a box to see those games.</div>
                       <div ref={similarWeeksBoxRef} className="h-[340px] cursor-pointer" />
                     </>
                   ) : (
-                    <div className="flex h-[340px] items-center justify-center text-center text-xs text-slate-400">
+                    <div className="flex h-[340px] items-center justify-center text-center text-xs text-slate-500">
                       Not enough data yet to find comparable weeks.
                     </div>
                   )}
@@ -1565,12 +1565,12 @@ export default function ThisWeekView() {
                   <Kpi label="Underdog win rate" value={section2Kpis.underdogWinRate != null ? `${Math.round(section2Kpis.underdogWinRate * 100)}%` : "—"} sub="vs. market-calibrated favorite" />
                 </div>
                 <div>
-                  <span className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Avg. confidence by model</span>
+                  <span className="text-[11px] font-medium uppercase tracking-wider text-slate-500">Avg. confidence by model</span>
                   <AvgConfidenceStrip avg={avgConfidenceByModel} />
                 </div>
                 {agreementChartOption && (
                   <div>
-                    <span className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Model agreement — vs. each other &amp; the actual winner</span>
+                    <span className="text-[11px] font-medium uppercase tracking-wider text-slate-500">Model agreement — vs. each other &amp; the actual winner</span>
                     <div ref={agreementChartRef} className="mt-1" style={{ width: 260, height: 260 }} />
                   </div>
                 )}
@@ -1603,7 +1603,7 @@ export default function ThisWeekView() {
 
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex flex-wrap items-center gap-3">
-                  <span className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Card order</span>
+                  <span className="text-[11px] font-medium uppercase tracking-wider text-slate-500">Card order</span>
                   <div className="flex gap-2">
                     {([["time", "Time"], ["confidence", "Highest prob"], ["disagree", "Disagreement"]] as const).map(([m, lbl]) => (
                       <button
@@ -1624,7 +1624,7 @@ export default function ThisWeekView() {
                   <button className={stepBtnCls} onClick={() => stepSeason(-1)} disabled={seasonIdx <= 0} title="Newer season">
                     ›
                   </button>
-                  <span className="text-xs text-slate-400">
+                  <span className="text-xs text-slate-500">
                     {cardsForSeason.length} game{cardsForSeason.length === 1 ? "" : "s"}
                   </span>
                 </div>
@@ -1665,7 +1665,7 @@ export default function ThisWeekView() {
                     />
                   );
                 })}
-                {!cardsForSeason.length && <div className="py-8 text-center text-sm text-slate-400">No games found for this season.</div>}
+                {!cardsForSeason.length && <div className="py-8 text-center text-sm text-slate-500">No games found for this season.</div>}
               </div>
 
               <div>
@@ -1710,13 +1710,13 @@ export default function ThisWeekView() {
                   Each dot is one model's P(home wins) for a game at that spread. Dots grow where several games land in the same spot —
                   hover a dot to see which game(s), their score, and the winner. Color shows the outcome:{" "}
                   <span className="font-semibold text-slate-800">darker, solid</span> means the model correctly predicted the winner,{" "}
-                  <span className="font-semibold text-slate-400">lighter</span> means it picked wrong, and the model's normal color means
+                  <span className="font-semibold text-slate-500">lighter</span> means it picked wrong, and the model's normal color means
                   the game hasn't been played yet. Correct picks also get a{" "}
                   <span className="font-semibold text-emerald-800">dark-green ring</span>.
                 </p>
 
                 <div className="mb-2 flex flex-wrap items-center gap-2">
-                  <span className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Seasons</span>
+                  <span className="text-[11px] font-medium uppercase tracking-wider text-slate-500">Seasons</span>
                   {seasonsForWeek.map((s) => {
                     const on = selectedGraphSeasons.has(s);
                     return (
@@ -1734,7 +1734,7 @@ export default function ThisWeekView() {
                 </div>
 
                 <div className="mb-2 flex flex-wrap items-center gap-2">
-                  <span className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Models</span>
+                  <span className="text-[11px] font-medium uppercase tracking-wider text-slate-500">Models</span>
                   {MODEL_KEYS.map(([key, label]) => {
                     const on = visibleModels.has(key);
                     return (
@@ -1857,7 +1857,7 @@ export default function ThisWeekView() {
                                 <td className="px-3 py-1.5 text-right font-semibold" style={t.swing != null ? { color: t.swing >= 0 ? "#166534" : "#991b1b" } : undefined}>
                                   {t.swing != null ? `${t.swing >= 0 ? "+" : ""}${Math.round(t.swing * 100)}pp` : "—"}
                                 </td>
-                                <td className="px-3 py-1.5 text-right text-slate-400">
+                                <td className="px-3 py-1.5 text-right text-slate-500">
                                   {t.nWin} / {t.nLoss}
                                 </td>
                               </tr>

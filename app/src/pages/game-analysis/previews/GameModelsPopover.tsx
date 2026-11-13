@@ -78,7 +78,7 @@ function ModelRow({
         <span className={side === "home" ? "font-bold text-slate-700" : undefined}>{home} {pctHome}%</span>
       </span>
       <span
-        className="w-9 shrink-0 truncate rounded-full px-1.5 py-0.5 text-center text-[9px] font-bold text-white"
+        className="w-9 shrink-0 truncate rounded-full px-1.5 py-0.5 text-center text-[10px] font-bold text-white"
         style={{ background: color }}
         title={`${label} favors ${side === "home" ? home : away}`}
       >
@@ -108,7 +108,7 @@ function HistRow({ label, color, acc, n }: { label: string; color?: string; acc:
         {label}
       </span>
       <span className="shrink-0 tabular-nums text-slate-700">
-        {acc == null ? "—" : <span className="font-bold">{Math.round(acc * 100)}%</span>} <span className="text-slate-400">(n={n})</span>
+        {acc == null ? "—" : <span className="font-bold">{Math.round(acc * 100)}%</span>} <span className="text-slate-500">(n={n})</span>
       </span>
     </div>
   );
@@ -134,7 +134,7 @@ function HistoricalSection({
     if (!res || res.n === 0) return null;
     return (
       <div className="mb-1.5 rounded-lg border border-slate-200 bg-slate-50 p-1.5">
-        <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">When these two have split before</div>
+        <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">When these two have split before</div>
         <HistRow label={SHORT_LABEL[res.a]} color={MODEL_COLORS[res.a]} acc={res.accA} n={res.n} />
         <HistRow label={SHORT_LABEL[res.b]} color={MODEL_COLORS[res.b]} acc={res.accB} n={res.n} />
       </div>
@@ -147,7 +147,7 @@ function HistoricalSection({
     if (!rows.length) return null;
     return (
       <div className="mb-1.5 rounded-lg border border-slate-200 bg-slate-50 p-1.5">
-        <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Accuracy in toss-up games (near 50/50)</div>
+        <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Accuracy in toss-up games (near 50/50)</div>
         {rows.map((r) => (
           <HistRow key={r.k} label={SHORT_LABEL[r.k]} color={MODEL_COLORS[r.k]} acc={r.acc} n={r.n} />
         ))}
@@ -157,7 +157,7 @@ function HistoricalSection({
   if (category.kind === "all-agree" && allAgreeStat.n > 0) {
     return (
       <div className="mb-1.5 rounded-lg border border-slate-200 bg-slate-50 p-1.5">
-        <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">When every model agrees like this</div>
+        <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">When every model agrees like this</div>
         <HistRow label="Agreed side wins" acc={allAgreeStat.winRate} n={allAgreeStat.n} />
       </div>
     );

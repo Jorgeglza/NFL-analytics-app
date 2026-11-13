@@ -77,7 +77,7 @@ export default function ByTeamTab({
           ))}
         </div>
       </FilterGroup>
-      <p className="text-[11px] text-slate-400">Credits the team actually bet on (the model's pick), not both teams in every game it appears in. Click a column to sort.</p>
+      <p className="text-[11px] text-slate-500">Credits the team actually bet on (the model's pick), not both teams in every game it appears in. Click a column to sort.</p>
 
       <LazyMount minHeight={480}>
         <div className={tableWrapCls}>
@@ -112,7 +112,7 @@ export default function ByTeamTab({
               ))}
               {!sorted.length && (
                 <tr>
-                  <td colSpan={5} className="px-3 py-8 text-center text-slate-400">
+                  <td colSpan={5} className="px-3 py-8 text-center text-slate-500">
                     No graded bets yet.
                   </td>
                 </tr>

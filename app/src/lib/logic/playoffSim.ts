@@ -8,16 +8,42 @@
 // Carlo loop would be more accurate but is out of scope here).
 //
 // Tiebreaker is a SIMPLIFIED approximation of the real NFL rulebook, not a
-// full implementation: win% -> head-to-head (only when the two teams' games
-// against each other are lopsided one way) -> conference record -> point
-// differential from games at/before throughWeek (not simulated, since the
-// sim only draws winners, not margins). Real playoff seeding also weighs
-// strength of victory/schedule, common-games records, and net points within
-// the conference/overall — deliberately out of scope here; documented in
-// docs/IMPLEMENTATION_LOG.md and the page's own UI copy.
+// full implementation: win% -> head-to-head win% among ALL teams tied at that
+// win% -> conference record -> point differential from games at/before
+// throughWeek (not simulated, since the sim only draws winners, not margins)
+// -> team abbreviation (deterministic last resort). Each tied group is ranked
+// by per-team keys, so the order is transitive — the old pairwise comparator
+// could cycle in a 3-way tie (A>B>C>A) and leave Array.sort's output
+// engine-dependent (audit M4). Real seeding also weighs strength of
+// victory/schedule, common-games records and net points — deliberately out of
+// scope; documented in docs/IMPLEMENTATION_LOG.md and the page's UI copy.
+//
+// Randomness is a seeded PRNG (default seed = season/throughWeek), so the same
+// inputs always give the same odds: no drift between visits, and the table and
+// the detail modal agree (audit M2). Neutral-site games get no home-field
+// bonus (audit M3).
 import type { Row } from "../data/loader";
-import { eloPHome, scheduleToEloGames, buildEloRatingHistory, ELO_INIT } from "./elo";
+import { eloPHome, isNeutralSite, scheduleToEloGames, buildEloRatingHistory, ELO_INIT } from "./elo";
 import { indexEloHistoryByTeam, eloAsOf } from "./powerRankings";
+
+/** mulberry32 — small, fast, well-distributed 32-bit PRNG; returns [0, 1). */
+export function mulberry32(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** Simulated seasons per run — shared by the Playoff table and its detail modal. */
+export const PLAYOFF_SIM_ITERATIONS = 2000;
+
+/** Default seed: stable per (season, as-of week). */
+export const playoffSimSeed = (season: number, throughWeek: number): number =>
+  season * 100 + (Number.isFinite(throughWeek) ? throughWeek : 99);
 
 export interface TeamConfDiv {
   conference: string;
@@ -70,9 +96,11 @@ export function simulatePlayoffs(
   schedule: Row[],
   season: number,
   teamMeta: Map<string, TeamConfDiv>,
-  iterations = 2000,
+  iterations = PLAYOFF_SIM_ITERATIONS,
   throughWeek: number = Infinity,
+  seed: number = playoffSimSeed(season, throughWeek),
 ): PlayoffSimResult[] {
+  const random = mulberry32(seed);
   const games = schedule.filter(
     (g) => Number(g.season) === season && g.game_type === "REG" && teamMeta.has(String(g.home_team)) && teamMeta.has(String(g.away_team)),
   );
@@ -149,8 +177,8 @@ export function simulatePlayoffs(
     for (const g of remaining) {
       const ht = String(g.home_team);
       const at = String(g.away_team);
-      const pHome = eloPHome(frozenElo.get(at) ?? ELO_INIT, frozenElo.get(ht) ?? ELO_INIT);
-      const homeWins = Math.random() < pHome;
+      const pHome = eloPHome(frozenElo.get(at) ?? ELO_INIT, frozenElo.get(ht) ?? ELO_INIT, isNeutralSite(g));
+      const homeWins = random() < pHome;
       const sameConf = teamMeta.get(ht)!.conference === teamMeta.get(at)!.conference;
       const hs = state.get(ht)!;
       const as_ = state.get(at)!;
@@ -181,32 +209,57 @@ export function simulatePlayoffs(
 
     const winPct = (b: TeamState) => (b.w + 0.5 * b.t) / Math.max(1, b.w + b.l + b.t);
     const confPct = (b: TeamState) => (b.confW + 0.5 * b.confT) / Math.max(1, b.confW + b.confL + b.confT);
-    const compare = (a: string, b: string): number => {
-      const sa = state.get(a)!;
-      const sb = state.get(b)!;
-      const pctDiff = winPct(sb) - winPct(sa);
-      if (pctDiff !== 0) return pctDiff;
-      const aOverB = h2h.get(`${a}|${b}`) ?? 0;
-      const bOverA = h2h.get(`${b}|${a}`) ?? 0;
-      if (aOverB !== bOverA) return bOverA - aOverB;
-      const confDiff = confPct(sb) - confPct(sa);
-      if (confDiff !== 0) return confDiff;
-      return sb.pd - sa.pd;
+    // Rank a list: by win%, then each group tied on win% by per-team keys
+    // computed WITHIN that group (h2h win% vs the other tied teams, conf%,
+    // point diff, abbreviation). Key-based sorting is always transitive.
+    const rank = (list: string[]): string[] => {
+      const byPct = [...list].sort((a, b) => winPct(state.get(b)!) - winPct(state.get(a)!) || a.localeCompare(b));
+      const out: string[] = [];
+      for (let i = 0; i < byPct.length; ) {
+        const p = winPct(state.get(byPct[i])!);
+        let j = i + 1;
+        while (j < byPct.length && Math.abs(winPct(state.get(byPct[j])!) - p) < 1e-9) j++;
+        const group = byPct.slice(i, j);
+        if (group.length > 1) {
+          const h2hPct = new Map<string, number>();
+          for (const t of group) {
+            let w = 0;
+            let n = 0;
+            for (const o of group) {
+              if (o === t) continue;
+              const tw = h2h.get(`${t}|${o}`) ?? 0;
+              const ow = h2h.get(`${o}|${t}`) ?? 0;
+              w += tw;
+              n += tw + ow;
+            }
+            h2hPct.set(t, n ? w / n : 0.5);
+          }
+          group.sort(
+            (a, b) =>
+              h2hPct.get(b)! - h2hPct.get(a)! ||
+              confPct(state.get(b)!) - confPct(state.get(a)!) ||
+              state.get(b)!.pd - state.get(a)!.pd ||
+              a.localeCompare(b),
+          );
+        }
+        out.push(...group);
+        i = j;
+      }
+      return out;
     };
 
     const madeThisIter = new Set<string>();
     for (const conf of conferences) {
       const divisions = [...byConfDiv.keys()].filter((k) => k.startsWith(`${conf}|`));
-      const divWinners: string[] = [];
-      const remainder: string[] = [];
+      const divWinnersUnranked: string[] = [];
+      const remainderUnranked: string[] = [];
       for (const dk of divisions) {
-        const ordered = [...byConfDiv.get(dk)!].sort(compare);
-        divWinners.push(ordered[0]);
-        remainder.push(...ordered.slice(1));
+        const ordered = rank(byConfDiv.get(dk)!);
+        divWinnersUnranked.push(ordered[0]);
+        remainderUnranked.push(...ordered.slice(1));
       }
-      divWinners.sort(compare);
-      remainder.sort(compare);
-      const wildcards = remainder.slice(0, 3);
+      const divWinners = rank(divWinnersUnranked);
+      const wildcards = rank(remainderUnranked).slice(0, 3);
       [...divWinners, ...wildcards].forEach((t, i) => {
         playoffCount.set(t, playoffCount.get(t)! + 1);
         seedSum.set(t, seedSum.get(t)! + (i + 1));
@@ -225,7 +278,7 @@ export function simulatePlayoffs(
     const week = Number(g.week);
     const hElo = frozenElo.get(ht) ?? ELO_INIT;
     const aElo = frozenElo.get(at) ?? ELO_INIT;
-    const pHome = eloPHome(aElo, hElo);
+    const pHome = eloPHome(aElo, hElo, isNeutralSite(g));
     if (remainingByTeam.has(ht)) remainingByTeam.get(ht)!.push({ week, opponent: at, home: true, teamElo: hElo, opponentElo: aElo, winProb: pHome });
     if (remainingByTeam.has(at)) remainingByTeam.get(at)!.push({ week, opponent: ht, home: false, teamElo: aElo, opponentElo: hElo, winProb: 1 - pHome });
   }

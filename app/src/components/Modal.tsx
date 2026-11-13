@@ -24,10 +24,17 @@ export function Modal({
 }) {
   const closeBtnRef = useRef<HTMLButtonElement>(null);
   const previouslyFocused = useRef<Element | null>(null);
+  // Latest onClose via a ref, so the mount effect below runs once. With
+  // onClose in its deps, a caller passing an inline arrow re-ran the effect
+  // on every parent re-render and yanked focus back to ✕ (audit B10).
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") onCloseRef.current();
     };
     window.addEventListener("keydown", onKey);
 
@@ -65,7 +72,7 @@ export function Modal({
       document.body.style.overflow = prevOverflow;
       if (previouslyFocused.current instanceof HTMLElement) previouslyFocused.current.focus();
     };
-  }, [onClose]);
+  }, []);
 
   return (
     <div

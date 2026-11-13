@@ -477,7 +477,7 @@ export default function ValueBets() {
                   {logo(g.away) && <img src={logo(g.away)!} alt={g.away} className="h-5 w-5 object-contain" loading="lazy" decoding="async" />}
                   <span className="text-sm font-bold text-slate-800">{g.away} @ {g.home}</span>
                   {logo(g.home) && <img src={logo(g.home)!} alt={g.home} className="h-5 w-5 object-contain" loading="lazy" decoding="async" />}
-                  <Link to={matchupHref(g.gameId)} className="ml-auto text-[11px] font-medium text-[#002f6c] hover:underline">
+                  <Link to={matchupHref(g.gameId)} className="tap-expand relative ml-auto text-[11px] font-medium text-[#002f6c] hover:underline">
                     Zoom in →
                   </Link>
                 </div>
@@ -491,8 +491,8 @@ export default function ValueBets() {
                       }`}
                     >
                       <span className="font-semibold text-slate-700">{p.offTeam}</span>
-                      <span className="text-slate-400">{statLabel(p.stat)}</span>
-                      <span className="text-slate-400">vs {p.defTeam}</span>
+                      <span className="text-slate-500">{statLabel(p.stat)}</span>
+                      <span className="text-slate-500">vs {p.defTeam}</span>
                       <span className={`ml-auto font-bold ${bestScore(p.score)}`}>{p.score >= 0 ? "+" : ""}{p.score}</span>
                     </button>
                   ))}
@@ -501,7 +501,7 @@ export default function ValueBets() {
             ))}
           </div>
         ) : (
-          <div className="py-4 text-center text-sm text-slate-400">No mismatch data for this week yet.</div>
+          <div className="py-4 text-center text-sm text-slate-500">No mismatch data for this week yet.</div>
         )}
       </div>
 
@@ -510,7 +510,7 @@ export default function ValueBets() {
         <span className="text-sm font-semibold text-slate-700">Stat Detail — {statLabel(selStat)}</span>
         <div className="flex flex-wrap items-end gap-3">
           <Select label="Stat" value={selStat} onChange={setStat} groups={buildMismatchStatGroups(numericCols)} />
-          <label className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-wider text-slate-400">
+          <label className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-wider text-slate-500">
             Top-N: {topN}
             <input type="range" min={1} max={32} step={1} value={topN} onChange={(e) => setTopN(Number(e.target.value))} className="w-44" />
           </label>
@@ -524,7 +524,7 @@ export default function ValueBets() {
           [`Avg Mismatch (Top ${topN})`, kpis?.avg ?? "-"],
         ].map(([l, v]) => (
           <div key={l} className="min-w-44 flex-1 rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 shadow-sm">
-            <div className="text-[11px] font-medium uppercase tracking-wider text-slate-400">{l}</div>
+            <div className="text-[11px] font-medium uppercase tracking-wider text-slate-500">{l}</div>
             <div className="text-[22px] font-bold">{v}</div>
           </div>
         ))}
@@ -541,7 +541,7 @@ export default function ValueBets() {
 
       {zoomGames.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Zoom in:</span>
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Zoom in:</span>
           {zoomGames.map((g) => (
             <Link
               key={`${g.away}-${g.home}`}
@@ -569,7 +569,7 @@ export default function ValueBets() {
       {pivot && (
         <div className="relative overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
           <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
               Top {TOP_PER_TEAM} players per mismatched team
             </span>
             {hiddenCount > 0 && (
@@ -579,7 +579,7 @@ export default function ValueBets() {
             )}
           </div>
           <table className="w-full border-separate border-spacing-0 text-xs">
-            <thead className="bg-slate-50 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+            <thead className="bg-slate-50 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
               <tr>
                 <th className="px-2 py-2" />
                 <th className={`px-2 py-2 text-left ${stickyColHeadCls}`}>Team</th>
@@ -628,7 +628,7 @@ export default function ValueBets() {
                     <Link
                       to={matchupHref(gameIdFor(p.team, p.opp), p.player)}
                       title="Zoom in on this matchup"
-                      className="flex min-h-11 min-w-11 items-center justify-center text-slate-400 hover:text-[#002f6c] sm:min-h-0 sm:min-w-0"
+                      className="flex min-h-11 min-w-11 items-center justify-center text-slate-500 hover:text-[#002f6c] sm:min-h-0 sm:min-w-0"
                     >
                       →
                     </Link>
@@ -645,7 +645,7 @@ export default function ValueBets() {
                 type="button"
                 onClick={() => setActiveCellTip(null)}
                 aria-label="Close"
-                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-slate-400 hover:bg-slate-200 hover:text-slate-600"
+                className="tap-expand relative flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-slate-500 hover:bg-slate-200 hover:text-slate-600"
               >
                 ✕
               </button>

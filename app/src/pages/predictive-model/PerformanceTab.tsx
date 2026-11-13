@@ -957,7 +957,7 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
             <span className="text-xs font-medium text-slate-600">
               Success rate at this cutoff:{" "}
               <span className="font-semibold text-slate-800">{pct(accAtThreshold?.acc ?? null)}</span>
-              {accAtThreshold && <span className="text-slate-400"> (n={accAtThreshold.n})</span>}
+              {accAtThreshold && <span className="text-slate-500"> (n={accAtThreshold.n})</span>}
             </span>
             {Math.round(thresholdPct) !== 50 && (
               <button
@@ -1036,7 +1036,7 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
                 ))}
                 {!bySeasonTable.length && (
                   <tr>
-                    <td colSpan={4} className="px-3 py-6 text-center text-slate-400">No games match this filter.</td>
+                    <td colSpan={4} className="px-3 py-6 text-center text-slate-500">No games match this filter.</td>
                   </tr>
                 )}
               </tbody>
@@ -1070,7 +1070,7 @@ export default function PerformanceTab({ games }: { games: Row[] }) {
                 ))}
                 {!calibSeasonTable.length && (
                   <tr>
-                    <td colSpan={5} className="px-3 py-6 text-center text-slate-400">No games match this filter.</td>
+                    <td colSpan={5} className="px-3 py-6 text-center text-slate-500">No games match this filter.</td>
                   </tr>
                 )}
               </tbody>

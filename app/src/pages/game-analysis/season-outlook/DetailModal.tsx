@@ -1,12 +1,12 @@
 import { useMemo } from "react";
 import type { EChartsOption } from "echarts";
-import type { PlayoffSimResult } from "../../../lib/logic/playoffSim";
+import { PLAYOFF_SIM_ITERATIONS, type PlayoffSimResult } from "../../../lib/logic/playoffSim";
 import type { TeamMeta } from "../../../lib/team/meta";
 import { Modal } from "../../../components/Modal";
 import { useECharts } from "../../../components/charts/useECharts";
 import { Card } from "../../../components/ui";
 
-const ITERATIONS = 2000;
+const ITERATIONS = PLAYOFF_SIM_ITERATIONS;
 
 function MetricRow({ label, value }: { label: string; value: string | number }) {
   return (
@@ -112,12 +112,12 @@ export default function DetailModal({
       <div className="space-y-4">
         <div className="flex flex-wrap items-center gap-x-6 gap-y-1 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
           <div>
-            <div className="text-[10px] uppercase tracking-wider text-slate-400">Current record (week {week})</div>
+            <div className="text-[10px] uppercase tracking-wider text-slate-500">Current record (week {week})</div>
             <div className="text-lg font-extrabold text-slate-800">{recordStr(result.currentWins, result.currentLosses, result.currentTies)}</div>
           </div>
           <div className="text-slate-300">+</div>
           <div>
-            <div className="text-[10px] uppercase tracking-wider text-slate-400">
+            <div className="text-[10px] uppercase tracking-wider text-slate-500">
               Expected wins over {result.remainingGames.length} remaining {result.remainingGames.length === 1 ? "game" : "games"}
             </div>
             <div className="text-lg font-extrabold" style={{ color: accent }}>
@@ -127,7 +127,7 @@ export default function DetailModal({
           </div>
           <div className="text-slate-300">=</div>
           <div>
-            <div className="text-[10px] uppercase tracking-wider text-slate-400">Projected final wins (avg)</div>
+            <div className="text-[10px] uppercase tracking-wider text-slate-500">Projected final wins (avg)</div>
             <div className="text-lg font-extrabold text-slate-800">{result.avgWins.toFixed(1)}</div>
           </div>
         </div>
@@ -165,7 +165,7 @@ export default function DetailModal({
                   <span className="w-16 shrink-0 truncate font-medium text-slate-700 sm:w-28">
                     {g.home ? "vs" : "@"} {g.opponent}
                   </span>
-                  <span className="hidden shrink-0 text-xs text-slate-400 sm:block sm:w-24">
+                  <span className="hidden shrink-0 text-xs text-slate-500 sm:block sm:w-24">
                     {Math.round(g.teamElo)} vs {Math.round(g.opponentElo)}
                   </span>
                   <div className="h-5 flex-1 overflow-hidden rounded-full bg-slate-100">
@@ -180,7 +180,7 @@ export default function DetailModal({
               ))}
             </div>
           ) : (
-            <div className="py-4 text-center text-xs text-slate-400">No games remaining — the regular season is complete for this team.</div>
+            <div className="py-4 text-center text-xs text-slate-500">No games remaining — the regular season is complete for this team.</div>
           )}
         </div>
 

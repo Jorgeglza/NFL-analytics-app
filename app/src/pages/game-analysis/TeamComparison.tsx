@@ -260,14 +260,14 @@ export default function TeamComparison() {
         >
           {marker && (
             <span
-              className="absolute -top-1.5 right-0.5 rounded-full border border-amber-300 bg-amber-100 px-1 text-[7px] font-bold uppercase leading-tight tracking-wider text-amber-700"
+              className="absolute -top-1.5 right-0.5 rounded-full border border-amber-300 bg-amber-100 px-1 text-[10px] font-bold uppercase leading-tight tracking-wider text-amber-700"
               title={hint}
             >
               {marker}
             </span>
           )}
-          <div className={`font-semibold uppercase tracking-wider text-slate-400 ${sub ? "text-[8px]" : "text-[9px]"}`}>{label}</div>
-          <div className={`font-semibold tabular-nums ${sub ? "text-[11px]" : "text-sm"} ${isZero ? "italic text-slate-400" : "text-slate-800"}`}>
+          <div className={`font-semibold uppercase tracking-wider text-slate-500 ${sub ? "text-[10px]" : "text-[10px]"}`}>{label}</div>
+          <div className={`font-semibold tabular-nums ${sub ? "text-[11px]" : "text-sm"} ${isZero ? "italic text-slate-500" : "text-slate-800"}`}>
             {value || "--"}
           </div>
         </div>
@@ -298,9 +298,9 @@ export default function TeamComparison() {
     if (!s1.hasData && !s2.hasData) {
       return (
         <div className={`flex items-center justify-center gap-2 py-1.5 ${sub ? "pl-4" : ""}`}>
-          <span className={`font-semibold text-slate-400 ${sub ? "text-[0.7rem]" : "text-sm"}`}>{title(stat)}</span>
+          <span className={`font-semibold text-slate-500 ${sub ? "text-[0.7rem]" : "text-sm"}`}>{title(stat)}</span>
           <span
-            className="rounded-full border border-dashed border-slate-300 px-2 py-0.5 text-[10px] uppercase tracking-wider text-slate-400"
+            className="rounded-full border border-dashed border-slate-300 px-2 py-0.5 text-[10px] uppercase tracking-wider text-slate-500"
             title="This stat is not yet provided by the data pipeline (known issue) — values will appear once the source is fixed."
           >
             Data unavailable
@@ -324,7 +324,7 @@ export default function TeamComparison() {
             </button>
             {subs && !sub && (
               <button
-                className="grid h-5 w-5 place-items-center rounded-full border border-slate-200 bg-white text-xs leading-none text-slate-500 hover:border-[#002f6c] hover:text-[#002f6c]"
+                className="tap-expand relative grid h-5 w-5 place-items-center rounded-full border border-slate-200 bg-white text-xs leading-none text-slate-500 hover:border-[#002f6c] hover:text-[#002f6c]"
                 onClick={() => setExpanded((e) => ({ ...e, [stat]: !e[stat] }))}
                 title={expanded[stat] ? "Hide breakdown" : "Show breakdown"}
               >
@@ -526,7 +526,7 @@ export default function TeamComparison() {
               >
                 <div className={`text-[0.7rem] ${active ? "font-semibold text-[#002f6c]" : "text-slate-500"}`}>{l}</div>
                 <div className="text-lg font-bold">{v}</div>
-                {rank != null && <div className="text-[10px] font-semibold text-slate-400">#{rank}</div>}
+                {rank != null && <div className="text-[10px] font-semibold text-slate-500">#{rank}</div>}
               </button>
             );
           })}
@@ -611,7 +611,7 @@ export default function TeamComparison() {
           <div className="mb-3 flex items-center justify-center gap-10">
             {[team1, team2].map((t, i) => (
               <div key={t} className="flex items-center gap-10">
-                {i === 1 && <div className="text-3xl font-light text-slate-400">VS</div>}
+                {i === 1 && <div className="text-3xl font-light text-slate-500">VS</div>}
                 <div className="text-center">
                   {meta.get(t)?.logo && (
                     <TeamLogoLink
@@ -643,7 +643,7 @@ export default function TeamComparison() {
               <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: color(team1) }} />
               <span className="font-semibold">{team1}</span>
             </div>
-            <div className="w-28 text-center text-[10px] uppercase tracking-wider text-slate-400 sm:w-44">Last · Total · Avg — bar = league rank</div>
+            <div className="w-28 text-center text-[10px] uppercase tracking-wider text-slate-500 sm:w-44">Last · Total · Avg — bar = league rank</div>
             <div className="flex flex-1 items-center justify-start gap-1.5">
               <span className="font-semibold">{team2}</span>
               <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: color(team2) }} />

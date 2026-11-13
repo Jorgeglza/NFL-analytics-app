@@ -79,7 +79,7 @@ export default function BySeasonTab({
       </FilterGroup>
 
       <Card title={`${label} — season by season`} subtitle="Bars: ROI % that season. Line: profit that season (not cumulative across seasons).">
-        {option ? <div ref={ref} className="h-[360px]" /> : <div className="grid h-[360px] place-items-center text-sm text-slate-400">No graded seasons yet.</div>}
+        {option ? <div ref={ref} className="h-[360px]" /> : <div className="grid h-[360px] place-items-center text-sm text-slate-500">No graded seasons yet.</div>}
       </Card>
 
       <div className={tableWrapCls}>

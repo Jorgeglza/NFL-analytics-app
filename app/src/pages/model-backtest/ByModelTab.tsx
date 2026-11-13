@@ -51,7 +51,7 @@ export default function ByModelTab({ rows, modelKeys }: { rows: GameBacktestRow[
   return (
     <div className="space-y-4">
       <Card title="ROI by model" subtitle="Every sub-model's return on investment, ranked best to worst. Zero is break-even; negative loses money to the vig.">
-        {option ? <div ref={ref} style={{ height: Math.max(220, ranked.length * 44 + 60) }} /> : <div className="grid h-[220px] place-items-center text-sm text-slate-400">No graded bets yet.</div>}
+        {option ? <div ref={ref} style={{ height: Math.max(220, ranked.length * 44 + 60) }} /> : <div className="grid h-[220px] place-items-center text-sm text-slate-500">No graded bets yet.</div>}
       </Card>
 
       <div className={tableWrapCls}>

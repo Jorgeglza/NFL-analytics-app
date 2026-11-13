@@ -122,7 +122,7 @@ export default function Home() {
                 {GROUP_ICONS[group.label] ?? "📊"}
               </span>
               <h2 className="text-lg font-bold text-slate-800">{group.label}</h2>
-              <span className="text-xs text-slate-400">
+              <span className="text-xs text-slate-500">
                 {group.pages.filter((p) => p.implemented).length}/{group.pages.length} available
               </span>
             </div>

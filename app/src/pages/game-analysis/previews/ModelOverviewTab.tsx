@@ -162,9 +162,9 @@ export default function ModelOverviewTab({
       >
         <div className="relative flex flex-col items-center">
           {logo ? <img src={logo} alt={p.team ?? ""} className="h-6" loading="lazy" decoding="async" /> : <div className="text-xs font-bold">{p.team ?? "—"}</div>}
-          {p.correct === true && <span className="absolute -right-0.5 -top-1 text-[9px] font-black text-[#2CA25F]">✓</span>}
-          {p.correct === false && <span className="absolute -right-0.5 -top-1 text-[9px] font-black text-[#C8102E]">✗</span>}
-          {rec.isTie && <span className="absolute -right-0.5 -top-1 text-[9px] font-black text-[#B58B00]">=</span>}
+          {p.correct === true && <span className="absolute -right-0.5 -top-1 text-[10px] font-black text-[#2CA25F]">✓</span>}
+          {p.correct === false && <span className="absolute -right-0.5 -top-1 text-[10px] font-black text-[#C8102E]">✗</span>}
+          {rec.isTie && <span className="absolute -right-0.5 -top-1 text-[10px] font-black text-[#B58B00]">=</span>}
         </div>
       </td>
     );
@@ -278,13 +278,13 @@ export default function ModelOverviewTab({
               </button>
             ))}
           </div>
-          <label className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
+          <label className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-500">
             Min confidence: {Math.round(minConf * 100)}%
             <input type="range" min={0.5} max={1} step={0.01} value={minConf} onChange={(e) => setMinConf(Number(e.target.value))} className="w-48" />
           </label>
         </FilterGroup>
         <FilterGroup label="Layout — how the grid reads">
-          <div className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
+          <div className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-500">
             Group by
             <div className="flex gap-2">
               {(["season", "week"] as const).map((g) => (
@@ -294,7 +294,7 @@ export default function ModelOverviewTab({
               ))}
             </div>
           </div>
-          <div className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
+          <div className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-500">
             Column order
             <div className="flex gap-2">
               {([["time", "Kickoff time"], ["rank", "Confidence"]] as const).map(([v, lbl]) => (
@@ -315,18 +315,18 @@ export default function ModelOverviewTab({
         <div className="flex flex-wrap gap-3">
           {confBands.map((b) => (
             <div key={b.label} className="min-w-28 flex-1 rounded-xl border border-slate-200 px-3 py-2 text-center" title={`${b.n.toLocaleString()} completed games with pick confidence in ${b.label}`}>
-              <div className="text-[10px] font-medium uppercase tracking-wider text-slate-400">{b.label}</div>
-              <div className={`text-xl font-bold tabular-nums ${b.pct == null ? "text-slate-300" : b.pct >= 60 ? "text-[#2CA25F]" : b.pct < 50 ? "text-[#C8102E]" : "text-slate-800"}`}>
+              <div className="text-[10px] font-medium uppercase tracking-wider text-slate-500">{b.label}</div>
+              <div className={`text-xl font-bold tabular-nums ${b.pct == null ? "text-slate-500" : b.pct >= 60 ? "text-[#2CA25F]" : b.pct < 50 ? "text-[#C8102E]" : "text-slate-800"}`}>
                 {b.pct == null ? "—" : `${Math.round(b.pct)}%`}
               </div>
               <div className="mx-auto mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
                 <div className="h-full rounded-full" style={{ width: `${b.pct ?? 0}%`, background: b.pct != null && b.pct >= 50 ? "#2CA25F" : "#C8102E" }} />
               </div>
-              <div className="mt-1 text-[10px] text-slate-400">{b.n.toLocaleString()} games</div>
+              <div className="mt-1 text-[10px] text-slate-500">{b.n.toLocaleString()} games</div>
             </div>
           ))}
         </div>
-        <div className="mt-2 text-[11px] text-slate-400">If the model is well-calibrated, accuracy should rise from left to right and each band should at least match its own confidence range.</div>
+        <div className="mt-2 text-[11px] text-slate-500">If the model is well-calibrated, accuracy should rise from left to right and each band should at least match its own confidence range.</div>
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -336,7 +336,7 @@ export default function ModelOverviewTab({
           ["Avg confidence", `${Math.round(100 * kpi.avgConf)}%`, "#C8102E"],
         ].map(([t, v, c]) => (
           <div key={t} className="min-w-36 rounded-2xl border border-slate-200 bg-white px-3 py-2" style={{ borderTop: `3px solid ${c}` }}>
-            <div className="text-[11px] font-medium uppercase tracking-wider text-slate-400">{t}</div>
+            <div className="text-[11px] font-medium uppercase tracking-wider text-slate-500">{t}</div>
             <div className="text-lg font-extrabold">{v}</div>
           </div>
         ))}
@@ -360,7 +360,7 @@ export default function ModelOverviewTab({
             type="button"
             onClick={() => setActiveRec(null)}
             aria-label="Close"
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-600"
           >
             ✕
           </button>
@@ -376,9 +376,9 @@ export default function ModelOverviewTab({
             rowLabel={grouping === "season" ? "Week" : "Season"}
           />
         ))}
-        {!matrices.length && <div className="py-8 text-center text-sm text-slate-400">No games meet the filters.</div>}
+        {!matrices.length && <div className="py-8 text-center text-sm text-slate-500">No games meet the filters.</div>}
       </div>
-      <p className="text-[11px] text-slate-400">
+      <p className="text-[11px] text-slate-500">
         {predictiveUnavailable
           ? "⚠ Predictive model: data unavailable this session — excluded from the model list and Average above."
           : predictiveDisclaimer(predictiveCoverage ?? null)}

@@ -149,7 +149,7 @@ export const pct = (v: number | null) => (v == null ? "N/A" : `${Math.round(v)}%
 function Kpi({ label, value, border }: { label: string; value: string; border: string }) {
   return (
     <div className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm" style={{ borderTop: `3px solid ${border}` }}>
-      <div className="text-[11px] font-medium uppercase tracking-wider text-slate-400">{label}</div>
+      <div className="text-[11px] font-medium uppercase tracking-wider text-slate-500">{label}</div>
       <div className="text-[22px] font-bold text-slate-900">{value}</div>
     </div>
   );
@@ -528,7 +528,7 @@ function Block({ title, rows, xKey }: { title: string; rows: Row[]; xKey: "week"
         </div>
         <div className="grid min-w-0 flex-1 gap-4 lg:grid-cols-3">
           <div className="lg:col-span-2">
-            <div className="mb-1 text-[11px] text-slate-400">Click a bar to see that {xLabel.toLowerCase()}&apos;s games.</div>
+            <div className="mb-1 text-[11px] text-slate-500">Click a bar to see that {xLabel.toLowerCase()}&apos;s games.</div>
             <div ref={barRef} className="h-[452px]" />
           </div>
           <div ref={scatterRef} className="h-[460px]" />
@@ -624,7 +624,7 @@ export default function WinTypesTab() {
       {glossaryOpen && (
         <Card title="App glossary" subtitle="Win types, stat definitions, and betting/model terms used throughout the app — same content as the Grading Model's Features tab.">
           <Glossary sections={GLOSSARY_SECTIONS} />
-          <p className="mt-4 text-xs text-slate-400">
+          <p className="mt-4 text-xs text-slate-500">
             Edge case inherited from the original app: a played pick'em counts as an Underdog win. Ties get their own "Tie" category and are
             excluded entirely from the Favorite Win % / Home Win % percentages — the "(No Score)" buckets now mean unplayed only.
           </p>
@@ -670,7 +670,7 @@ export default function WinTypesTab() {
           </Card>
 
           <div className="flex flex-wrap items-center gap-2 sm:gap-1.5">
-            <span className="mr-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">Jump to</span>
+            <span className="mr-1 text-[11px] font-medium uppercase tracking-wider text-slate-500">Jump to</span>
             {blockValues.map((x) => (
               <button
                 key={x}
@@ -681,7 +681,7 @@ export default function WinTypesTab() {
               </button>
             ))}
             {mode === "week" && (
-              <span className="ml-2 text-xs text-slate-400">Week blocks pool all seasons {seasonSpan} for that week number.</span>
+              <span className="ml-2 text-xs text-slate-500">Week blocks pool all seasons {seasonSpan} for that week number.</span>
             )}
           </div>
 

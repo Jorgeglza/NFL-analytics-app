@@ -14,6 +14,7 @@ import { useECharts } from "../../../components/charts/useECharts";
 import { MIN_N_BUCKET, MARKET_BUCKET_W, ATS_WINDOW, homeCoverFairProb, vigLeanProbHome, atsTrendProbHome } from "../../../lib/logic/probBlend";
 import { edgeComposite, EDGE_WEIGHTS } from "../../../lib/logic/edgeComposite";
 import { impliedProb, fairProbs } from "../../../lib/logic/moneyline";
+import { formatKickoff } from "../../../lib/logic/kickoff";
 import { opponentLabel } from "../../grading-model/shared";
 import { usePageTitle } from "../../../lib/hooks/usePageTitle";
 import {
@@ -49,7 +50,7 @@ import {
   type BucketWindowPoint,
   predictiveDisclaimer,
 } from "./engine";
-import type { EloRatingPoint } from "../../../lib/logic/elo";
+import { ELO_HFA, isNeutralSite, type EloRatingPoint } from "../../../lib/logic/elo";
 import { labelFor } from "../../predictive-model/shared";
 import { describeFeature } from "../../predictive-model/featureDescriptions";
 
@@ -115,7 +116,7 @@ function ProbBar({
         )}
       </div>
       <span className="w-10 shrink-0 text-right font-bold tabular-nums">{p == null ? "—" : `${Math.round(100 * p)}%${partialWindow ? "*" : ""}`}</span>
-      {note != null && <span className={`${noteWidthClass} shrink-0 truncate text-slate-400`} title={note}>{note}</span>}
+      {note != null && <span className={`${noteWidthClass} shrink-0 truncate text-slate-500`} title={note}>{note}</span>}
     </div>
   );
 }
@@ -131,12 +132,12 @@ function SignalKPI({ label, p, weightPct, detail }: { label: string; p: number |
   return (
     <div className="min-w-0 rounded-md bg-slate-50 px-1.5 py-1">
       <div className="flex items-center justify-between gap-1">
-        <span className="truncate text-[8px] font-semibold uppercase tracking-wide text-slate-400">{label}</span>
-        <span className="shrink-0 text-[8px] font-medium text-slate-400">{weightPct}% wt</span>
+        <span className="truncate text-[10px] font-semibold uppercase tracking-wide text-slate-500">{label}</span>
+        <span className="shrink-0 text-[10px] font-medium text-slate-500">{weightPct}% wt</span>
       </div>
       <div className="flex items-baseline gap-1">
         <span className="text-xs font-bold text-slate-700">{p == null ? "—" : `${Math.round(100 * p)}%`}</span>
-        <span className="min-w-0 truncate text-[8px] text-slate-400" title={detail}>{detail}</span>
+        <span className="min-w-0 truncate text-[10px] text-slate-500" title={detail}>{detail}</span>
       </div>
     </div>
   );
@@ -188,7 +189,7 @@ function ContribRow({
       <span className="w-14 shrink-0 text-right font-bold tabular-nums" style={{ color }}>
         {towardHome ? "+" : "−"}{Math.abs(r.contrib).toFixed(1)}
       </span>
-      {actual && <span className="w-28 shrink-0 truncate text-[10px] text-slate-400">{actual}</span>}
+      {actual && <span className="w-28 shrink-0 truncate text-[10px] text-slate-500">{actual}</span>}
     </div>
   );
 }
@@ -366,7 +367,7 @@ function EloSpark({
     },
   });
   if (slots.length < 2) {
-    return <div className="flex h-8 items-center text-[10px] italic text-slate-400">Not enough history yet</div>;
+    return <div className="flex h-8 items-center text-[10px] italic text-slate-500">Not enough history yet</div>;
   }
   return <div ref={ref} className="h-24 w-full min-w-0" />;
 }
@@ -471,7 +472,7 @@ function MarginBars({
   );
   const ref = useECharts(option);
   if (slots.length < 1) {
-    return <div className="flex h-8 items-center text-[10px] italic text-slate-400">Not enough games yet</div>;
+    return <div className="flex h-8 items-center text-[10px] italic text-slate-500">Not enough games yet</div>;
   }
   return <div ref={ref} className="h-24 w-full min-w-0" />;
 }
@@ -557,28 +558,28 @@ function RecentFormTeam({ team, games, meta }: { team: string; games: RecentGame
         )}
       </div>
       {games.length === 0 ? (
-        <div className="py-4 text-center text-[11px] italic text-slate-400">No games played yet this season</div>
+        <div className="py-4 text-center text-[11px] italic text-slate-500">No games played yet this season</div>
       ) : (
         <>
           <div className="mb-2 grid grid-cols-4 gap-1.5">
             {kpis.map((k) => (
               <div key={k.label} className="rounded-lg bg-slate-50 px-2 py-1.5 text-center">
-                <div className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">{k.label}</div>
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">{k.label}</div>
                 <div className={`text-sm font-extrabold tabular-nums ${k.cls ?? "text-slate-800"}`}>{k.value}</div>
-                <div className="text-[9px] text-slate-400">{k.sub}</div>
+                <div className="text-[10px] text-slate-500">{k.sub}</div>
               </div>
             ))}
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
-              <thead className="bg-slate-50 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+              <thead className="bg-slate-50 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
                 <tr>
                   <th colSpan={3} className="border-r border-slate-100 px-1.5 pt-1.5 text-left">Game</th>
                   <th colSpan={2} className="border-r border-slate-100 px-1.5 pt-1.5 text-center">Points</th>
                   <th colSpan={2} className="border-r border-slate-100 px-1.5 pt-1.5 text-center">Yards</th>
                   <th colSpan={2} className="px-1.5 pt-1.5 text-center">Diff</th>
                 </tr>
-                <tr className="text-[9px]">
+                <tr className="text-[10px]">
                   <th className="px-1.5 pb-1.5 text-left">Wk</th>
                   <th className="px-1.5 pb-1.5 text-left">Opp</th>
                   <th className="border-r border-slate-100 px-1.5 pb-1.5 text-left">Res</th>
@@ -1188,7 +1189,7 @@ export default function MatchupTab({
     return { rows: df.slice(0, 10), winsA, winsB, ties, first: dates[0] ?? "--", last: dates[dates.length - 1] ?? "--" };
   }, [schedule, selGame, away, home]);
 
-  if (!selGame || !meta.size) return <div className="py-8 text-center text-sm text-slate-400">No games.</div>;
+  if (!selGame || !meta.size) return <div className="py-8 text-center text-sm text-slate-500">No games.</div>;
 
   const spread = selGame.spread_line == null ? null : Number(selGame.spread_line);
   const fav = favoriteSide(spread);
@@ -1196,9 +1197,8 @@ export default function MatchupTab({
   const mlAway = selGame.away_moneyline == null ? null : Number(selGame.away_moneyline);
   const mlHome = selGame.home_moneyline == null ? null : Number(selGame.home_moneyline);
   const { awayFair, homeFair, overround } = fairProbs(mlAway, mlHome);
-  const dateTxt = selGame.gameday
-    ? new Date(`${selGame.gameday}T${selGame.gametime ?? "12:00"}`).toLocaleString("en-US", { weekday: "short", month: "short", day: "2-digit", hour: "numeric", minute: "2-digit" })
-    : "—";
+  // gametime is US Eastern — shown converted to the viewer's timezone (B9).
+  const dateTxt = selGame.gameday ? formatKickoff(selGame.gameday, selGame.gametime) : "—";
 
   // model-breakdown helpers
   const pickOf = (pair: [number | null, number | null]): string | null =>
@@ -1219,7 +1219,7 @@ export default function MatchupTab({
               <div key={l} className="flex-1 rounded-lg border border-slate-200 px-2 py-1 text-center" title={r ? `League rank #${r.rank} of ${r.nTeams} (season-to-date average)` : undefined}>
                 <div className="text-[0.7rem] text-slate-500">{l}</div>
                 <div className="text-lg font-bold">{v ?? "--"}</div>
-                {r && <div className="text-[10px] font-semibold text-slate-400">#{r.rank}</div>}
+                {r && <div className="text-[10px] font-semibold text-slate-500">#{r.rank}</div>}
               </div>
             );
           })}
@@ -1253,7 +1253,7 @@ export default function MatchupTab({
                   className={`min-w-32 flex-1 rounded-xl border px-2.5 py-2 text-center ${isCons ? "border-[#002f6c] bg-[#002f6c]/5" : "border-slate-200"}`}
                   title={hasP ? `${lbl}: ${away} ${Math.round(100 * pA!)}% | ${home} ${Math.round(100 * pH!)}%` : `${lbl}: not available for this game`}
                 >
-                  <div className="flex items-center justify-center gap-1.5 text-[10px] font-medium uppercase tracking-wider text-slate-400">
+                  <div className="flex items-center justify-center gap-1.5 text-[10px] font-medium uppercase tracking-wider text-slate-500">
                     <span className="inline-block h-2 w-2 rounded-full" style={{ background: MODEL_COLORS[k] }} />
                     {lbl}
                   </div>
@@ -1265,7 +1265,7 @@ export default function MatchupTab({
           </div>
           {/* Model distribution — every model's home-win probability plotted on one axis, dot-colored by model */}
           <div className="flex items-center gap-2 border-t border-slate-100 px-3 py-2">
-            <span className="w-8 shrink-0 text-right text-[9px] font-medium text-slate-300" title={`${away} win probability`}>{away}</span>
+            <span className="w-8 shrink-0 text-right text-[10px] font-medium text-slate-500" title={`${away} win probability`}>{away}</span>
             <div className="relative h-2.5 flex-1">
               <div className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-slate-200" />
               <div className="absolute inset-y-0 left-1/2 w-px bg-slate-300" title="50%" />
@@ -1283,7 +1283,7 @@ export default function MatchupTab({
                 );
               })}
             </div>
-            <span className="w-8 shrink-0 text-[9px] font-medium text-slate-300" title={`${home} win probability`}>{home}</span>
+            <span className="w-8 shrink-0 text-[10px] font-medium text-slate-500" title={`${home} win probability`}>{home}</span>
           </div>
         </div>
       )}
@@ -1333,7 +1333,7 @@ export default function MatchupTab({
                 <div className="text-lg font-bold">{big}</div>
                 <div className="text-[0.7rem] text-slate-500">{sub}</div>
                 {extra != null && (
-                  <div className="text-[0.7rem] text-slate-400" title="Projected final score — the predictive (margin regression) model's margin split across the market's total line">
+                  <div className="text-[0.7rem] text-slate-500" title="Projected final score — the predictive (margin regression) model's margin split across the market's total line">
                     {extra}
                   </div>
                 )}
@@ -1349,18 +1349,18 @@ export default function MatchupTab({
           <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
             <div className="mb-2 flex flex-wrap items-baseline gap-2">
               <div className="text-sm font-bold">Key stats — season to date (thru W{wkPlayed})</div>
-              <div className="text-[11px] text-slate-400">Bold = better side · #N = league rank (direction-adjusted, #1 best)</div>
+              <div className="text-[11px] text-slate-500">Bold = better side · #N = league rank (direction-adjusted, #1 best)</div>
             </div>
             <div className="grid gap-x-6 gap-y-1.5 sm:grid-cols-2">
               {keyStats.rows.map((r) => (
                 <div key={r.label} className="flex items-center gap-2 text-sm">
                   <span className={`w-20 text-right tabular-nums ${r.better === "away" ? "font-bold text-slate-900" : "text-slate-500"}`}>
                     {r.a == null ? "—" : r.a.toFixed(1)}
-                    {r.ra != null && <span className="ml-1 text-[10px] font-semibold text-slate-400">#{r.ra}</span>}
+                    {r.ra != null && <span className="ml-1 text-[10px] font-semibold text-slate-500">#{r.ra}</span>}
                   </span>
                   <span className="flex-1 text-center text-xs font-medium text-slate-500">{r.label}</span>
                   <span className={`w-20 tabular-nums ${r.better === "home" ? "font-bold text-slate-900" : "text-slate-500"}`}>
-                    {r.rh != null && <span className="mr-1 text-[10px] font-semibold text-slate-400">#{r.rh}</span>}
+                    {r.rh != null && <span className="mr-1 text-[10px] font-semibold text-slate-500">#{r.rh}</span>}
                     {r.h == null ? "—" : r.h.toFixed(1)}
                   </span>
                 </div>
@@ -1390,7 +1390,7 @@ export default function MatchupTab({
             {modelKeys.filter(([k]) => k !== "consensus").map(([k, lbl]) => (
               <ProbBar key={k} label={lbl} p={bundle[k][1]} color={MODEL_COLORS[k]} />
             ))}
-            <div className="text-[10px] text-slate-400">Equal-weight mean of every model with data for this game — historically the best calibrated.</div>
+            <div className="text-[10px] text-slate-500">Equal-weight mean of every model with data for this game — historically the best calibrated.</div>
           </ModelBlock>
         </div>
       )}
@@ -1400,13 +1400,13 @@ export default function MatchupTab({
         <div>
           <div className="mb-2 flex flex-wrap items-baseline gap-2">
             <div className="text-sm font-bold text-slate-800">Model breakdown</div>
-            <div className="text-[11px] text-slate-400">Bars show the home-side ({home}) probability · tick = 50% · each card explains its own inputs</div>
+            <div className="text-[11px] text-slate-500">Bars show the home-side ({home}) probability · tick = 50% · each card explains its own inputs</div>
           </div>
           <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
             <ModelBlock color={MODEL_COLORS.ml} title="ML Fair" pick={pickOf(bundle.ml)} prob={probOf(bundle.ml)}>
               <ProbBar label={`Implied — ${home} ${fmtMl(mlHome)}`} p={impliedProb(mlHome)} color={MODEL_COLORS.ml} note={`${away} ${fmtMl(mlAway)}`} />
               <ProbBar label="Fair (vig removed)" p={homeFair} color={MODEL_COLORS.ml} note={overround == null ? "" : `vig ${(100 * overround).toFixed(1)}%`} />
-              <div className="text-[10px] text-slate-400">The bookmaker's own probability once its margin is stripped out.</div>
+              <div className="text-[10px] text-slate-500">The bookmaker's own probability once its margin is stripped out.</div>
             </ModelBlock>
 
             <ModelBlock color={MODEL_COLORS.blend} title="Market-calibrated" pick={pickOf(bundle.blend)} prob={probOf(bundle.blend)}>
@@ -1424,10 +1424,10 @@ export default function MatchupTab({
               {bucketCalOption && (
                 <div>
                   <div ref={bucketCalRef} className="h-32" />
-                  <div className="-mt-1 text-[9px] text-slate-400">Gray bars = sample size (N) per bucket, right-hand scale.</div>
+                  <div className="-mt-1 text-[10px] text-slate-500">Gray bars = sample size (N) per bucket, right-hand scale.</div>
                 </div>
               )}
-              <div className="flex items-center justify-between gap-2 text-[10px] text-slate-400">
+              <div className="flex items-center justify-between gap-2 text-[10px] text-slate-500">
                 <span>
                   {engine.bucketWidened
                     ? `Bucket (${shortBucketRange(engine.bucket)}) was thin (N below ${MIN_N_BUCKET}), so history pooled in ±${engine.bucketHalfWidthPts}pt of nearby spreads.`
@@ -1463,7 +1463,7 @@ export default function MatchupTab({
                   );
                 })()}
               </div>
-              <div className="text-[10px] text-slate-400">Mostly bucket history, plus a {Math.round((1 - MARKET_BUCKET_W) * 100)}% dose of two signals ML Fair doesn't see: the spread's own vig lean and each team's recent against-the-spread trend.</div>
+              <div className="text-[10px] text-slate-500">Mostly bucket history, plus a {Math.round((1 - MARKET_BUCKET_W) * 100)}% dose of two signals ML Fair doesn't see: the spread's own vig lean and each team's recent against-the-spread trend.</div>
               {(engine.nBucket < MIN_N_BUCKET || engine.risks.length > 0) && (
                 <div className="text-[10px] text-amber-700">{engine.risks.join(" ") || `Low-N bucket (N=${engine.nBucket}).`}</div>
               )}
@@ -1490,7 +1490,7 @@ export default function MatchupTab({
                       {predictedMargin == null ? "—" : fmtSigned(-predictedMargin)}
                     </span>
                   </span>
-                  <span className="flex-1 truncate text-center text-[9px] font-medium uppercase tracking-wider text-slate-400">predicted margin</span>
+                  <span className="flex-1 truncate text-center text-[10px] font-medium uppercase tracking-wider text-slate-500">predicted margin</span>
                   <span className="flex shrink-0 items-baseline gap-1.5">
                     <span className="text-sm font-bold tabular-nums" style={{ color: meta.get(home)?.color ?? MODEL_COLORS.predictive }}>
                       {predictedMargin == null ? "—" : fmtSigned(predictedMargin)}
@@ -1501,7 +1501,7 @@ export default function MatchupTab({
                 </button>
                 {predTop5.length > 0 ? (
                   <>
-                    <div className="pt-0.5 text-[9px] font-medium uppercase tracking-wider text-slate-400">Biggest movers for this game (margin points)</div>
+                    <div className="pt-0.5 text-[10px] font-medium uppercase tracking-wider text-slate-500">Biggest movers for this game (margin points)</div>
                     {predTop5.map((r) => (
                       <ContribRow
                         key={r.feature}
@@ -1515,9 +1515,9 @@ export default function MatchupTab({
                     ))}
                   </>
                 ) : (
-                  <div className="text-[10px] italic text-slate-400">No variable breakdown available for this game.</div>
+                  <div className="text-[10px] italic text-slate-500">No variable breakdown available for this game.</div>
                 )}
-                <div className="text-[10px] text-slate-400">
+                <div className="text-[10px] text-slate-500">
                   Linear regression on pre-game stats predicts the scoring margin — the +/− values above are points of that margin.
                   {bundle.predictive[1] != null && !predWindowFull && (
                     <> {"* "}fewer than 3 prior played weeks for at least one team this season — the model's rolling-window inputs (L3 points margin, EPA, success rate, etc.) average over however many games have been played so far instead of the intended 3.</>
@@ -1562,7 +1562,7 @@ export default function MatchupTab({
                     />
                   ))}
                 </div>
-                <div className="mt-3 text-[10px] text-slate-400">
+                <div className="mt-3 text-[10px] text-slate-500">
                   Linear regression on pre-game stats predicts the scoring margin — the +/− values are points of that margin, net of every other factor in the model.{" "}
                   <a href="#/game_analysis/models_guide" className="underline decoration-dotted underline-offset-2 hover:text-slate-600">Model details →</a>
                 </div>
@@ -1580,7 +1580,7 @@ export default function MatchupTab({
                     {keyStats.eloAway == null ? "—" : Math.round(keyStats.eloAway)}
                   </span>
                 </span>
-                <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400">elo</span>
+                <span className="text-[10px] font-medium uppercase tracking-wider text-slate-500">elo</span>
                 <span className="inline-flex items-center gap-1.5">
                   <span className={`text-sm tabular-nums ${keyStats.eloAway != null && keyStats.eloHome != null && keyStats.eloHome > keyStats.eloAway ? "font-bold text-slate-900" : "text-slate-500"}`}>
                     {keyStats.eloHome == null ? "—" : Math.round(keyStats.eloHome)}
@@ -1588,7 +1588,11 @@ export default function MatchupTab({
                   <span className="text-[11px] font-semibold text-slate-500">{home}</span>
                   <span className="inline-block h-2 w-2 rounded-full" style={{ background: meta.get(home)?.color ?? MODEL_COLORS.elo }} />
                 </span>
-                <span className="text-[10px] text-slate-400" title="Home-field advantage baked into the Elo win-probability formula">+48 home</span>
+                {isNeutralSite(selGame) ? (
+                  <span className="text-[10px] text-slate-500" title="Neutral-site game (e.g. international or Super Bowl): no home-field bonus in Elo">neutral site</span>
+                ) : (
+                  <span className="text-[10px] text-slate-500" title="Home-field advantage baked into the Elo win-probability formula">+{ELO_HFA} home</span>
+                )}
               </div>
 
               {/* Both teams' last 17 weeks on one shared Elo-points axis — see how they stack up
@@ -1605,7 +1609,7 @@ export default function MatchupTab({
               />
 
               <ProbBar label="Resulting p(home)" p={bundle.elo[1]} color={MODEL_COLORS.elo} />
-              <div className="text-[10px] text-slate-400">Rolling power rating, last 17 games shown (1505 = average) · dotted line marks a new season · dot color = win/loss.</div>
+              <div className="text-[10px] text-slate-500">Rolling power rating, last 17 games shown (1505 = average) · dotted line marks a new season · dot color = win/loss.</div>
             </ModelBlock>
 
             <ModelBlock color={MODEL_COLORS.pyth} title="Pythagorean" pick={pickOf(bundle.pyth)} prob={probOf(bundle.pyth)}>
@@ -1655,11 +1659,11 @@ export default function MatchupTab({
 
               {/* Small, subtle toggle between this week's game-by-game margin and the running
                   season-to-date total — same underlying data, two ways to read it over time. */}
-              <div className="flex items-center justify-end gap-1 pt-0.5 text-[9px]">
+              <div className="flex items-center justify-end gap-1 pt-0.5 text-[10px]">
                 <button
                   type="button"
                   onClick={() => setPythMode("game")}
-                  className={pythMode === "game" ? "font-semibold text-slate-600" : "text-slate-400 hover:text-slate-500"}
+                  className={pythMode === "game" ? "font-semibold text-slate-600" : "text-slate-500 hover:text-slate-500"}
                 >
                   Per game
                 </button>
@@ -1667,7 +1671,7 @@ export default function MatchupTab({
                 <button
                   type="button"
                   onClick={() => setPythMode("cumulative")}
-                  className={pythMode === "cumulative" ? "font-semibold text-slate-600" : "text-slate-400 hover:text-slate-500"}
+                  className={pythMode === "cumulative" ? "font-semibold text-slate-600" : "text-slate-500 hover:text-slate-500"}
                 >
                   Cumulative
                 </button>
@@ -1687,27 +1691,27 @@ export default function MatchupTab({
                 mode={pythMode}
               />
 
-              <div className="text-[10px] text-slate-400">
+              <div className="text-[10px] text-slate-500">
                 From points scored vs allowed through W{wkPlayed} — each side's expected win% is combined via log5 into the head-to-head probability above.
               </div>
             </ModelBlock>
 
             <ModelBlock color={MODEL_COLORS.trend} title="Trend Edge" pick={pickOf(bundle.trend)} prob={probOf(bundle.trend)}>
               {trendEdge.pAway == null ? (
-                <div className="flex h-40 items-center justify-center text-[10px] italic text-slate-400">Not enough recent-form data yet</div>
+                <div className="flex h-40 items-center justify-center text-[10px] italic text-slate-500">Not enough recent-form data yet</div>
               ) : (
                 <div ref={edgeRef} className="h-40 min-w-0" />
               )}
-              <div className="text-[10px] text-slate-400">Weighted recent-form differences (away − home): grade, last-6 margin, EPA, win rate, turnovers. Hover the bars.</div>
+              <div className="text-[10px] text-slate-500">Weighted recent-form differences (away − home): grade, last-6 margin, EPA, win rate, turnovers. Hover the bars.</div>
             </ModelBlock>
           </div>
         </div>
       )}
       {!predictiveUnavailable && (
-        <p className="text-[11px] text-slate-400">{predictiveDisclaimer(predictiveCoverage ?? null)}</p>
+        <p className="text-[11px] text-slate-500">{predictiveDisclaimer(predictiveCoverage ?? null)}</p>
       )}
       {predictiveUnavailable && (
-        <p className="text-[11px] text-slate-400">⚠ Predictive model: data unavailable this session — excluded from the model list and Average above.</p>
+        <p className="text-[11px] text-slate-500">⚠ Predictive model: data unavailable this session — excluded from the model list and Average above.</p>
       )}
 
       {/* Additional stats — stat comparison + history */}
@@ -1734,14 +1738,14 @@ export default function MatchupTab({
             <div ref={leftTrendRef} className="h-44" />
           </div>
           <div className="flex w-full flex-col justify-center lg:w-52">
-            <div className="mb-1 text-center text-[10px] font-medium uppercase tracking-wider text-slate-400">League rank — bigger side = better</div>
+            <div className="mb-1 text-center text-[10px] font-medium uppercase tracking-wider text-slate-500">League rank — bigger side = better</div>
             {rankBar ? (
               <div className="flex h-7 overflow-hidden rounded-full ring-1 ring-inset ring-black/5">
                 <div className="grid place-items-center text-xs font-bold text-white" style={{ width: `${rankBar.w1 * 100}%`, background: meta.get(away)?.color ?? "#d62728" }}>#{Math.round(rankBar.n1)}</div>
                 <div className="grid place-items-center text-xs font-bold text-white" style={{ width: `${(1 - rankBar.w1) * 100}%`, background: meta.get(home)?.color ?? "#1f77b4" }}>#{Math.round(rankBar.n2)}</div>
               </div>
             ) : (
-              <div className="text-center text-sm text-slate-400">N/A</div>
+              <div className="text-center text-sm text-slate-500">N/A</div>
             )}
           </div>
           <div className="min-w-0 flex-1">
@@ -1757,7 +1761,7 @@ export default function MatchupTab({
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="mb-3 text-sm font-semibold text-slate-700">
-            Recent form — last 3 games <span className="font-normal text-slate-400">(@ = away game)</span>
+            Recent form — last 3 games <span className="font-normal text-slate-500">(@ = away game)</span>
           </div>
           <div className="divide-y divide-slate-100">
             {[away, home].map((t) => (
@@ -1766,7 +1770,7 @@ export default function MatchupTab({
               </div>
             ))}
           </div>
-          <div className="mt-2 text-[10px] text-slate-400">
+          <div className="mt-2 text-[10px] text-slate-500">
             Most recent first. Bold = side that won the stat; red Agst = opponent out-gained/out-scored them. TO = turnover margin, EPA = EPA differential.
           </div>
         </div>
@@ -1774,9 +1778,9 @@ export default function MatchupTab({
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
             <div className="text-sm font-semibold text-slate-700">
-              Head-to-head <span className="font-normal text-slate-400">(since 2015 — dataset start)</span>
+              Head-to-head <span className="font-normal text-slate-500">(since 2015 — dataset start)</span>
             </div>
-            {h2h && <div className="text-[11px] text-slate-400">First {h2h.first} · last {h2h.last}</div>}
+            {h2h && <div className="text-[11px] text-slate-500">First {h2h.first} · last {h2h.last}</div>}
           </div>
           {h2h && (
             <>
@@ -1785,14 +1789,14 @@ export default function MatchupTab({
                   <div key={t} className={`flex items-center gap-2 ${i === 1 ? "flex-row-reverse" : ""}`}>
                     {meta.get(t)?.logo && <img src={meta.get(t)!.logo} alt={t} className="h-8" loading="lazy" decoding="async" />}
                     <span className="text-2xl font-extrabold tabular-nums" style={{ color: meta.get(t)?.color }}>{wcount}</span>
-                    {i === 0 && <span className="text-sm font-light text-slate-400">–</span>}
+                    {i === 0 && <span className="text-sm font-light text-slate-500">–</span>}
                   </div>
                 ))}
-                {h2h.ties > 0 && <span className="text-xs text-slate-400">({h2h.ties} ties)</span>}
+                {h2h.ties > 0 && <span className="text-xs text-slate-500">({h2h.ties} ties)</span>}
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
-                  <thead className="bg-slate-50 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                  <thead className="bg-slate-50 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-500">
                     <tr>{["Season", "Wk", "Date", "Score", "Winner"].map((h) => <th key={h} className="px-2 py-1.5">{h}</th>)}</tr>
                   </thead>
                   <tbody>

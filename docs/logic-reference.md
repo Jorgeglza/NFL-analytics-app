@@ -117,6 +117,22 @@ math — reused as-is from §5's engine).
 - Calibration reuses the same fixed-width-bin/`(lo, hi]` reliability-diagram convention as
   `pages/predictive-model/shared.ts`'s `reliabilityBuckets()`, generalized from `home_win_prob` to
   any sub-model's bundle probability.
+- As-of market history (2026-11-12, audit M1): the backtest does NOT use `buildHist(schedule)`.
+  It walks REG games in (season, week) order and grows a `HistAgg` with `addGameToHist()` only
+  after each week is scored, so Market-calibrated's bucket rates use strictly earlier games (the
+  live pages' "exclude own week" rule leaked later seasons into a backtest). Trend Edge's grades
+  still come from all-season Random Forests (parity) — disclosed on the Methodology tab.
+
+## 6a. Elo / playoff simulation details (new analytics, 2026-11-12 audit fixes)
+- Neutral sites (M3): schedule `location === "Neutral"` ⇒ no +48 home bonus, in `eloPHome`, the
+  rating update's MOV dampener, Power Rankings' per-game Elo detail and the playoff sim.
+- Playoff sim randomness (M2): seeded `mulberry32`, default seed `season*100 + throughWeek`
+  (99 for "full season") — identical inputs give identical odds.
+- Playoff tiebreak (M4): rank by win%, then each tied group by per-team keys computed within the
+  group — head-to-head win% vs the other tied teams, conference win%, point diff, abbreviation.
+  Key-based ⇒ always transitive (the old pairwise comparator could cycle in a 3-way tie).
+- Kickoff times (B9): nflverse `gametime` is US Eastern; `lib/logic/kickoff.ts` converts to the
+  real instant and the UI shows it in the viewer's timezone with its abbreviation.
 
 ## 7. Player pages
 - Hit rate: `count(value ≥ line)/count(non-null) ·100`. Parlay: `P=∏pᵢ`, odds `=1/P`.

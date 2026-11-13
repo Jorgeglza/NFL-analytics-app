@@ -4,6 +4,7 @@
 // (~260px of chrome before any content, at 4 stacked full-width cards) are
 // replaced by a horizontally-scrollable compact pill strip; the original
 // card grid is kept at `sm+`.
+import type { KeyboardEvent } from "react";
 import { Link } from "react-router-dom";
 
 export function TabBar<T extends string>({
@@ -27,13 +28,28 @@ export function TabBar<T extends string>({
 }) {
   // `key` is passed directly in JSX below, not via these spread objects —
   // React warns when a spread props object contains `key` (audit B8).
+  // Tab semantics (audit A5): role="tab" + aria-selected, and ←/→/Home/End
+  // move between tabs within the strip.
+  const a11y = (t: T) => ({ role: "tab", "aria-selected": active === t });
+  const onListKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key)) return;
+    const items = [...e.currentTarget.querySelectorAll<HTMLElement>('[role="tab"]')];
+    const i = items.indexOf(document.activeElement as HTMLElement);
+    if (i < 0) return;
+    e.preventDefault();
+    const next = e.key === "Home" ? 0 : e.key === "End" ? items.length - 1 : (i + (e.key === "ArrowRight" ? 1 : -1) + items.length) % items.length;
+    items[next].focus();
+    items[next].click();
+  };
   const compactProps = (t: T) => ({
+    ...a11y(t),
     onClick: () => onChange(t),
     className: `flex h-11 shrink-0 snap-start items-center gap-1.5 whitespace-nowrap rounded-full border px-4 text-sm font-bold transition-colors ${
       active === t ? "border-[#002f6c] bg-[#002f6c] text-white" : "border-slate-200 bg-white text-slate-700"
     }`,
   });
   const cardProps = (t: T) => ({
+    ...a11y(t),
     onClick: () => onChange(t),
     className: `rounded-2xl border px-4 py-2.5 text-left shadow-sm transition-all ${
       active === t ? "border-[#002f6c] bg-[#002f6c] text-white" : "border-slate-200 bg-white text-slate-700 hover:border-[#002f6c]/40"
@@ -41,7 +57,7 @@ export function TabBar<T extends string>({
   });
   return (
     <>
-      <div className="-mx-1 flex snap-x snap-mandatory gap-2 overflow-x-auto px-1 pb-1 sm:hidden">
+      <div role="tablist" onKeyDown={onListKeyDown} className="-mx-1 flex snap-x snap-mandatory gap-2 overflow-x-auto px-1 pb-1 sm:hidden">
         {tabs.map(([t, icon]) =>
           hrefFor ? (
             <Link key={t} to={hrefFor(t)} {...compactProps(t)}>
@@ -56,7 +72,7 @@ export function TabBar<T extends string>({
           ),
         )}
       </div>
-      <div className={`hidden gap-2 sm:grid ${gridClassName}`}>
+      <div role="tablist" onKeyDown={onListKeyDown} className={`hidden gap-2 sm:grid ${gridClassName}`}>
         {tabs.map(([t, icon, desc]) =>
           hrefFor ? (
             <Link key={t} to={hrefFor(t)} {...cardProps(t)}>
@@ -64,7 +80,7 @@ export function TabBar<T extends string>({
                 <span>{icon}</span>
                 {t}
               </div>
-              <div className={`mt-0.5 text-[11px] ${active === t ? "text-white/75" : "text-slate-400"}`}>{desc}</div>
+              <div className={`mt-0.5 text-[11px] ${active === t ? "text-white/75" : "text-slate-500"}`}>{desc}</div>
             </Link>
           ) : (
             <button key={t} type="button" {...cardProps(t)}>
@@ -72,7 +88,7 @@ export function TabBar<T extends string>({
                 <span>{icon}</span>
                 {t}
               </div>
-              <div className={`mt-0.5 text-[11px] ${active === t ? "text-white/75" : "text-slate-400"}`}>{desc}</div>
+              <div className={`mt-0.5 text-[11px] ${active === t ? "text-white/75" : "text-slate-500"}`}>{desc}</div>
             </button>
           ),
         )}

@@ -78,10 +78,10 @@ export default function CalibrationTab({
       </FilterGroup>
 
       <Card title={`Reliability diagram — ${label}`} subtitle="Each point is a bin of predicted home-win probability. On the dashed line = perfectly calibrated (dot size = sample size).">
-        {option ? <div ref={ref} className="h-[420px]" /> : <div className="grid h-[420px] place-items-center text-sm text-slate-400">No graded games for this model.</div>}
+        {option ? <div ref={ref} className="h-[420px]" /> : <div className="grid h-[420px] place-items-center text-sm text-slate-500">No graded games for this model.</div>}
       </Card>
 
-      <p className="text-[11px] text-slate-400">
+      <p className="text-[11px] text-slate-500">
         Calibration is a different question from profitability — a model can be well-calibrated and still lose money to the vig (the market's
         own price is, by construction, close to well-calibrated too). Profitability needs the model's probability to beat the market's, not
         just match reality.

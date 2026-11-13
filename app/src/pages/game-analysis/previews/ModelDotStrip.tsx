@@ -3,8 +3,10 @@
 // correctness. Originally built inline in WeekPreviewTab.tsx; extracted so
 // other pages (the Pick'em "This Week" view) can reuse the exact same
 // component instead of duplicating it.
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
+import { createPortal } from "react-dom";
 import { MODEL_KEYS, MODEL_COLORS, type MetricKey, type ProbBundle, pickWinner } from "./engine";
+import { useCoarsePointer } from "../../../lib/hooks/useCoarsePointer";
 
 /** Anchored detail popover for one model's dot — tap/click target, since a
  * bare `title` attribute never fires on touch. Mirrors InfoDot.tsx's
@@ -50,6 +52,60 @@ function DotPopover({ pH, label, color, away, home, actual }: { pH: number; labe
   );
 }
 
+/** Touch version: every model in one list (audit A1 — the 24px dots overlap
+ * whenever models agree, so they can't be tapped one by one on a phone). */
+function AllModelsPopover({
+  bundle,
+  away,
+  home,
+  actual,
+  anchor,
+  popRef,
+}: {
+  bundle: ProbBundle;
+  away: string;
+  home: string;
+  actual: "home" | "away" | null;
+  anchor: DOMRect;
+  popRef: RefObject<HTMLDivElement>;
+}) {
+  const rows = MODEL_KEYS.map(([k, lbl]) => ({ k, lbl, pH: bundle[k][1] })).filter((r): r is { k: MetricKey; lbl: string; pH: number } => r.pH != null);
+  // Portaled + fixed: game cards lift on hover (a transform → their own
+  // stacking context), so an in-card absolute popover gets painted over by
+  // the NEXT card regardless of z-index.
+  const below = anchor.bottom + 230 < window.innerHeight;
+  return createPortal(
+    <div
+      ref={popRef}
+      role="dialog"
+      aria-label="All model predictions"
+      // React bubbles portal events through the component tree — keep taps
+      // here from reaching the game card's own onClick (navigation).
+      onClick={(e) => e.stopPropagation()}
+      className="fixed z-50 rounded-xl border border-slate-200 bg-white p-2.5 text-left text-xs font-normal normal-case leading-snug text-slate-600 shadow-lg"
+      style={{ left: anchor.left, width: anchor.width, ...(below ? { top: anchor.bottom + 14 } : { bottom: window.innerHeight - anchor.top + 8 }) }}
+    >
+      {rows.map(({ k, lbl, pH }) => {
+        const side = pickWinner([1 - pH, pH]);
+        const pick = side === "home" ? home : away;
+        const p = Math.round(100 * (side === "home" ? pH : 1 - pH));
+        const correct = actual != null ? side === actual : null;
+        return (
+          <span key={k} className="flex items-center gap-2 py-0.5">
+            <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: MODEL_COLORS[k] }} />
+            <span className="min-w-0 flex-1 truncate">{lbl}</span>
+            <span className="font-semibold tabular-nums text-slate-800">
+              {pick} {p}%
+            </span>
+            {correct != null && <span className={correct ? "text-emerald-700" : "text-rose-700"}>{correct ? "✓" : "✗"}</span>}
+          </span>
+        );
+      })}
+    </div>,
+    document.body,
+  );
+}
+
 /** How long a tap-opened dot popover stays up before auto-dismissing, on
  * top of closing early via an outside click/tap or Escape. */
 const DOT_TAP_AUTOCLOSE_MS = 2500;
@@ -78,7 +134,33 @@ export function ModelDotStrip({
   type Key = MetricKey | "consensus";
   const [openKey, setOpenKey] = useState<Key | null>(null); // tap-opened, auto-dismisses
   const [hoverKey, setHoverKey] = useState<Key | null>(null); // shown transiently by hover/focus
+  const [allOpen, setAllOpen] = useState<DOMRect | null>(null); // touch: the whole-strip list, anchored at this rect
+  const coarse = useCoarsePointer();
   const rootRef = useRef<HTMLDivElement>(null);
+  const popRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!allOpen) return;
+    const onOutside = (e: MouseEvent | TouchEvent) => {
+      const t = e.target as Node;
+      if (rootRef.current?.contains(t) || popRef.current?.contains(t)) return;
+      setAllOpen(null);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setAllOpen(null);
+    };
+    const onScroll = () => setAllOpen(null); // fixed-position: don't float away from the strip
+    document.addEventListener("click", onOutside);
+    document.addEventListener("touchstart", onOutside);
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("scroll", onScroll, true);
+    return () => {
+      document.removeEventListener("click", onOutside);
+      document.removeEventListener("touchstart", onOutside);
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("scroll", onScroll, true);
+    };
+  }, [allOpen]);
 
   useEffect(() => {
     if (!openKey) return;
@@ -112,9 +194,29 @@ export function ModelDotStrip({
   });
 
   return (
-    <div ref={rootRef} className="relative mt-2 h-5 rounded-full bg-slate-100" title="Each dot = one model's home-win probability. Hover or tap a dot for details. Spread-out dots = the models disagree.">
+    <div
+      ref={rootRef}
+      data-no-touch-title
+      className={`relative mt-2 h-5 rounded-full bg-slate-100 ${coarse ? "[&>button[data-dot]]:pointer-events-none" : ""}`}
+      title="Each dot = one model's home-win probability. Hover or tap a dot for details. Spread-out dots = the models disagree."
+    >
+      {coarse && (
+        // Touch: one ≥44px-tall target over the whole strip; dots below become
+        // display-only (pointer-events-none via data-dot).
+        <button
+          type="button"
+          aria-label="Show every model's prediction"
+          aria-expanded={allOpen != null}
+          onClick={(e) => {
+            e.stopPropagation();
+            setAllOpen((v) => (v ? null : rootRef.current?.getBoundingClientRect() ?? null));
+          }}
+          className="absolute inset-x-0 -inset-y-3 z-[42] rounded-full"
+        />
+      )}
+      {coarse && allOpen && <AllModelsPopover bundle={bundle} away={away} home={home} actual={actual} anchor={allOpen} popRef={popRef} />}
       <div className="absolute inset-y-0 left-1/2 w-px bg-slate-300" />
-      <span className="absolute -top-0.5 left-1/2 -translate-x-1/2 text-[8px] text-slate-400">50%</span>
+      <span className="absolute -top-0.5 left-1/2 -translate-x-1/2 text-[10px] text-slate-500">50%</span>
       {MODEL_KEYS.filter(([k]) => k !== "consensus").map(([k, lbl], i) => {
         const pH = bundle[k][1];
         if (pH == null) return null;
@@ -123,6 +225,8 @@ export function ModelDotStrip({
           <button
             key={k}
             type="button"
+            data-dot
+            tabIndex={coarse ? -1 : undefined}
             aria-label={`${lbl} details`}
             aria-expanded={visible}
             {...dotHandlers(k)}
@@ -146,6 +250,8 @@ export function ModelDotStrip({
       {bundle.consensus[1] != null && (
         <button
           type="button"
+          data-dot
+          tabIndex={coarse ? -1 : undefined}
           aria-label="Average details"
           aria-expanded={openKey === "consensus" || hoverKey === "consensus"}
           {...dotHandlers("consensus")}
@@ -160,8 +266,8 @@ export function ModelDotStrip({
       )}
       {showEndLabels && (
         <>
-          <span className="absolute -bottom-3.5 left-0 text-[8px] text-slate-400">← {away}</span>
-          <span className="absolute -bottom-3.5 right-0 text-[8px] text-slate-400">{home} →</span>
+          <span className="absolute -bottom-3.5 left-0 text-[10px] text-slate-500">← {away}</span>
+          <span className="absolute -bottom-3.5 right-0 text-[10px] text-slate-500">{home} →</span>
         </>
       )}
     </div>

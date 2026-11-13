@@ -182,7 +182,7 @@ export default function WeeklyTab({
             ["Min / Max", `${stats.min.toFixed(1)} / ${stats.max.toFixed(1)}`],
           ].map(([l, v]) => (
             <div key={l} className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-              <div className="text-[11px] font-medium uppercase tracking-wider text-slate-400">{l}</div>
+              <div className="text-[11px] font-medium uppercase tracking-wider text-slate-500">{l}</div>
               <div className="text-xl font-bold text-slate-900">{v}</div>
             </div>
           ))}
@@ -213,7 +213,7 @@ export default function WeeklyTab({
         {onSelectTeam && <p className="mb-2 text-xs text-slate-500">Click a team to see what's driving its grade →</p>}
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
-            <thead className="bg-slate-50 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+            <thead className="bg-slate-50 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
               <tr>
                 <th className="px-3 py-2">Team</th>
                 <th className="px-3 py-2 text-right">Grade</th>

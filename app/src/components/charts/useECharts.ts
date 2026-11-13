@@ -56,11 +56,19 @@ function normalizeLayer(layer: OptionLike) {
 function normalizeOption(option: echarts.EChartsOption): echarts.EChartsOption {
   const opt = option as OptionLike;
   normalizeLayer(opt);
-  if (opt.baseOption && typeof opt.baseOption === "object") {
-    normalizeLayer(opt.baseOption as OptionLike);
-  }
+  const root = opt.baseOption && typeof opt.baseOption === "object" ? (opt.baseOption as OptionLike) : opt;
+  if (root !== opt) normalizeLayer(root);
+  // Screen readers (audit A5): ECharts' built-in aria module writes a generated
+  // text description of the chart (type, series, data range) as the container's
+  // aria-label. Decal patterns stay off so the look is unchanged.
+  if (root.aria === undefined) root.aria = { enabled: true, decal: { show: false } };
+  // Reduced motion (audit A5): no entry/update animations.
+  if (root.animation === undefined && prefersReducedMotion()) root.animation = false;
   return option;
 }
+
+const prefersReducedMotion = () =>
+  typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
 
 /**
  * Mounts an ECharts instance on the returned callback ref, applies options,
@@ -95,33 +103,44 @@ export function useECharts(
 
   const ref = useCallback((node: HTMLDivElement | null) => {
     if (node) {
-      const chart = echarts.init(node);
-      chartRef.current = chart;
-      if (optionRef.current) chart.setOption(normalizeOption(optionRef.current), true);
-      onInitRef.current?.(chart);
-      // The node can attach before flex layout settles (width 0) and some
-      // environments never deliver the initial ResizeObserver tick — re-measure
-      // on the next frame so the chart always picks up its real size.
-      requestAnimationFrame(() => {
-        if (chartRef.current === chart) chart.resize();
+      // Init only once the container has a real size (audit A6): a node that
+      // attaches before layout settles (hidden tab, unmeasured flex child)
+      // made echarts.init warn "Can't get DOM width or height" and draw at 0×0
+      // until a later resize. Until then, the ResizeObserver/rAF below retry.
+      const init = () => {
+        if (chartRef.current || !node.isConnected || !node.clientWidth || !node.clientHeight) return;
+        const chart = echarts.init(node);
+        chartRef.current = chart;
+        if (optionRef.current) chart.setOption(normalizeOption(optionRef.current), true);
+        onInitRef.current?.(chart);
+        // Some environments never deliver the initial ResizeObserver tick —
+        // re-measure on the next frame so the chart always picks up its real size.
+        requestAnimationFrame(() => {
+          if (chartRef.current === chart) chart.resize();
+        });
+
+        // Touch devices have no "mouse left" analog: ECharts' default tooltip
+        // triggering leaves a tapped tooltip stuck on screen until another
+        // data point is tapped. Hide it on (a) a tap on empty chart canvas and
+        // (b) a tap anywhere outside the chart entirely.
+        const hideTip = () => chart.dispatchAction({ type: "hideTip" });
+        chart.getZr().on("click", (e: { target?: unknown }) => {
+          if (!e.target) hideTip();
+        });
+        const onDocumentTouch = (e: TouchEvent) => {
+          if (!node.contains(e.target as Node)) hideTip();
+        };
+        document.addEventListener("touchstart", onDocumentTouch, { passive: true });
+        touchCleanupRef.current = () => document.removeEventListener("touchstart", onDocumentTouch);
+      };
+      const ro = new ResizeObserver(() => {
+        if (chartRef.current) chartRef.current.resize();
+        else init();
       });
-      const ro = new ResizeObserver(() => chart.resize());
       ro.observe(node);
       roRef.current = ro;
-
-      // Touch devices have no "mouse left" analog: ECharts' default tooltip
-      // triggering leaves a tapped tooltip stuck on screen until another
-      // data point is tapped. Hide it on (a) a tap on empty chart canvas and
-      // (b) a tap anywhere outside the chart entirely.
-      const hideTip = () => chart.dispatchAction({ type: "hideTip" });
-      chart.getZr().on("click", (e: { target?: unknown }) => {
-        if (!e.target) hideTip();
-      });
-      const onDocumentTouch = (e: TouchEvent) => {
-        if (!node.contains(e.target as Node)) hideTip();
-      };
-      document.addEventListener("touchstart", onDocumentTouch, { passive: true });
-      touchCleanupRef.current = () => document.removeEventListener("touchstart", onDocumentTouch);
+      init();
+      requestAnimationFrame(init);
     } else {
       roRef.current?.disconnect();
       roRef.current = null;

@@ -175,7 +175,7 @@ export default function FeaturesTab({ importance }: { importance: Row[] }) {
               ))}
               {!filtered.length && (
                 <tr>
-                  <td colSpan={4} className="px-3 py-6 text-center text-slate-400">No stats match "{search}".</td>
+                  <td colSpan={4} className="px-3 py-6 text-center text-slate-500">No stats match "{search}".</td>
                 </tr>
               )}
             </tbody>

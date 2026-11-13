@@ -15,7 +15,7 @@ export function TeamLogoLink({ to, logo, alt, imgClassName, title, onClick }: Te
       to={to}
       title={title}
       onClick={onClick}
-      className="inline-block rounded-sm transition-opacity duration-150 hover:opacity-80 focus-visible:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#002f6c]/40"
+      className="tap-expand relative inline-block rounded-sm transition-opacity duration-150 hover:opacity-80 focus-visible:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#002f6c]/40"
     >
       <img src={logo} alt={alt} className={imgClassName} loading="lazy" decoding="async" />
     </Link>

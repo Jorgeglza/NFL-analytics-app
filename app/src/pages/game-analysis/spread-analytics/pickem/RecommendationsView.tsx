@@ -14,6 +14,7 @@ import {
   type Row,
 } from "../../../../lib/data/loader";
 import { currentWeek, isUpcomingStale } from "../../../../lib/logic/defaultWeek";
+import { formatKickoff } from "../../../../lib/logic/kickoff";
 import { toGame, bucketOf, historicFavRate, type Game } from "../../../../lib/logic/spreadPicks";
 import { WIN_TYPE_COLORS } from "../../../../lib/logic/winType";
 import { getTeamMetaMap, type TeamMeta } from "../../../../lib/team/meta";
@@ -72,7 +73,7 @@ function SpreadStrip({ games, threshold }: { games: SpreadPoint[]; threshold: nu
 
   return (
     <div className="flex flex-col gap-1">
-      <span className="text-[11px] font-medium uppercase tracking-wider text-slate-400">This week&apos;s spreads</span>
+      <span className="text-[11px] font-medium uppercase tracking-wider text-slate-500">This week&apos;s spreads</span>
       <svg width={W} height={H} className="overflow-visible">
         <line x1={5} y1={H / 2} x2={W - 5} y2={H / 2} stroke="#e2e8f0" strokeWidth={1} />
         {groups.map((g) => (
@@ -100,7 +101,7 @@ function SpreadStrip({ games, threshold }: { games: SpreadPoint[]; threshold: nu
               <span className="font-semibold text-slate-700">
                 {g.awayTeam} @ {g.homeTeam}
               </span>{" "}
-              <span className="text-slate-400">
+              <span className="text-slate-500">
                 &middot; {g.spread > 0 ? "+" : ""}
                 {g.spread} &middot;{" "}
                 {g.favorite ? (
@@ -115,7 +116,7 @@ function SpreadStrip({ games, threshold }: { games: SpreadPoint[]; threshold: nu
           ))}
         </FloatingTooltip>
       )}
-      <span className="text-[10px] text-slate-400">
+      <span className="text-[10px] text-slate-500">
         {min.toFixed(1)}–{maxSpread.toFixed(1)} pts &middot; line marks the {threshold}pt threshold
       </span>
     </div>
@@ -133,13 +134,13 @@ function TeamPair({ away, home, season, week, meta }: { away: string; home: stri
       {awayLogo ? (
         <TeamLogoLink to={to} logo={awayLogo} alt={away} imgClassName="h-10 w-10 object-contain sm:h-8 sm:w-8" title={`Compare ${away} vs ${home}`} />
       ) : (
-        <span className="text-xs font-bold text-slate-400">{away}</span>
+        <span className="text-xs font-bold text-slate-500">{away}</span>
       )}
       <span className="text-[10px] text-slate-300">@</span>
       {homeLogo ? (
         <TeamLogoLink to={to} logo={homeLogo} alt={home} imgClassName="h-10 w-10 object-contain sm:h-8 sm:w-8" title={`Compare ${away} vs ${home}`} />
       ) : (
-        <span className="text-xs font-bold text-slate-400">{home}</span>
+        <span className="text-xs font-bold text-slate-500">{home}</span>
       )}
     </div>
   );
@@ -334,7 +335,7 @@ export default function RecommendationsView() {
                       <div className="flex flex-col items-center gap-2 text-center sm:flex-row sm:items-center sm:gap-3 sm:text-left">
                         <TeamPair away={g.awayTeam} home={g.homeTeam} season={season} week={week} meta={teamMeta} />
                         <div>
-                          <div className="text-xs font-medium uppercase tracking-wider text-slate-400">
+                          <div className="text-xs font-medium uppercase tracking-wider text-slate-500">
                             {g.awayTeam} @ {g.homeTeam} &middot; spread {g.spread > 0 ? "+" : ""}
                             {g.spread}
                           </div>
@@ -351,7 +352,7 @@ export default function RecommendationsView() {
                           <div className="flex items-center gap-1.5 sm:justify-end">
                             <span>Model win prob: {Math.round(modelProb * 100)}%</span>
                             <span
-                              className="rounded-full px-1.5 py-0.5 text-[9px] font-bold text-white"
+                              className="rounded-full px-1.5 py-0.5 text-[10px] font-bold text-white"
                               style={{ background: favColor }}
                               title={`Favors ${favTeam}`}
                             >
@@ -363,7 +364,7 @@ export default function RecommendationsView() {
                           <div className="flex items-center gap-1.5 sm:justify-end">
                             <span>Market fair: {Math.round((g.favorite === "home" ? Number(u.market_home_fair) : 1 - Number(u.market_home_fair)) * 100)}%</span>
                             <span
-                              className="rounded-full px-1.5 py-0.5 text-[9px] font-bold text-white"
+                              className="rounded-full px-1.5 py-0.5 text-[10px] font-bold text-white"
                               style={{ background: favColor }}
                               title={`Favors ${favTeam}`}
                             >
@@ -389,7 +390,7 @@ export default function RecommendationsView() {
               const divGame = raw?.div_game != null ? Number(raw.div_game) === 1 : null;
               const roof = raw?.roof != null ? String(raw.roof) : null;
               const totalLine = raw?.total_line != null ? Number(raw.total_line) : null;
-              const kickoff = raw?.weekday != null && raw?.gametime != null ? `${raw.weekday}, ${raw.gameday} · ${raw.gametime}` : null;
+              const kickoff = raw?.gameday != null && raw?.gametime != null ? formatKickoff(raw.gameday, raw.gametime) : null;
 
               const awayForm = recentForm(games, g.awayTeam, Number(season), Number(week));
               const homeForm = recentForm(games, g.homeTeam, Number(season), Number(week));
@@ -403,7 +404,7 @@ export default function RecommendationsView() {
                       <div className="flex flex-col items-center gap-2 text-center sm:flex-row sm:items-center sm:gap-3 sm:text-left">
                         <TeamPair away={g.awayTeam} home={g.homeTeam} season={season} week={week} meta={teamMeta} />
                         <div>
-                          <div className="text-xs font-medium uppercase tracking-wider text-slate-400">
+                          <div className="text-xs font-medium uppercase tracking-wider text-slate-500">
                             {g.awayTeam} @ {g.homeTeam} &middot; spread {g.spread > 0 ? "+" : ""}
                             {g.spread}
                           </div>
@@ -460,7 +461,7 @@ export default function RecommendationsView() {
                             { team: g.homeTeam, form: homeForm, rank: homeRank },
                           ].map(({ team, form, rank }) => (
                             <div key={team}>
-                              <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{team}</div>
+                              <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{team}</div>
                               <div className="mt-0.5 font-semibold text-slate-700">
                                 Last {form.results.length || 0}: {form.results.length ? form.record : "—"}
                               </div>
@@ -487,7 +488,7 @@ export default function RecommendationsView() {
                         </div>
                         {(kickoff || totalLine != null) && (
                           <div>
-                            <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Game info</div>
+                            <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Game info</div>
                             <div className="mt-0.5 text-slate-600">
                               {kickoff}
                               {kickoff && totalLine != null && " · "}
@@ -496,7 +497,7 @@ export default function RecommendationsView() {
                           </div>
                         )}
                         <div>
-                          <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Worth a human look, not a model</div>
+                          <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Worth a human look, not a model</div>
                           <ul className="mt-1 list-disc space-y-1 pl-4 text-slate-500">
                             {CHECKLIST_REMINDERS.map((r) => (
                               <li key={r}>{r}</li>

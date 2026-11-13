@@ -137,6 +137,6 @@ export default function HeatmapChart({ data, meta }: { data: HeatmapData; meta: 
 
   const ref = useECharts(option);
 
-  if (!option) return <div className="py-8 text-center text-sm text-slate-400">No schedule data yet.</div>;
+  if (!option) return <div className="py-8 text-center text-sm text-slate-500">No schedule data yet.</div>;
   return <div ref={ref} style={{ height: Math.max(320, rowChartH(data.rows.length)) }} />;
 }

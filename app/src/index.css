@@ -61,6 +61,32 @@ body {
   }
 }
 
+/* Touch-only hit-area expander (audit A1): small visual controls (info dots,
+   inline text links, compact chips) keep their look but get a ~44px target on
+   coarse pointers via an invisible ::after. The element must be positioned
+   (`relative` or `absolute`); use only where neighbours aren't within ~10px. */
+@media (pointer: coarse) {
+  .tap-expand::after {
+    content: "";
+    position: absolute;
+    inset: -10px;
+  }
+}
+
+/* Reduced motion (audit A5): drop transitions/animations and the hover lift
+   for users who ask the OS for less motion. ECharts animation is turned off
+   separately in useECharts' normalizeOption(). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 /* Safe-area padding utilities for notches/home-indicator bars. */
 .safe-bottom {
   padding-bottom: env(safe-area-inset-bottom);

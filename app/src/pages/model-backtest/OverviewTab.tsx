@@ -104,10 +104,10 @@ export default function OverviewTab({
       </div>
 
       <Card title="Cumulative profit over time" subtitle={`Running total for ${label}, one point per graded bet in chronological order.`}>
-        {option ? <div ref={ref} className="h-[360px]" /> : <div className="grid h-[360px] place-items-center text-sm text-slate-400">No graded bets for this model yet.</div>}
+        {option ? <div ref={ref} className="h-[360px]" /> : <div className="grid h-[360px] place-items-center text-sm text-slate-500">No graded bets for this model yet.</div>}
       </Card>
 
-      <p className="text-[11px] text-slate-400">
+      <p className="text-[11px] text-slate-500">
         Betting straight-up against real moneyline odds is a harder bar than straight-up accuracy — a model can win most of its picks and
         still lose money if it's mostly picking short-priced favorites. See the Methodology tab for exactly how profit is computed.
       </p>

@@ -5,7 +5,7 @@
 // a team missing one signal, e.g. week 1 with no grade yet, is averaged over
 // whatever signals it has rather than penalized to 0).
 import type { Row } from "../data/loader";
-import { buildEloRatingHistory, scheduleToEloGames, eloPHome, eloMovMultiplier, ELO_INIT, ELO_HFA, ELO_K, type EloRatingPoint } from "./elo";
+import { buildEloRatingHistory, scheduleToEloGames, eloPHome, eloHfa, isNeutralSite, eloMovMultiplier, ELO_INIT, ELO_HFA, ELO_K, type EloRatingPoint } from "./elo";
 import { pythWinPct } from "./pythagorean";
 
 export interface PowerRankingRow {
@@ -256,13 +256,15 @@ export function computeTeamBreakdown(schedule: Row[], grades: Row[], season: num
     let teamScore: number | null = null;
     let opponentScore: number | null = null;
     let postGameElo = teamIsHome ? eloHomePre : eloAwayPre;
+    const neutral = isNeutralSite(game);
+    const hfa = eloHfa(neutral);
     if (played) {
       const hs = Number(game.home_score);
       const as_ = Number(game.away_score);
       const marginHome = hs - as_;
-      const pHome = eloPHome(eloAwayPre, eloHomePre);
+      const pHome = eloPHome(eloAwayPre, eloHomePre, neutral);
       const actualHome = marginHome > 0 ? 1 : marginHome < 0 ? 0 : 0.5;
-      const diffWinner = marginHome >= 0 ? eloHomePre + ELO_HFA - eloAwayPre : eloAwayPre - (eloHomePre + ELO_HFA);
+      const diffWinner = marginHome >= 0 ? eloHomePre + hfa - eloAwayPre : eloAwayPre - (eloHomePre + hfa);
       movMultiplier = marginHome === 0 ? 1 : eloMovMultiplier(marginHome, diffWinner);
       const homeDelta = ELO_K * movMultiplier * (actualHome - pHome);
       delta = teamIsHome ? homeDelta : -homeDelta;
@@ -278,7 +280,7 @@ export function computeTeamBreakdown(schedule: Row[], grades: Row[], season: num
       opponentScore,
       preGameElo: teamIsHome ? eloHomePre : eloAwayPre,
       opponentPreGameElo: teamIsHome ? eloAwayPre : eloHomePre,
-      hfa: ELO_HFA,
+      hfa,
       k: ELO_K,
       movMultiplier,
       delta,

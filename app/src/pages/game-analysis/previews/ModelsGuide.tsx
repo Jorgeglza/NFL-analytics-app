@@ -12,7 +12,7 @@ import { MIN_N_BUCKET, MARKET_BUCKET_W, ATS_WINDOW, homeCoverFairProb, vigLeanPr
 import { edgeComposite, EDGE_WEIGHTS, EDGE_SCALE } from "../../../lib/logic/edgeComposite";
 import { fairProbs, impliedProb } from "../../../lib/logic/moneyline";
 import { pythWinPct, log5, PYTH_EXP } from "../../../lib/logic/pythagorean";
-import { ELO_INIT, ELO_K, ELO_HFA } from "../../../lib/logic/elo";
+import { ELO_INIT, ELO_K, ELO_HFA, isNeutralSite } from "../../../lib/logic/elo";
 import {
   buildHist,
   buildGradesIndex,
@@ -51,14 +51,14 @@ function ModelCard({
   return (
     <Card accent={color} title={<span className="flex items-center gap-2"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: color }} />{title}</span>}>
       <p className="text-sm text-slate-700">{what}</p>
-      <div className="mt-2 text-[11px] font-medium uppercase tracking-wider text-slate-400">Inputs</div>
+      <div className="mt-2 text-[11px] font-medium uppercase tracking-wider text-slate-500">Inputs</div>
       <ul className="mt-1 list-disc space-y-0.5 pl-5 text-xs text-slate-600">
         {inputs.map((i) => (
           <li key={i}>{i}</li>
         ))}
       </ul>
       <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50/70 p-3">
-        <div className="mb-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">Worked example — selected game</div>
+        <div className="mb-1 text-[11px] font-medium uppercase tracking-wider text-slate-500">Worked example — selected game</div>
         <div className="space-y-1 text-xs text-slate-700">{children}</div>
       </div>
     </Card>
@@ -257,7 +257,7 @@ export default function ModelsGuide() {
                 <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ background: MODEL_COLORS[k] }} />
                 <span className="w-36 shrink-0 text-slate-500">{label}</span>
                 <b>{pctf(ex.bundle[k][1], 0)}</b>
-                <span className="text-slate-400">(home)</span>
+                <span className="text-slate-500">(home)</span>
               </div>
             ))}
           </div>
@@ -324,7 +324,7 @@ export default function ModelsGuide() {
             ]}
           >
             <div>Predicted home win probability (precomputed): <b>{pctf(ex.bundle.predictive[1])}</b></div>
-            <div className="text-slate-400">{ex.bundle.predictive[1] == null ? "No prediction for this game (outside coverage or unplayed)." : "Loaded from the export's precomputed normal-CDF probability — nothing is refit in the browser."}</div>
+            <div className="text-slate-500">{ex.bundle.predictive[1] == null ? "No prediction for this game (outside coverage or unplayed)." : "Loaded from the export's precomputed normal-CDF probability — nothing is refit in the browser."}</div>
             <Res team={pickOf(ex.bundle.predictive)} p={ex.bundle.predictive[0] != null && ex.bundle.predictive[1] != null ? Math.max(ex.bundle.predictive[0], ex.bundle.predictive[1]) : null} />
           </ModelCard>
         )}
@@ -335,13 +335,13 @@ export default function ModelsGuide() {
           what="A rolling power rating updated after every game since 2015: beat a strong team and your rating jumps; lose to a weak one and it drops. Bigger margins move it more; ratings drift back toward average between seasons."
           inputs={[
             `Every game result since 2015 (start ${ELO_INIT}, K=${ELO_K})`,
-            `Home-field advantage: +${ELO_HFA} Elo to the home side`,
+            `Home-field advantage: +${ELO_HFA} Elo to the home side (none at neutral sites — international games, Super Bowl)`,
             "Margin-of-victory multiplier (log of the margin, dampened for mismatches)",
             "Between seasons each team keeps ⅔ of its rating (⅓ regresses to the mean)",
           ]}
         >
-          <div>Pre-game ratings: {away} <b>{ex.eloE ? Math.round(ex.eloE.eloAway) : "—"}</b> · {home} <b>{ex.eloE ? Math.round(ex.eloE.eloHome) : "—"}</b> (+{ELO_HFA} home bonus)</div>
-          <div>p(home) = 1 / (1 + 10^(−(eloHome + {ELO_HFA} − eloAway)/400))</div>
+          <div>Pre-game ratings: {away} <b>{ex.eloE ? Math.round(ex.eloE.eloAway) : "—"}</b> · {home} <b>{ex.eloE ? Math.round(ex.eloE.eloHome) : "—"}</b> ({game && isNeutralSite(game) ? "neutral site, no home bonus" : `+${ELO_HFA} home bonus`})</div>
+          <div>p(home) = 1 / (1 + 10^(−(eloHome + {game && isNeutralSite(game) ? 0 : ELO_HFA} − eloAway)/400))</div>
           <Res team={pickOf(ex.bundle.elo)} p={ex.bundle.elo[0] != null && ex.bundle.elo[1] != null ? Math.max(ex.bundle.elo[0], ex.bundle.elo[1]) : null} />
         </ModelCard>
 
@@ -387,7 +387,7 @@ export default function ModelsGuide() {
               <div key={label} className="flex flex-wrap items-baseline gap-x-1">
                 <span className="w-16 shrink-0 text-slate-500">{label}</span>
                 <span>{away} {numf(a)} vs {home} {numf(h)}</span>
-                <span className="text-slate-400">→ diff {numf(a != null && h != null ? a - h : null, 2)} × {wt} =</span>
+                <span className="text-slate-500">→ diff {numf(a != null && h != null ? a - h : null, 2)} × {wt} =</span>
                 <b className={contrib > 0 ? "text-slate-800" : contrib < 0 ? "text-slate-500" : undefined}>{numf(contrib, 3)}</b>
               </div>
             ))}

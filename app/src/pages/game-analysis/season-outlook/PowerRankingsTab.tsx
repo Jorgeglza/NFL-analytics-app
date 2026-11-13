@@ -8,12 +8,12 @@ import { Link } from "react-router-dom";
 import type { Row } from "../../../lib/data/loader";
 import type { TeamMeta } from "../../../lib/team/meta";
 import { computePowerRankings, computeTeamBreakdown, computeTeamRankTrend, type PowerRankingRow } from "../../../lib/logic/powerRankings";
-import { tableWrapCls, theadCls, trCls } from "../../../components/ui";
+import { tableWrapCls, theadCls, trCls, clickableRowCls, clickableRowProps } from "../../../components/ui";
 import DetailModal from "../power-rankings/DetailModal";
 
 function MovementBadge({ movement }: { movement: number | null }) {
-  if (movement == null) return <span className="text-xs text-slate-400">—</span>;
-  if (movement === 0) return <span className="text-xs text-slate-400">–</span>;
+  if (movement == null) return <span className="text-xs text-slate-500">—</span>;
+  if (movement === 0) return <span className="text-xs text-slate-500">–</span>;
   const up = movement > 0;
   return (
     <span className={`text-xs font-bold ${up ? "text-[#3C9A5F]" : "text-[#C8102E]"}`}>
@@ -69,7 +69,7 @@ export default function PowerRankingsTab({
             {rankings.map((r) => {
               const tm = meta.get(r.team);
               return (
-                <tr key={r.team} className={`${trCls} cursor-pointer`} onClick={() => setSelectedTeam(r.team)}>
+                <tr key={r.team} {...clickableRowProps(() => setSelectedTeam(r.team), `${tm?.name ?? r.team} ranking details`)} className={`${trCls} ${clickableRowCls}`}>
                   <td className="px-3 py-3 font-bold text-slate-800 sm:py-2">{r.rank}</td>
                   <td className="px-3 py-3 sm:py-2"><MovementBadge movement={r.movement} /></td>
                   <td className="px-3 py-3 sm:py-2">
@@ -87,7 +87,7 @@ export default function PowerRankingsTab({
                       <Link
                         to={`/game_analysis/team_trends?team1=${r.team}`}
                         onClick={(e) => e.stopPropagation()}
-                        className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 shadow-sm transition-colors hover:border-[#002f6c]/50 hover:text-[#002f6c]"
+                        className="tap-expand relative rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 shadow-sm transition-colors hover:border-[#002f6c]/50 hover:text-[#002f6c]"
                         title={`Compare ${tm?.name ?? r.team}'s trend against other teams`}
                       >
                         Compare

@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import type { Row } from "../../../lib/data/loader";
 import type { TeamMeta } from "../../../lib/team/meta";
-import { simulatePlayoffs, type PlayoffSimResult, type TeamConfDiv } from "../../../lib/logic/playoffSim";
+import { simulatePlayoffs, PLAYOFF_SIM_ITERATIONS, type PlayoffSimResult, type TeamConfDiv } from "../../../lib/logic/playoffSim";
 import { Loading } from "../../../components/Loading";
-import { tableWrapCls, theadCls, trCls } from "../../../components/ui";
+import { tableWrapCls, theadCls, trCls, clickableRowCls, clickableRowProps } from "../../../components/ui";
 import DetailModal from "./DetailModal";
 
-const ITERATIONS = 2000;
+const ITERATIONS = PLAYOFF_SIM_ITERATIONS;
 
 function recordStr(w: number, l: number, t: number): string {
   return t > 0 ? `${w}-${l}-${t}` : `${w}-${l}`;
@@ -65,7 +65,7 @@ export default function PlayoffTab({ schedule, season, week, meta }: { schedule:
               {[...teams]
                 .sort((a, b) => b.playoffPct - a.playoffPct)
                 .map((r) => (
-                  <tr key={r.team} className={`${trCls} cursor-pointer`} onClick={() => setSelectedTeam(r.team)}>
+                  <tr key={r.team} {...clickableRowProps(() => setSelectedTeam(r.team), `${meta.get(r.team)?.name ?? r.team} playoff details`)} className={`${trCls} ${clickableRowCls}`}>
                     <td className="px-3 py-3 font-semibold text-slate-800 sm:py-2">
                       <div className="flex items-center gap-2">
                         {meta.get(r.team)?.logo && <img src={meta.get(r.team)!.logo} alt="" className="h-5 w-5 object-contain" loading="lazy" decoding="async" />}

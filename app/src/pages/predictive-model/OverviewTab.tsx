@@ -101,7 +101,7 @@ export default function OverviewTab({
                     <tr key={`${g.away_team}-${g.home_team}`} className={trCls}>
                       <td className="px-3 py-1.5 font-medium">
                         {g.away_team} @ {g.home_team}
-                        {g.gameday ? <span className="ml-1.5 text-xs text-slate-400">{g.gameday}</span> : null}
+                        {g.gameday ? <span className="ml-1.5 text-xs text-slate-500">{g.gameday}</span> : null}
                       </td>
                       <td className="px-3 py-1.5 text-right text-slate-500">{spread == null ? "—" : spread > 0 ? `+${spread}` : spread}</td>
                       <td className="px-3 py-1.5 text-right font-semibold">

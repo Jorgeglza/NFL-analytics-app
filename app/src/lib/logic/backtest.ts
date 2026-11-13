@@ -13,7 +13,6 @@ import { eloTeamKey } from "./elo";
 import {
   MODEL_KEYS,
   type MetricKey,
-  type HistAgg,
   type GradesIndex,
   type TeamWeekIndex,
   type EloIndex,
@@ -23,6 +22,8 @@ import {
   resultWinner,
   favoriteSide,
   kickoffMs,
+  emptyHist,
+  addGameToHist,
 } from "../../pages/game-analysis/previews/engine";
 
 /** Flat stake per bet ("1 unit"), confirmed with the user over a compounding
@@ -58,10 +59,18 @@ export interface GameBacktestRow {
  * One row per (completed regular-season game × sub-model). Calls `probBundle()`
  * once per game and fans out to `modelKeys.length` rows — never recomputed per
  * model, so this costs the same per-game work as Model Overview/Model Picker.
+ *
+ * As-of market history (audit M1): the Market-calibrated bucket rates come
+ * from a HistAgg grown week by week, so each game only sees results from
+ * strictly earlier (season, week)s. The live pages' `buildHist(schedule)`
+ * excludes only the game's own week, which for a backtest leaked every LATER
+ * season's outcomes into the bucket (a 2016 game scored with 2017–2026
+ * results). Elo, Pythagorean and Predictive were already pre-game. Trend
+ * Edge's grades still come from Random Forests fit on all seasons (kept for
+ * old-app parity) — disclosed on the Methodology tab instead.
  */
 export function buildGameBacktestRows(
   schedule: Row[],
-  hist: HistAgg,
   gradesIdx: GradesIndex,
   twIdx: TeamWeekIndex,
   eloIdx: EloIndex,
@@ -70,8 +79,18 @@ export function buildGameBacktestRows(
   modelKeys: readonly [MetricKey, string][] = MODEL_KEYS,
 ): GameBacktestRow[] {
   const rows: GameBacktestRow[] = [];
-  for (const g of schedule) {
-    if (g.game_type !== "REG") continue;
+  const weekKey = (g: Row) => Number(g.season) * 100 + Number(g.week);
+  const reg = schedule.filter((g) => g.game_type === "REG").sort((a, b) => weekKey(a) - weekKey(b));
+  const hist = emptyHist();
+  let pending: Row[] = []; // current week's games, added to `hist` once the week is done
+  let pendingWeek = -1;
+  for (const g of reg) {
+    if (weekKey(g) !== pendingWeek) {
+      for (const p of pending) addGameToHist(hist, p);
+      pending = [];
+      pendingWeek = weekKey(g);
+    }
+    pending.push(g);
     const actual = resultWinner(g);
     if (actual == null) continue; // completed games only (excludes ties + unplayed)
     const season = Number(g.season);

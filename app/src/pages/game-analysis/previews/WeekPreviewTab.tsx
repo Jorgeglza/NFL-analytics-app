@@ -245,7 +245,7 @@ export default function WeekPreviewTab({
                 />
               )}
               {onOpenMatchup && (
-                <span className="pointer-events-none absolute bottom-1.5 right-2 text-[10px] text-slate-300 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+                <span className="pointer-events-none absolute bottom-1.5 right-2 text-[10px] text-slate-500 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
                   view matchup →
                 </span>
               )}
@@ -256,7 +256,7 @@ export default function WeekPreviewTab({
               )}
               <div className="mb-1.5">
                 <div className="text-sm font-bold">{dateStr}</div>
-                <div className="text-[11px] font-medium uppercase tracking-wider text-slate-400">{away} @ {home}</div>
+                <div className="text-[11px] font-medium uppercase tracking-wider text-slate-500">{away} @ {home}</div>
               </div>
               <div className="relative z-10 flex items-center gap-2">
                 <div className="flex-1 text-center">
@@ -310,9 +310,9 @@ export default function WeekPreviewTab({
             </div>
           );
         })}
-        {!cards.length && <div className="py-8 text-center text-sm text-slate-400">No games found for this week.</div>}
+        {!cards.length && <div className="py-8 text-center text-sm text-slate-500">No games found for this week.</div>}
       </div>
-      <p className="text-[11px] text-slate-400">
+      <p className="text-[11px] text-slate-500">
         {predictiveUnavailable
           ? "⚠ Predictive model: data unavailable this session — excluded from the model list and Average above."
           : predictiveDisclaimer(predictiveCoverage ?? null)}

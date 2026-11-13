@@ -95,7 +95,7 @@ export default function TeamWeekModal({
               })}
             </div>
           ) : (
-            <div className="text-sm text-slate-400">No games found.</div>
+            <div className="text-sm text-slate-500">No games found.</div>
           )}
         </div>
 
@@ -116,10 +116,10 @@ export default function TeamWeekModal({
                   <td className="px-3 py-1.5">{g.rank}</td>
                   <td className="px-3 py-1.5">{g.isHome ? "vs" : "@"} {g.opponent}</td>
                   <td className="px-3 py-1.5">{g.spread > 0 ? `+${g.spread}` : g.spread}</td>
-                  <td className="px-3 py-1.5">{g.teamScore == null || g.oppScore == null ? <span className="text-slate-400">—</span> : `${g.teamScore}-${g.oppScore}`}</td>
+                  <td className="px-3 py-1.5">{g.teamScore == null || g.oppScore == null ? <span className="text-slate-500">—</span> : `${g.teamScore}-${g.oppScore}`}</td>
                   <td className="px-3 py-1.5">
                     {g.win == null ? (
-                      <span className="text-slate-400">—</span>
+                      <span className="text-slate-500">—</span>
                     ) : g.tie ? (
                       <span className="font-bold text-slate-500">T</span>
                     ) : g.win ? (
@@ -134,7 +134,7 @@ export default function TeamWeekModal({
                         {g.winType}
                       </span>
                     ) : (
-                      <span className="text-slate-400">—</span>
+                      <span className="text-slate-500">—</span>
                     )}
                   </td>
                 </tr>

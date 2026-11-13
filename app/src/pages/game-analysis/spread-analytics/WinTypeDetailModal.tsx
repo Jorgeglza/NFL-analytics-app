@@ -163,7 +163,7 @@ export function WinTypeBreakdown({ games }: { games: Game[] }) {
       </div>
 
       <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm" style={{ borderTop: "3px solid #94a3b8" }}>
-        <div className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Spread distribution</div>
+        <div className="text-[11px] font-medium uppercase tracking-wider text-slate-500">Spread distribution</div>
         <div className="mt-2">
           <SpreadStrip games={games} />
         </div>
@@ -208,7 +208,7 @@ export function WinTypeBreakdown({ games }: { games: Game[] }) {
                       <td className="px-3 py-1.5">
                         <div className="flex items-center gap-1.5">
                           <TeamBadge abbr={g.awayTeam} meta={teamMeta?.get(g.awayTeam)} />
-                          <span className="text-slate-400">@</span>
+                          <span className="text-slate-500">@</span>
                           <TeamBadge abbr={g.homeTeam} meta={teamMeta?.get(g.homeTeam)} />
                         </div>
                       </td>
@@ -218,7 +218,7 @@ export function WinTypeBreakdown({ games }: { games: Game[] }) {
                             {g.awayScore}–{g.homeScore}
                           </span>
                         ) : (
-                          <span className="text-slate-400">—</span>
+                          <span className="text-slate-500">—</span>
                         )}
                       </td>
                       <td className="px-3 py-1.5">{g.spread == null ? "—" : g.spread > 0 ? `+${g.spread}` : g.spread}</td>

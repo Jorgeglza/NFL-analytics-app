@@ -1,5 +1,6 @@
 // Elo power-rating model — new in Session 5 (not a port of the old app).
-// Standard NFL Elo (538-style): init 1505, K=20, home-field +48 Elo, MOV
+// Standard NFL Elo (538-style): init 1505, K=20, home-field +48 Elo (0 at
+// neutral sites — international games, Super Bowl; audit M3), MOV
 // multiplier ln(|margin|+1) * 2.2/(0.001*|eloDiff|+2.2), between-season
 // regression r <- 2/3 r + 1/3 1505. Ratings are strictly pre-game: the index
 // stores the ratings as they stood BEFORE each game, so there is no leakage.
@@ -15,9 +16,16 @@ export const ELO_SEASON_REGRESS = 1 / 3;
 const TEAM_ALIAS: Record<string, string> = { SD: "LAC", OAK: "LV", STL: "LA" };
 export const eloTeamKey = (team: string): string => TEAM_ALIAS[team] ?? team;
 
-/** p(home wins) from pre-game ratings (home-field advantage included). */
-export function eloPHome(eloAway: number, eloHome: number): number {
-  return 1 / (1 + Math.pow(10, -(eloHome + ELO_HFA - eloAway) / 400));
+/** Home-field bonus for a game: none at a neutral site (international games,
+ *  Super Bowl — schedule `location === "Neutral"`), audit M3. */
+export const eloHfa = (neutral?: boolean): number => (neutral ? 0 : ELO_HFA);
+
+/** True when a schedule row is played at a neutral site. */
+export const isNeutralSite = (g: Row): boolean => String(g.location ?? "") === "Neutral";
+
+/** p(home wins) from pre-game ratings (home-field advantage included unless neutral). */
+export function eloPHome(eloAway: number, eloHome: number, neutral = false): number {
+  return 1 / (1 + Math.pow(10, -(eloHome + eloHfa(neutral) - eloAway) / 400));
 }
 
 /** 538-style margin-of-victory multiplier. eloDiffWinner = winner elo (incl HFA) - loser elo. */
@@ -34,6 +42,8 @@ export interface EloGame {
   homeScore: number | null;
   /** epoch ms used only for ordering */
   order: number;
+  /** Neutral-site game: no home-field bonus. */
+  neutral?: boolean;
 }
 
 export interface EloEntry {
@@ -66,14 +76,15 @@ export function buildEloIndex(games: EloGame[]): Map<string, EloEntry> {
     }
     const ea = get(g.awayTeam);
     const eh = get(g.homeTeam);
-    const pHome = eloPHome(ea, eh);
+    const hfa = eloHfa(g.neutral);
+    const pHome = eloPHome(ea, eh, g.neutral);
     out.set(g.gameId, { eloAway: ea, eloHome: eh, pHome });
 
     if (g.awayScore == null || g.homeScore == null) continue;
     const margin = g.homeScore - g.awayScore;
     const actualHome = margin > 0 ? 1 : margin < 0 ? 0 : 0.5;
     // winner's effective elo diff for the MOV dampener (HFA on home side)
-    const diffWinner = margin >= 0 ? eh + ELO_HFA - ea : ea - (eh + ELO_HFA);
+    const diffWinner = margin >= 0 ? eh + hfa - ea : ea - (eh + hfa);
     const mult = margin === 0 ? 1 : eloMovMultiplier(margin, diffWinner);
     const delta = ELO_K * mult * (actualHome - pHome);
     set(g.homeTeam, eh + delta);
@@ -95,6 +106,7 @@ export function scheduleToEloGames(schedule: Row[]): (EloGame & { week: number }
       awayScore: g.away_score == null ? null : Number(g.away_score),
       homeScore: g.home_score == null ? null : Number(g.home_score),
       order: (g.gameday ? Date.parse(String(g.gameday)) : 0) + Number(g.week) / 1000,
+      neutral: isNeutralSite(g),
     }));
 }
 
@@ -137,10 +149,11 @@ export function buildEloRatingHistory(games: (EloGame & { week: number })[]): El
     if (g.awayScore == null || g.homeScore == null) continue;
     const ea = get(g.awayTeam);
     const eh = get(g.homeTeam);
-    const pHome = eloPHome(ea, eh);
+    const hfa = eloHfa(g.neutral);
+    const pHome = eloPHome(ea, eh, g.neutral);
     const margin = g.homeScore - g.awayScore;
     const actualHome = margin > 0 ? 1 : margin < 0 ? 0 : 0.5;
-    const diffWinner = margin >= 0 ? eh + ELO_HFA - ea : ea - (eh + ELO_HFA);
+    const diffWinner = margin >= 0 ? eh + hfa - ea : ea - (eh + hfa);
     const mult = margin === 0 ? 1 : eloMovMultiplier(margin, diffWinner);
     const delta = ELO_K * mult * (actualHome - pHome);
     const newHome = eh + delta;

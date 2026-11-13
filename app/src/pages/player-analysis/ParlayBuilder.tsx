@@ -234,18 +234,18 @@ function LegCard({
             below are excluded from it (data-export-exclude), so the
             exported card still says what leg it is. */}
         <div className="pb-leg-summary mb-1 text-sm font-bold text-[#002f6c]">
-          {player || "—"} <span className="font-medium text-slate-400">·</span> {team} <span className="font-medium text-slate-400">·</span> {statLabel(stat)}
+          {player || "—"} <span className="font-medium text-slate-500">·</span> {team} <span className="font-medium text-slate-500">·</span> {statLabel(stat)}
           {line != null && <span className="text-slate-500"> {line}</span>}
         </div>
         <div data-export-exclude className="flex flex-wrap items-end gap-2">
           <Select label="Season" value={leg.season} onChange={(v) => set({ season: v })} options={seasons.map((s) => ({ value: String(s), label: String(s) }))} />
           <Select label="Season Type" value={leg.seasonType} onChange={(v) => set({ seasonType: v })} options={seasonTypeOptions(seasonTypes)} />
           <Select label="Team" value={team} onChange={(v) => set({ team: v })} options={teams.map((t) => ({ value: t, label: teamMeta?.get(t)?.name ?? t }))} />
-          <div className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
+          <div className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-500">
             Stat Type
             <div className="flex gap-1">
               {(["offense", "defense"] as const).map((sd) => (
-                <button key={sd} onClick={() => set({ side: sd })} className={`rounded-full px-2.5 py-1 text-xs normal-case tracking-normal capitalize ${leg.side === sd ? "bg-[#002f6c] text-white shadow-sm" : "bg-slate-100 text-slate-600 hover:text-slate-900"}`}>
+                <button key={sd} onClick={() => set({ side: sd })} className={`min-h-11 rounded-full px-3 py-1 text-xs normal-case tracking-normal capitalize sm:min-h-0 sm:px-2.5 ${leg.side === sd ? "bg-[#002f6c] text-white shadow-sm" : "bg-slate-100 text-slate-600 hover:text-slate-900"}`}>
                   {sd}
                 </button>
               ))}
@@ -299,7 +299,7 @@ function LegCard({
           {line != null && calc && calc.total > 0 ? (
             <>
               {calc.made} of {calc.total}
-              {americanOdds(calc.made / calc.total) && <span className="text-slate-400"> · fair {americanOdds(calc.made / calc.total)}</span>}
+              {americanOdds(calc.made / calc.total) && <span className="text-slate-500"> · fair {americanOdds(calc.made / calc.total)}</span>}
             </>
           ) : (
             "Set a line"
@@ -450,13 +450,13 @@ export default function ParlayBuilder() {
         <h1 className="flex items-center gap-2.5 text-2xl font-extrabold tracking-tight text-[#002f6c]"><span className="h-6 w-1.5 rounded-full bg-gradient-to-b from-[#002f6c] to-[#164a9c]" />Parlay Builder</h1>
         <div className="flex flex-wrap items-center gap-3">
           <div className="min-w-[calc(50%-2.25rem)] flex-1 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-center shadow-sm sm:min-w-40 sm:flex-none" style={{ borderTop: "3px solid #002f6c" }}>
-            <div className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Expected Probability</div>
+            <div className="text-[11px] font-medium uppercase tracking-wider text-slate-500">Expected Probability</div>
             <div className="mt-0.5 text-2xl font-bold">{expectedProb == null ? "—" : `${(expectedProb * 100).toFixed(2)}%`}</div>
           </div>
           <div className="min-w-[calc(50%-2.25rem)] flex-1 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-center shadow-sm sm:min-w-40 sm:flex-none" style={{ borderTop: "3px solid #002f6c" }}>
-            <div className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Expected Odds</div>
+            <div className="text-[11px] font-medium uppercase tracking-wider text-slate-500">Expected Odds</div>
             <div className="mt-0.5 text-2xl font-bold">{expectedOdds == null ? "—" : expectedOdds.toFixed(2)}</div>
-            {expectedAmericanOdds && <div className="mt-0.5 text-[11px] font-semibold text-slate-400">{expectedAmericanOdds}</div>}
+            {expectedAmericanOdds && <div className="mt-0.5 text-[11px] font-semibold text-slate-500">{expectedAmericanOdds}</div>}
           </div>
           <button
             data-export-exclude

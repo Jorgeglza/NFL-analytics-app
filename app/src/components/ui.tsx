@@ -1,7 +1,7 @@
 // Shared UI kit (M4) — matches the navbar/home design language:
 // navy #002f6c accents, rounded-2xl white cards on slate borders,
 // uppercase micro-labels, pill segments. Presentation only.
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 
 export const NAVY = "#002f6c";
 
@@ -60,7 +60,7 @@ export function Kpi({ label, value, accent = NAVY, sub }: { label: string; value
       className="min-w-[calc(50%-0.375rem)] flex-1 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm sm:min-w-36"
       style={{ borderTop: `3px solid ${accent}` }}
     >
-      <div className="text-[11px] font-medium uppercase tracking-wider text-slate-400">{label}</div>
+      <div className="text-[11px] font-medium uppercase tracking-wider text-slate-500">{label}</div>
       <div className="mt-0.5 text-xl font-bold text-slate-900">{value}</div>
       {sub && <div className="mt-0.5 text-[11px] text-slate-500">{sub}</div>}
     </div>
@@ -81,7 +81,7 @@ export function Segmented<T extends string>({
 }) {
   return (
     <div className="flex max-w-[calc(100vw-2rem)] flex-col gap-1">
-      {label && <span className="text-[11px] font-medium uppercase tracking-wider text-slate-400">{label}</span>}
+      {label && <span className="text-[11px] font-medium uppercase tracking-wider text-slate-500">{label}</span>}
       <div className="flex max-w-full overflow-x-auto rounded-full border border-slate-200 bg-slate-100 p-0.5">
         {options.map((o) => (
           <button
@@ -126,8 +126,29 @@ export function FilterGroup({ label, children }: { label: string; children: Reac
 /** Consistent table classes. `relative` so `ScrollHint` (below) can anchor
  * to it without every consumer needing to add its own positioning. */
 export const tableWrapCls = "relative overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm";
-export const theadCls = "bg-slate-50 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400";
+export const theadCls = "bg-slate-50 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500";
 export const trCls = "border-t border-slate-100 transition-colors hover:bg-slate-50/70";
+
+/** Classes for a click-to-open row: pointer + visible keyboard focus ring. */
+export const clickableRowCls = "cursor-pointer focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[#002f6c]";
+
+/** Props that make a click-to-open table row keyboard-operable (audit A5):
+ * focusable, Enter/Space activates. Spread onto the `<tr>` and add
+ * `clickableRowCls` to its className; `label` becomes its accessible name. */
+export function clickableRowProps(onActivate: () => void, label: string) {
+  return {
+    tabIndex: 0,
+    "aria-label": label,
+    onClick: onActivate,
+    onKeyDown: (e: KeyboardEvent) => {
+      if (e.target !== e.currentTarget) return; // let inner links/buttons handle their own keys
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        onActivate();
+      }
+    },
+  };
+}
 
 /** Pins a table's first column while the rest scrolls horizontally — apply
  * to both the `<th>` and `<td>` of that column. Requires the table itself
@@ -201,7 +222,7 @@ export function NumberInput({
 }) {
   return (
     <label className="flex flex-col gap-1">
-      <span className="text-[11px] font-medium uppercase tracking-wider text-slate-400">{label}</span>
+      <span className="text-[11px] font-medium uppercase tracking-wider text-slate-500">{label}</span>
       <input
         type="number"
         value={value}
@@ -235,7 +256,7 @@ export function RangeInput({
 }) {
   return (
     <label className="flex flex-col gap-1.5">
-      <span className="text-[11px] font-medium uppercase tracking-wider text-slate-400">{label}</span>
+      <span className="text-[11px] font-medium uppercase tracking-wider text-slate-500">{label}</span>
       <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(Number(e.target.value))} className={`${className} accent-[#002f6c]`} />
     </label>
   );

@@ -15,6 +15,7 @@ import { Card, tableWrapCls, theadCls, trCls, stickyColCls, stickyColHeadCls, Sc
 import { TeamLogoLink } from "../../components/team/TeamLogoLink";
 import { opponentLabel } from "../grading-model/shared";
 import { fairProbs } from "../../lib/logic/moneyline";
+import { formatKickoff } from "../../lib/logic/kickoff";
 import { usePageTitle } from "../../lib/hooks/usePageTitle";
 import { useSeasonWeek } from "../../context/SeasonWeekContext";
 import { InfoDot } from "../../components/InfoDot";
@@ -131,15 +132,15 @@ function StatRow({
       </div>
       <div className="w-16 shrink-0 text-right">
         <div className="text-base font-bold tabular-nums text-slate-900">{fmt(s.perGame, decimals)}</div>
-        <div className="text-[9px] font-medium uppercase tracking-wider text-slate-400">per game</div>
+        <div className="text-[10px] font-medium uppercase tracking-wider text-slate-500">per game</div>
       </div>
       <div className="w-16 shrink-0 text-right">
         <div className="text-sm font-semibold tabular-nums text-slate-600">{Math.round(s.total).toLocaleString()}</div>
-        <div className="text-[9px] font-medium uppercase tracking-wider text-slate-400">total ({s.games} gm)</div>
+        <div className="text-[10px] font-medium uppercase tracking-wider text-slate-500">total ({s.games} gm)</div>
       </div>
       <div className="w-14 shrink-0 text-right">
-        <div className="text-sm font-semibold tabular-nums text-slate-400">{lg == null ? "—" : fmt(lg, decimals)}</div>
-        <div className="text-[9px] font-medium uppercase tracking-wider text-slate-400">lg avg/gm</div>
+        <div className="text-sm font-semibold tabular-nums text-slate-500">{lg == null ? "—" : fmt(lg, decimals)}</div>
+        <div className="text-[10px] font-medium uppercase tracking-wider text-slate-500">lg avg/gm</div>
       </div>
       <StatSpark pts={pts} lg={lg} color={accent} />
     </div>
@@ -179,7 +180,7 @@ function SplitBar({
     <div>
       <div className="mb-1 flex items-baseline justify-between gap-2 text-xs">
         <span className="font-semibold text-slate-600">{label}</span>
-        <span className="flex items-center gap-1.5 whitespace-nowrap text-slate-400">
+        <span className="flex items-center gap-1.5 whitespace-nowrap text-slate-500">
           {rank != null && (
             <span
               className="rounded-full bg-slate-600 px-1.5 py-px text-[10px] font-bold text-white"
@@ -277,7 +278,7 @@ function gameInfoFor(g: Row, team: string): GameInfo {
 /** Actual counts behind a split bar's percentages (e.g. "34 pass att · 22 rush car"). */
 function RawCounts({ a, b, aLabel, bLabel }: { a: number | null; b: number | null; aLabel: string; bLabel: string }) {
   return (
-    <div className="mt-1 flex justify-between text-[10px] text-slate-400">
+    <div className="mt-1 flex justify-between text-[10px] text-slate-500">
       <span>{a == null ? "—" : Math.round(a).toLocaleString()} {aLabel}</span>
       <span>{b == null ? "—" : Math.round(b).toLocaleString()} {bLabel}</span>
     </div>
@@ -305,7 +306,7 @@ function GameStatBar({
 }) {
   const a = aVal ?? 0;
   const b = bVal ?? 0;
-  if (!(a + b)) return <div className="text-xs text-slate-400">{label}: no data.</div>;
+  if (!(a + b)) return <div className="text-xs text-slate-500">{label}: no data.</div>;
   const pct = (a / (a + b)) * 100;
   return (
     <div>
@@ -316,10 +317,10 @@ function GameStatBar({
       </div>
       <div className="mt-1 flex items-baseline justify-between">
         <span className="text-base font-bold tabular-nums" style={{ color: accent }}>
-          {Math.round(a).toLocaleString()} <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400">{aUnit}</span>
+          {Math.round(a).toLocaleString()} <span className="text-[10px] font-medium uppercase tracking-wider text-slate-500">{aUnit}</span>
         </span>
         <span className="text-base font-bold tabular-nums text-slate-500">
-          {Math.round(b).toLocaleString()} <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400">{bUnit}</span>
+          {Math.round(b).toLocaleString()} <span className="text-[10px] font-medium uppercase tracking-wider text-slate-500">{bUnit}</span>
         </span>
       </div>
     </div>
@@ -338,7 +339,7 @@ function MetricRow({ label, value }: { label: string; value: string }) {
 /** Home/away market win-probability split bar (moneyline-implied fair odds). */
 function GameProbBar({ info, meta, team }: { info: GameInfo; meta: Map<string, TeamMeta>; team: string }) {
   if (info.teamProb == null || info.oppProb == null) {
-    return <div className="py-2 text-xs text-slate-400">No market odds recorded for this game.</div>;
+    return <div className="py-2 text-xs text-slate-500">No market odds recorded for this game.</div>;
   }
   const teamPct = info.teamProb * 100;
   const oppPct = info.oppProb * 100;
@@ -356,7 +357,7 @@ function GameProbBar({ info, meta, team }: { info: GameInfo; meta: Map<string, T
         <div className="flex-1" style={{ background: oppColor }} />
       </div>
       {info.played && info.win != null && !info.tie && (
-        <div className="mt-1.5 text-[10.5px] text-slate-400">
+        <div className="mt-1.5 text-[10.5px] text-slate-500">
           Market favored {favoriteIsTeam ? team : info.opp} — {info.win === favoriteIsTeam ? "the favorite won." : "the underdog won."}
         </div>
       )}
@@ -410,14 +411,14 @@ function ScheduleSection({
               return (
                 <Fragment key={info.gameId}>
                   <tr
-                    className={`${trCls} cursor-pointer ${info.played ? "" : "text-slate-400"}`}
+                    className={`${trCls} cursor-pointer ${info.played ? "" : "text-slate-500"}`}
                     onClick={() => setOpen((o) => ({ ...o, [info.gameId]: !o[info.gameId] }))}
                   >
                     <td className={`px-3 py-3 font-semibold text-slate-500 sm:py-2 ${stickyColCls}`}>
-                      <span className={`mr-1.5 inline-block text-slate-400 transition-transform ${isOpen ? "rotate-90" : ""}`}>›</span>
+                      <span className={`mr-1.5 inline-block text-slate-500 transition-transform ${isOpen ? "rotate-90" : ""}`}>›</span>
                       W{info.week}
                     </td>
-                    <td className="px-3 py-2 whitespace-nowrap text-slate-500" title={`${info.g.weekday ?? ""} ${info.g.gametime ?? ""}`}>
+                    <td className="px-3 py-2 whitespace-nowrap text-slate-500" title={`Kickoff ${formatKickoff(info.g.gameday, info.g.gametime)}`}>
                       {info.g.gameday ?? "—"}
                     </td>
                     <td className="px-3 py-2">
@@ -447,7 +448,7 @@ function ScheduleSection({
                           {info.tie ? "T" : info.win ? "W" : "L"}
                         </span>
                       ) : (
-                        <span className="rounded-full border border-dashed border-slate-300 px-2 py-0.5 text-[10px] uppercase tracking-wider text-slate-400">
+                        <span className="rounded-full border border-dashed border-slate-300 px-2 py-0.5 text-[10px] uppercase tracking-wider text-slate-500">
                           Scheduled
                         </span>
                       )}
@@ -457,7 +458,7 @@ function ScheduleSection({
                     </td>
                     <td
                       className={`px-3 py-2 text-right tabular-nums font-semibold ${
-                        info.margin == null ? "text-slate-400" : info.margin > 0 ? "text-[#3C9A5F]" : info.margin < 0 ? "text-[#C8102E]" : "text-slate-500"
+                        info.margin == null ? "text-slate-500" : info.margin > 0 ? "text-[#3C9A5F]" : info.margin < 0 ? "text-[#C8102E]" : "text-slate-500"
                       }`}
                     >
                       {info.margin == null ? "—" : `${info.margin > 0 ? "+" : ""}${info.margin}`}
@@ -472,7 +473,7 @@ function ScheduleSection({
                           {info.atsResult && (
                             <span
                               className={`ml-1.5 text-[10px] font-bold ${
-                                info.atsResult === "W" ? "text-[#3C9A5F]" : info.atsResult === "L" ? "text-[#C8102E]" : "text-slate-400"
+                                info.atsResult === "W" ? "text-[#3C9A5F]" : info.atsResult === "L" ? "text-[#C8102E]" : "text-slate-500"
                               }`}
                             >
                               {info.atsResult}
@@ -491,7 +492,7 @@ function ScheduleSection({
                           <div className="flex-1" style={{ background: opp?.color ?? "#94a3b8" }} />
                         </div>
                       ) : (
-                        <span className="text-slate-300">—</span>
+                        <span className="text-slate-500">—</span>
                       )}
                     </td>
                     <td className="px-3 py-2 text-right tabular-nums text-slate-500">
@@ -505,7 +506,7 @@ function ScheduleSection({
                           <div className="space-y-3">
                             <div className="grid gap-3 sm:grid-cols-2">
                               <div className="rounded-xl border border-slate-200 bg-white p-3">
-                                <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Box score</div>
+                                <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Box score</div>
                                 <MetricRow label="Points (allowed)" value={`${fmt(gv("points") ?? 0, 0)} (${fmt(gv("points_allowed") ?? 0, 0)})`} />
                                 <MetricRow label="Total yards (allowed)" value={`${fmt(gv("total_yards") ?? 0, 0)} (${fmt(gv("total_yards_allowed") ?? 0, 0)})`} />
                                 <MetricRow
@@ -515,13 +516,13 @@ function ScheduleSection({
                                 <MetricRow label="Turnovers (forced)" value={`${fmt(gv("turnovers") ?? 0, 0)} (${fmt(gv("turnovers_allowed") ?? 0, 0)})`} />
                               </div>
                               <div className="rounded-xl border border-slate-200 bg-white p-3">
-                                <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Market win probability</div>
+                                <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Market win probability</div>
                                 <GameProbBar info={info} meta={meta} team={team} />
                               </div>
                             </div>
                             <div className="grid gap-4 lg:grid-cols-2">
                               <div className="rounded-xl border border-slate-200 bg-white p-3" style={{ borderTop: `3px solid ${OFF_ACCENT}` }}>
-                                <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Offense — this game</div>
+                                <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Offense — this game</div>
                                 <div className="space-y-3">
                                   <GameStatBar label="Yards (passing vs rushing)" aVal={gv("passing_yards")} bVal={gv("rushing_yards")} aUnit="pass yds" bUnit="rush yds" accent={OFF_ACCENT} />
                                   <GameStatBar label="Play volume (pass attempts vs carries)" aVal={gv("attempts")} bVal={gv("carries")} aUnit="pass att" bUnit="rush car" accent={OFF_ACCENT} />
@@ -536,7 +537,7 @@ function ScheduleSection({
                                 </div>
                               </div>
                               <div className="rounded-xl border border-slate-200 bg-white p-3" style={{ borderTop: `3px solid ${DEF_ACCENT}` }}>
-                                <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Defense (opponent) — this game</div>
+                                <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Defense (opponent) — this game</div>
                                 <div className="space-y-3">
                                   <GameStatBar
                                     label="Yards allowed (pass vs rush)"
@@ -569,11 +570,11 @@ function ScheduleSection({
                         ) : (
                           <div className="grid gap-3 sm:grid-cols-2">
                             <div className="rounded-xl border border-slate-200 bg-white p-3">
-                              <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Market win probability</div>
+                              <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Market win probability</div>
                               <GameProbBar info={info} meta={meta} team={team} />
                             </div>
                             <div className="rounded-xl border border-slate-200 bg-white p-3">
-                              <MetricRow label="Kickoff" value={`${info.g.gameday ?? "—"} ${info.g.gametime ?? ""} (${info.g.weekday ?? "—"})`} />
+                              <MetricRow label="Kickoff" value={formatKickoff(info.g.gameday, info.g.gametime)} />
                               <MetricRow label="Venue" value={String(info.g.stadium ?? "—")} />
                             </div>
                           </div>
@@ -831,18 +832,18 @@ export default function Scorecards() {
               ] as const
             ).map(([l, s, rank, d]) => (
               <div key={l}>
-                <div className="text-[10px] font-medium uppercase tracking-wider text-slate-400">{l}</div>
+                <div className="text-[10px] font-medium uppercase tracking-wider text-slate-500">{l}</div>
                 <div className="text-xl font-bold tabular-nums">{s ? fmt(s.perGame, d) : "—"}</div>
-                {rank != null && <div className="text-[10px] font-semibold text-slate-400">#{rank} of {nTeams}</div>}
+                {rank != null && <div className="text-[10px] font-semibold text-slate-500">#{rank} of {nTeams}</div>}
               </div>
             ))}
           </div>
           <div className="ml-auto flex gap-2">
             {gradeInfo.metrics.map((g) => (
               <div key={g.key} className="w-20 rounded-xl border border-slate-200 px-2 py-1.5 text-center" title={`Model grade, season average. Rank #${g.rank ?? "—"} of ${gradeInfo.nGraded}.`}>
-                <div className="text-[10px] font-medium uppercase tracking-wider text-slate-400">{g.label}</div>
+                <div className="text-[10px] font-medium uppercase tracking-wider text-slate-500">{g.label}</div>
                 <div className="text-lg font-bold tabular-nums">{g.value == null ? "—" : Math.round(g.value)}</div>
-                <div className="text-[10px] font-semibold text-slate-400">{g.rank == null ? "" : `#${g.rank}`}</div>
+                <div className="text-[10px] font-semibold text-slate-500">{g.rank == null ? "" : `#${g.rank}`}</div>
               </div>
             ))}
           </div>

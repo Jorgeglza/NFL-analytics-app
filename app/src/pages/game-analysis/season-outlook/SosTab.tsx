@@ -55,15 +55,15 @@ export default function SosTab({ schedule, season, week, meta }: { schedule: Row
 
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <h2 className="mb-1 text-sm font-semibold text-slate-700">Opponent difficulty, week {week} onward — hardest remaining schedule first</h2>
-        <p className="mb-2 text-[11px] text-slate-400">
+        <p className="mb-2 text-[11px] text-slate-500">
           Each cell is that week's opponent — color and the small number are the opponent's pre-game Elo rating (redder = tougher).
         </p>
-        {heatmap ? <HeatmapChart data={heatmap} meta={meta} /> : <div className="py-8 text-center text-sm text-slate-400">No schedule data yet.</div>}
+        {heatmap ? <HeatmapChart data={heatmap} meta={meta} /> : <div className="py-8 text-center text-sm text-slate-500">No schedule data yet.</div>}
       </div>
 
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <h2 className="mb-2 text-sm font-semibold text-slate-700">Remaining strength of schedule — hardest first</h2>
-        {chartOption ? <div ref={chartRef} style={{ height: Math.max(240, rowChartH(rows.length, 22, 40)) }} /> : <div className="py-8 text-center text-sm text-slate-400">No data yet.</div>}
+        {chartOption ? <div ref={chartRef} style={{ height: Math.max(240, rowChartH(rows.length, 22, 40)) }} /> : <div className="py-8 text-center text-sm text-slate-500">No data yet.</div>}
       </div>
 
       <div className={tableWrapCls}>

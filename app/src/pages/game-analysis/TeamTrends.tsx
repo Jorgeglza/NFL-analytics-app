@@ -183,7 +183,7 @@ export default function TeamTrends() {
 
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <h2 className="mb-2 text-sm font-semibold text-slate-700">{metric.label} by week — {season}</h2>
-        {chartOption ? <div ref={chartRef} className="h-80" /> : <div className="py-12 text-center text-sm text-slate-400">No data for the selected teams/metric.</div>}
+        {chartOption ? <div ref={chartRef} className="h-80" /> : <div className="py-12 text-center text-sm text-slate-500">No data for the selected teams/metric.</div>}
       </div>
 
       <div className={tableWrapCls}>

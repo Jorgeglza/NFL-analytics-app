@@ -45,6 +45,15 @@ export default function MethodologyTab({
           <li>No transaction costs, limits, or line-shopping across books are modeled — one price per game, taken as given.</li>
           <li>A profitable backtest on historical data is not a guarantee of future profitability — markets adapt, and this is the same
             look-back-only caveat that applies to every model on this page.</li>
+          <li>
+            <b>What each model could see.</b> Elo, Pythagorean, ML Fair and the Predictive model use only information available before
+            each game. <b>Market-calibrated</b> is replayed "as of" each week: its spread-bucket win rates are rebuilt from games played
+            strictly before the one being scored, so early-history games (2015) have thin buckets and fewer picks. <b>Trend Edge</b> (and
+            Consensus, which averages it in) is <i>not</i> fully pre-game: its season-to-date grades come from Random Forest grading models
+            fit once on every season and scaled over the whole dataset, so the grade weights behind a 2016 game were learned partly from
+            2017+ results. The effect is likely small but biases its accuracy/ROI upward. The grading models stay as-is to match the original
+            app exactly.
+          </li>
           <li>{predictiveUnavailable ? "⚠ Predictive model: data unavailable this session — excluded from every chart/table on this page." : predictiveDisclaimer(predictiveCoverage)}</li>
         </ul>
       </Card>

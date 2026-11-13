@@ -15,6 +15,7 @@ import {
 import { edgeComposite, meanLastN, EDGE_SCALE, type TrendFeatures } from "../../../lib/logic/edgeComposite";
 import { impliedProb, fairProbs } from "../../../lib/logic/moneyline";
 import { wilson } from "../../../lib/logic/wilson";
+import { easternToEpochMs } from "../../../lib/logic/kickoff";
 import { buildEloIndex, buildEloRatingHistory, scheduleToEloGames, eloTeamKey, type EloEntry, type EloRatingPoint } from "../../../lib/logic/elo";
 import { indexEloHistoryByTeam } from "../../../lib/logic/powerRankings";
 import { opponentLabel } from "../../../lib/logic/gameId";
@@ -94,46 +95,54 @@ export interface HistAgg {
   atsByTeamSeason: Map<string, { week: number; covered: number }[]>;
 }
 
-export function buildHist(schedule: Row[]): HistAgg {
-  const counts = new Map<string, { n: number; wins: number }>();
-  const perWeek = new Map<string, Map<string, { n: number; wins: number }>>();
-  const atsByTeamSeason = new Map<string, { week: number; covered: number }[]>();
-  const pushAts = (team: string, season: number, week: number, covered: number) => {
-    const key = `${team}|${season}`;
-    if (!atsByTeamSeason.has(key)) atsByTeamSeason.set(key, []);
-    atsByTeamSeason.get(key)!.push({ week, covered });
-  };
-  for (const g of schedule) {
-    if (g.game_type !== "REG" || g.spread_line == null) continue;
-    const spread = Number(g.spread_line);
-    const fav = favoriteSide(spread);
-    const winner = resultWinner(g);
-    if (winner == null || fav == null) continue; // ties + pick'ems excluded like the old groupby
-    const key = `${bucketLabel(spread)}|${fav}`;
-    const win = winner === fav ? 1 : 0;
-    const c = counts.get(key) ?? { n: 0, wins: 0 };
-    c.n++;
-    c.wins += win;
-    counts.set(key, c);
-    const wkKey = `${g.season}|${g.week}`;
-    if (!perWeek.has(wkKey)) perWeek.set(wkKey, new Map());
-    const pw = perWeek.get(wkKey)!;
-    const pc = pw.get(key) ?? { n: 0, wins: 0 };
-    pc.n++;
-    pc.wins += win;
-    pw.set(key, pc);
+export function emptyHist(): HistAgg {
+  return { counts: new Map(), perWeek: new Map(), atsByTeamSeason: new Map() };
+}
 
-    const coverMarginHome = Number(g.home_score) - Number(g.away_score) + spread;
-    if (coverMarginHome !== 0) {
-      const homeCovered = coverMarginHome > 0 ? 1 : 0;
-      const season = Number(g.season);
-      const week = Number(g.week);
-      pushAts(String(g.home_team), season, week, homeCovered);
-      pushAts(String(g.away_team), season, week, 1 - homeCovered);
-    }
+/** Add one schedule row to a HistAgg in place (no-op for non-REG, unscored,
+ * tied or pick'em games). Lets the Model Backtest grow the table week by week
+ * so each game only sees earlier results (audit M1). Callers adding rows out
+ * of week order must re-sort `atsByTeamSeason` (buildHist does). */
+export function addGameToHist(hist: HistAgg, g: Row): void {
+  if (g.game_type !== "REG" || g.spread_line == null) return;
+  const spread = Number(g.spread_line);
+  const fav = favoriteSide(spread);
+  const winner = resultWinner(g);
+  if (winner == null || fav == null) return; // ties + pick'ems excluded like the old groupby
+  const key = `${bucketLabel(spread)}|${fav}`;
+  const win = winner === fav ? 1 : 0;
+  const c = hist.counts.get(key) ?? { n: 0, wins: 0 };
+  c.n++;
+  c.wins += win;
+  hist.counts.set(key, c);
+  const wkKey = `${g.season}|${g.week}`;
+  if (!hist.perWeek.has(wkKey)) hist.perWeek.set(wkKey, new Map());
+  const pw = hist.perWeek.get(wkKey)!;
+  const pc = pw.get(key) ?? { n: 0, wins: 0 };
+  pc.n++;
+  pc.wins += win;
+  pw.set(key, pc);
+
+  const coverMarginHome = Number(g.home_score) - Number(g.away_score) + spread;
+  if (coverMarginHome !== 0) {
+    const homeCovered = coverMarginHome > 0 ? 1 : 0;
+    const season = Number(g.season);
+    const week = Number(g.week);
+    const pushAts = (team: string, covered: number) => {
+      const k = `${team}|${season}`;
+      if (!hist.atsByTeamSeason.has(k)) hist.atsByTeamSeason.set(k, []);
+      hist.atsByTeamSeason.get(k)!.push({ week, covered });
+    };
+    pushAts(String(g.home_team), homeCovered);
+    pushAts(String(g.away_team), 1 - homeCovered);
   }
-  for (const rows of atsByTeamSeason.values()) rows.sort((a, b) => a.week - b.week);
-  return { counts, perWeek, atsByTeamSeason };
+}
+
+export function buildHist(schedule: Row[]): HistAgg {
+  const hist = emptyHist();
+  for (const g of schedule) addGameToHist(hist, g);
+  for (const rows of hist.atsByTeamSeason.values()) rows.sort((a, b) => a.week - b.week);
+  return hist;
 }
 
 /** Team's ATS cover rate over its last `n` played games this season, through week `wk`. */
@@ -783,8 +792,10 @@ export function defaultWeekNearToday(schedule: Row[], season: number): number | 
 }
 
 export function kickoffMs(g: Row): number {
-  const d = g.gameday == null ? NaN : Date.parse(`${g.gameday}T${g.gametime ?? "00:00"}`);
-  return Number.isNaN(d) ? Number.MAX_SAFE_INTEGER : d;
+  // gametime is US Eastern; resolve the real instant (audit B9). A missing
+  // gametime keeps the old midnight default so date-only ordering is unchanged.
+  const d = easternToEpochMs(g.gameday, g.gametime ?? "00:00");
+  return d == null ? Number.MAX_SAFE_INTEGER : d;
 }
 
 export { EDGE_SCALE, impliedProb };

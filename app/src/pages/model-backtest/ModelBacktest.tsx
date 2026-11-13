@@ -19,7 +19,6 @@ import {
   type Row,
 } from "../../lib/data/loader";
 import {
-  buildHist,
   buildGradesIndex,
   buildTeamWeekIndex,
   buildScheduleEloIndex,
@@ -156,7 +155,6 @@ export default function ModelBacktest() {
     };
   }, [retryTick]);
 
-  const hist = useMemo(() => (schedule.length ? buildHist(schedule) : null), [schedule]);
   const gradesIdx = useMemo(() => (grades.length ? buildGradesIndex(grades) : null), [grades]);
   const twIdx = useMemo(() => (teamWeekBySeason ? buildTeamWeekIndex(teamWeekBySeason) : null), [teamWeekBySeason]);
   const eloIdx = useMemo(() => (schedule.length ? buildScheduleEloIndex(schedule) : null), [schedule]);
@@ -167,15 +165,16 @@ export default function ModelBacktest() {
   // ModelOverviewTab/ModelPickerTab already do live over the full history, so
   // this has proven-fine performance at this scale (~2k games).
   const rows = useMemo(() => {
-    if (!hist || !gradesIdx || !twIdx || !eloIdx) return null;
-    return buildGameBacktestRows(schedule, hist, gradesIdx, twIdx, eloIdx, predIdx ?? undefined, DEFAULT_STAKE, modelKeys);
-  }, [schedule, hist, gradesIdx, twIdx, eloIdx, predIdx, modelKeys]);
+    if (!schedule.length || !gradesIdx || !twIdx || !eloIdx) return null;
+    // Market history is built as-of each week inside (audit M1).
+    return buildGameBacktestRows(schedule, gradesIdx, twIdx, eloIdx, predIdx ?? undefined, DEFAULT_STAKE, modelKeys);
+  }, [schedule, gradesIdx, twIdx, eloIdx, predIdx, modelKeys]);
 
   useEffect(() => {
     if (!modelKeys.some(([k]) => k === primary)) setPrimary(modelKeys[0]?.[0] ?? "consensus");
   }, [modelKeys, primary]);
 
-  const loading = !schedule.length || !hist || !gradesIdx || !twIdx || !eloIdx || !rows;
+  const loading = !schedule.length || !gradesIdx || !twIdx || !eloIdx || !rows;
 
   return (
     <div className="space-y-4">

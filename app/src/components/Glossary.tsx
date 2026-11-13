@@ -19,17 +19,18 @@ export function Glossary({ sections, searchPlaceholder = "Search a term…" }: {
   return (
     <div>
       <input
-        type="text"
+        type="search"
+        aria-label="Search the glossary"
         value={q}
         onChange={(e) => setQ(e.target.value)}
         placeholder={searchPlaceholder}
         className="mb-4 w-full max-w-xs rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm shadow-sm focus:border-[#002f6c] focus:outline-none focus:ring-2 focus:ring-[#002f6c]/15"
       />
-      {!filtered.length && <p className="text-sm text-slate-400">No terms match "{q}".</p>}
+      {!filtered.length && <p className="text-sm text-slate-500">No terms match "{q}".</p>}
       <div className="space-y-4">
         {filtered.map((s) => (
           <div key={s.title}>
-            <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-400">{s.title}</div>
+            <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-500">{s.title}</div>
             <div className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
               {s.entries.map((e) => (
                 <div key={e.term} className="flex items-start gap-2 text-sm">

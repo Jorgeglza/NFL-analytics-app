@@ -99,7 +99,7 @@ export default function TeamDetailModal({
         </Card>
 
         <Card title="Profit over time" subtitle={`Running total for ${team}'s bets, one point per graded bet in chronological order.`}>
-          {option ? <div ref={ref} className="h-[280px]" /> : <div className="grid h-[280px] place-items-center text-sm text-slate-400">No graded bets yet.</div>}
+          {option ? <div ref={ref} className="h-[280px]" /> : <div className="grid h-[280px] place-items-center text-sm text-slate-500">No graded bets yet.</div>}
         </Card>
 
         <div className={tableWrapCls}>
@@ -138,7 +138,7 @@ export default function TeamDetailModal({
               ))}
               {!bySeason.length && (
                 <tr>
-                  <td colSpan={7} className="px-3 py-6 text-center text-slate-400">
+                  <td colSpan={7} className="px-3 py-6 text-center text-slate-500">
                     No picks on this team yet.
                   </td>
                 </tr>

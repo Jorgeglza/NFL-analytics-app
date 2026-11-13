@@ -13,7 +13,7 @@ import { ErrorRetry } from "../../components/Loading";
 import { buildStatGroups, statLabel, americanOdds, headshotCrop, randomItem, randomPassRushRecStat, randomDefenseStat, seasonTypeOptions, HIT_COLOR, MISS_COLOR, NEUTRAL_COLOR } from "./statPicker";
 import { useSeasonWeek } from "../../context/SeasonWeekContext";
 import { useSeasonFallback } from "../../lib/hooks/useSeasonFallback";
-import { stickyColHeadCls, ScrollHint } from "../../components/ui";
+import { stickyColHeadCls, ScrollHint, clickableRowCls, clickableRowProps } from "../../components/ui";
 
 const EXCLUDE = new Set([
   "season", "week", "team", "opponent_team", "gameday", "game_id",
@@ -291,7 +291,7 @@ export default function PropBets() {
         <Select label="Season Type" value={seasonType} onChange={setSeasonType} options={seasonTypeOptions(seasonTypes)} />
         <Select label="Season" value={season} onChange={setSeason} options={seasons.map((s) => ({ value: String(s), label: String(s) }))} />
         <Select label="Team" value={selTeam} onChange={setTeam} options={teams.map((t) => ({ value: t, label: teamMeta?.get(t)?.name ?? t }))} />
-        <div className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
+        <div className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-500">
           Side
           <div className="flex gap-2">
             {(["offense", "defense"] as const).map((sd) => (
@@ -318,13 +318,13 @@ export default function PropBets() {
       {pivot && (
         <div className="relative overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
           <table className="w-full border-separate border-spacing-0 text-xs">
-            <thead className="bg-slate-50 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+            <thead className="bg-slate-50 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
               <tr>
                 <th className={`px-3 py-2 text-left ${stickyColHeadCls}`}>Player</th>
                 {pivot.weeks.map((w) => (
                   <th key={w} className="px-2 py-2 text-center">
                     W{w}
-                    <span className="block text-[9px] font-medium normal-case tracking-normal text-slate-400">
+                    <span className="block text-[10px] font-medium normal-case tracking-normal text-slate-500">
                       {pivot.weekOpp.get(w) ?? ""}
                     </span>
                   </th>
@@ -334,7 +334,12 @@ export default function PropBets() {
             </thead>
             <tbody>
               {pivot.players.map((p) => (
-                <tr key={p.player} className={`cursor-pointer border-t border-slate-100 hover:bg-slate-50 ${p.player === selPlayer ? "bg-blue-50" : ""}`} onClick={() => setSelectedPlayer(p.player)}>
+                <tr
+                  key={p.player}
+                  {...clickableRowProps(() => setSelectedPlayer(p.player), `Show ${p.player}'s chart`)}
+                  aria-current={p.player === selPlayer ? "true" : undefined}
+                  className={`${clickableRowCls} border-t border-slate-100 hover:bg-slate-50 ${p.player === selPlayer ? "bg-blue-50" : ""}`}
+                >
                   <td
                     className={`sticky left-0 z-10 whitespace-nowrap px-3 py-3 text-left font-medium shadow-[2px_0_4px_-2px_rgba(0,0,0,0.15)] sm:py-1.5 ${p.player === selPlayer ? "bg-blue-50" : "bg-white"}`}
                   >
@@ -367,7 +372,7 @@ export default function PropBets() {
             </tbody>
           </table>
           <ScrollHint />
-          <div className="border-t border-slate-100 px-3 py-1.5 text-[10px] text-slate-400">
+          <div className="border-t border-slate-100 px-3 py-1.5 text-[10px] text-slate-500">
             Opponent shown under each week — @ = away game. A missing week is the team's bye.
           </div>
           {activeCellTip && (
@@ -377,7 +382,7 @@ export default function PropBets() {
                 type="button"
                 onClick={() => setActiveCellTip(null)}
                 aria-label="Close"
-                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-slate-400 hover:bg-slate-200 hover:text-slate-600"
+                className="tap-expand relative flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-slate-500 hover:bg-slate-200 hover:text-slate-600"
               >
                 ✕
               </button>
@@ -433,7 +438,7 @@ export default function PropBets() {
             {verdict ? (
               <div ref={donutRef} className="h-[360px]" />
             ) : (
-              <div className="flex h-[360px] items-center justify-center text-sm text-slate-400">
+              <div className="flex h-[360px] items-center justify-center text-sm text-slate-500">
                 Set a line to see the hit-rate split.
               </div>
             )}

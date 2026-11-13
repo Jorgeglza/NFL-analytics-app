@@ -37,7 +37,7 @@ function BarRow({ label, sub, value, max, color }: { label: string; sub?: string
       <div className="flex flex-wrap items-baseline justify-between gap-x-2">
         <span className="text-xs font-medium text-slate-700">
           {label}
-          {sub && <span className="ml-1.5 font-normal text-slate-400">{sub}</span>}
+          {sub && <span className="ml-1.5 font-normal text-slate-500">{sub}</span>}
         </span>
         <span className="text-xs font-semibold text-slate-800">{pct(value)}</span>
       </div>
@@ -59,10 +59,10 @@ function DivergingRow({ label, sub, value, band, n }: { label: string; sub?: str
       <div className="flex flex-wrap items-baseline justify-between gap-x-2">
         <span className="text-xs font-medium text-slate-700">
           {label}
-          {sub && <span className="ml-1.5 font-normal text-slate-400">{sub}</span>}
+          {sub && <span className="ml-1.5 font-normal text-slate-500">{sub}</span>}
         </span>
         <span className="text-xs font-semibold text-slate-800">
-          {pct(value)} <span className="font-normal text-slate-400">n={n}</span>
+          {pct(value)} <span className="font-normal text-slate-500">n={n}</span>
         </span>
       </div>
       <div className="relative h-4 rounded-full bg-slate-100">
@@ -443,7 +443,7 @@ export default function StoryView() {
         <div className="overflow-x-auto">
           <table className="w-full min-w-[480px] text-sm">
             <thead>
-              <tr className="text-left text-[11px] uppercase tracking-wider text-slate-400">
+              <tr className="text-left text-[11px] uppercase tracking-wider text-slate-500">
                 <th className="pb-2">Factor family</th>
                 {(["0-3", "4-5", "7+"] as Zone[]).map((z) => (
                   <th key={z} className="pb-2 text-right">

@@ -357,11 +357,11 @@ export default function TeamsTab({
             </button>
           ))}
         </div>
-        <label className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
+        <label className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-500">
           Through week: {tw}
           <input type="range" min={weeks[0] ?? 1} max={maxWeek} step={1} value={tw} onChange={(e) => setThroughWeek(Number(e.target.value))} className="w-48" />
         </label>
-        <label className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
+        <label className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-500">
           Top N drivers: {topN}
           <input type="range" min={3} max={12} step={1} value={topN} onChange={(e) => setTopN(Number(e.target.value))} className="w-48" />
         </label>
@@ -395,7 +395,7 @@ export default function TeamsTab({
           </p>
           <div className="relative overflow-x-auto">
             <table className="w-full border-separate border-spacing-0 text-xs">
-              <thead className="bg-slate-50 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+              <thead className="bg-slate-50 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
                 <tr>
                   <th className={`px-2 py-2 ${stickyColHeadCls}`}>Feature</th>
                   {driversTable.weeks.map((w) => (
@@ -421,7 +421,7 @@ export default function TeamsTab({
                     <td className={`px-2 py-1.5 font-semibold ${stickyColCls}`}>{r.feature}</td>
                     {r.raws.map((v, i) => {
                       const wk = driversTable.weeks[i];
-                      if (driversTable.byeWeeks.has(wk)) return <td key={i} className="px-2 py-1.5 text-right italic text-slate-400">Bye</td>;
+                      if (driversTable.byeWeeks.has(wk)) return <td key={i} className="px-2 py-1.5 text-right italic text-slate-500">Bye</td>;
                       return <td key={i} className="px-2 py-1.5 text-right">{v == null ? "—" : v.toFixed(2)}</td>;
                     })}
                     <td className="bg-slate-100/70 px-2 py-1.5 text-right">{r.avg == null ? "—" : r.avg.toFixed(2)}</td>

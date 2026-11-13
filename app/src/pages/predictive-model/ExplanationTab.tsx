@@ -185,7 +185,7 @@ export default function ExplanationTab({
               ))}
               {!filtered.length && (
                 <tr>
-                  <td colSpan={2} className="px-3 py-6 text-center text-slate-400">No features match "{search}".</td>
+                  <td colSpan={2} className="px-3 py-6 text-center text-slate-500">No features match "{search}".</td>
                 </tr>
               )}
             </tbody>
@@ -198,7 +198,7 @@ export default function ExplanationTab({
               type="button"
               onClick={() => setActiveDesc(null)}
               aria-label="Close"
-              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-slate-400 hover:bg-slate-200 hover:text-slate-600"
+              className="tap-expand relative flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-slate-500 hover:bg-slate-200 hover:text-slate-600"
             >
               ✕
             </button>
@@ -238,10 +238,10 @@ export default function ExplanationTab({
         {selectedGame && (
           <>
             <div className="mb-4 flex flex-wrap gap-3 rounded-xl border border-slate-200 bg-slate-50/70 p-3 text-sm">
-              <div><span className="text-slate-400">Predicted margin: </span><b className="text-slate-800">{Number(selectedGame.predicted_margin).toFixed(1)}</b></div>
-              <div><span className="text-slate-400">Actual margin: </span><b className="text-slate-800">{Number(selectedGame.actual_margin).toFixed(1)}</b></div>
-              <div><span className="text-slate-400">Home win prob: </span><b className="text-slate-800">{pct(Number(selectedGame.home_win_prob))}</b></div>
-              <div><span className="text-slate-400">Spread line: </span><b className="text-slate-800">{selectedGame.spread_line !== null ? Number(selectedGame.spread_line).toFixed(1) : "--"}</b></div>
+              <div><span className="text-slate-500">Predicted margin: </span><b className="text-slate-800">{Number(selectedGame.predicted_margin).toFixed(1)}</b></div>
+              <div><span className="text-slate-500">Actual margin: </span><b className="text-slate-800">{Number(selectedGame.actual_margin).toFixed(1)}</b></div>
+              <div><span className="text-slate-500">Home win prob: </span><b className="text-slate-800">{pct(Number(selectedGame.home_win_prob))}</b></div>
+              <div><span className="text-slate-500">Spread line: </span><b className="text-slate-800">{selectedGame.spread_line !== null ? Number(selectedGame.spread_line).toFixed(1) : "--"}</b></div>
             </div>
 
             {selectedFeatures ? (
@@ -259,9 +259,9 @@ export default function ExplanationTab({
                   <tbody>
                     <tr className={trCls}>
                       <td className="px-3 py-1.5 font-medium text-slate-500">Intercept (baseline)</td>
-                      <td className="px-3 py-1.5 text-right text-slate-400">--</td>
-                      <td className="px-3 py-1.5 text-right text-slate-400">--</td>
-                      <td className="px-3 py-1.5 text-right text-slate-400">--</td>
+                      <td className="px-3 py-1.5 text-right text-slate-500">--</td>
+                      <td className="px-3 py-1.5 text-right text-slate-500">--</td>
+                      <td className="px-3 py-1.5 text-right text-slate-500">--</td>
                       <td className="px-3 py-1.5 text-right font-semibold">{intercept.toFixed(2)}</td>
                     </tr>
                     {contribRows.map((r) => (
@@ -289,7 +289,7 @@ export default function ExplanationTab({
                 </table>
               </div>
             ) : (
-              <p className="text-sm text-slate-400">No feature breakdown available for this game.</p>
+              <p className="text-sm text-slate-500">No feature breakdown available for this game.</p>
             )}
             {activeDescGame && (
               <div className="mt-2 flex items-start justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
@@ -298,7 +298,7 @@ export default function ExplanationTab({
                   type="button"
                   onClick={() => setActiveDescGame(null)}
                   aria-label="Close"
-                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-slate-400 hover:bg-slate-200 hover:text-slate-600"
+                  className="tap-expand relative flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-slate-500 hover:bg-slate-200 hover:text-slate-600"
                 >
                   ✕
                 </button>

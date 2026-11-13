@@ -38,7 +38,7 @@ function PythSplitBar({ pf, pa, pythPct, color }: { pf: number; pa: number; pyth
           {pa}
         </div>
       </div>
-      <div className="mt-1 flex justify-between text-[10px] uppercase tracking-wider text-slate-400">
+      <div className="mt-1 flex justify-between text-[10px] uppercase tracking-wider text-slate-500">
         <span>Points for</span>
         <span>Points against</span>
       </div>
@@ -177,7 +177,7 @@ export default function DetailModal({
           </Card>
 
           <Card title="Season-to-date Overall Grade" subtitle="Weekly Overall Grade — hover a bar for that week's opponent/score" accent="#E87722">
-            {gradeOption ? <div ref={gradeRef} className="h-40" /> : <div className="py-6 text-center text-xs text-slate-400">No grades yet.</div>}
+            {gradeOption ? <div ref={gradeRef} className="h-40" /> : <div className="py-6 text-center text-xs text-slate-500">No grades yet.</div>}
             <div className="mt-2 border-t border-slate-100 pt-2">
               <MetricRow label={`Average of ${weeklyGrades.length} week(s)`} value={breakdown.gradeAvg == null ? "—" : breakdown.gradeAvg.toFixed(1)} />
               <MetricRow
@@ -194,7 +194,7 @@ export default function DetailModal({
               </div>
               <div className="shrink-0 rounded-xl bg-slate-50 px-3 py-1.5 text-center" title="Pythagorean expected win share">
                 <div className="text-lg font-extrabold text-slate-800">{pct(breakdown.pythPct)}</div>
-                <div className="text-[10px] uppercase tracking-wider text-slate-400">win share</div>
+                <div className="text-[10px] uppercase tracking-wider text-slate-500">win share</div>
               </div>
             </div>
             {weeklyGrades.length > 0 && (
@@ -206,7 +206,7 @@ export default function DetailModal({
                       <span>
                         Wk{g.week} {g.home ? "vs" : "@"} {g.opponent ?? "—"}
                       </span>
-                      <span className={won == null ? "text-slate-400" : won ? "text-[#3C9A5F] font-semibold" : "text-[#C8102E] font-semibold"}>
+                      <span className={won == null ? "text-slate-500" : won ? "text-[#3C9A5F] font-semibold" : "text-[#C8102E] font-semibold"}>
                         {g.teamScore != null ? `${won ? "W" : "L"} ${g.teamScore}–${g.opponentScore}` : "—"}
                       </span>
                     </div>
@@ -223,7 +223,7 @@ export default function DetailModal({
           </Card>
 
           <Card title="Composite score" subtitle="This team vs. the league average, week by week" accent={accent}>
-            {compositeOption ? <div ref={compositeRef} className="h-40" /> : <div className="py-6 text-center text-xs text-slate-400">No data yet.</div>}
+            {compositeOption ? <div ref={compositeRef} className="h-40" /> : <div className="py-6 text-center text-xs text-slate-500">No data yet.</div>}
             <div className="mt-2 border-t border-slate-100 pt-2">
               <MetricRow label="Elo (normalized)" value={pct(breakdown.eloNorm)} />
               <MetricRow label="Grade (normalized)" value={pct(breakdown.gradeNorm)} />
@@ -235,7 +235,7 @@ export default function DetailModal({
 
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <h3 className="mb-2 text-sm font-semibold text-slate-700">Rank evolution — {breakdown.season}</h3>
-          {trendOption ? <div ref={trendRef} className="h-64" /> : <div className="py-8 text-center text-sm text-slate-400">No trend data yet.</div>}
+          {trendOption ? <div ref={trendRef} className="h-64" /> : <div className="py-8 text-center text-sm text-slate-500">No trend data yet.</div>}
         </div>
       </div>
     </Modal>

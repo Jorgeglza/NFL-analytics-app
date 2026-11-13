@@ -18,7 +18,7 @@ import { withMobile } from "../../components/charts/responsive";
 import { opponentLabel } from "../grading-model/shared";
 import { PageSkeleton } from "../../components/Skeleton";
 import { ErrorRetry } from "../../components/Loading";
-import { stickyColHeadCls, ScrollHint } from "../../components/ui";
+import { stickyColHeadCls, ScrollHint, clickableRowCls, clickableRowProps } from "../../components/ui";
 import { buildMismatchStatGroups, statLabel } from "./statPicker";
 import { defaultWeekNearToday } from "../game-analysis/previews/engine";
 import { useSeasonFallback } from "../../lib/hooks/useSeasonFallback";
@@ -436,7 +436,7 @@ export default function MatchupBets() {
     <div className="space-y-4">
       <Link
         to={`/player_analysis/value_bets?season=${season}&week=${selWeek}`}
-        className="inline-flex items-center gap-1 text-xs font-medium text-[#002f6c] hover:underline"
+        className="tap-expand relative inline-flex items-center gap-1 text-xs font-medium text-[#002f6c] hover:underline"
       >
         ← Back to Value Bets
       </Link>
@@ -453,10 +453,10 @@ export default function MatchupBets() {
         <div className="flex items-center gap-2.5">
           {meta?.get(away)?.logo && <img src={meta.get(away)!.logo} alt={away} className="h-9 w-9 object-contain" loading="lazy" decoding="async" />}
           <span className="text-xl font-extrabold text-slate-800">{away}</span>
-          <span className="text-sm font-medium text-slate-400">@</span>
+          <span className="text-sm font-medium text-slate-500">@</span>
           <span className="text-xl font-extrabold text-slate-800">{home}</span>
           {meta?.get(home)?.logo && <img src={meta.get(home)!.logo} alt={home} className="h-9 w-9 object-contain" loading="lazy" decoding="async" />}
-          {selGame?.gameday && <span className="ml-1 text-xs text-slate-400">{selGame.gameday}</span>}
+          {selGame?.gameday && <span className="ml-1 text-xs text-slate-500">{selGame.gameday}</span>}
         </div>
         <div className="ml-auto flex flex-wrap gap-3">
           {[
@@ -464,7 +464,7 @@ export default function MatchupBets() {
             [`Avg Edge (Top ${topN})`, mismatches?.length ? (mismatches.reduce((a, m) => a + m.edge, 0) / mismatches.length).toFixed(1) : "—"],
           ].map(([l, v]) => (
             <div key={l} className="min-w-40 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
-              <div className="text-[11px] font-medium uppercase tracking-wider text-slate-400">{l}</div>
+              <div className="text-[11px] font-medium uppercase tracking-wider text-slate-500">{l}</div>
               <div className="text-xl font-bold">{v}</div>
             </div>
           ))}
@@ -475,7 +475,7 @@ export default function MatchupBets() {
       <div className="rounded-2xl border border-slate-200 bg-white p-3">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
           <span className="text-sm font-semibold">Matchup Mismatches — by category</span>
-          <label className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-wider text-slate-400">
+          <label className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-wider text-slate-500">
             Top-N: {topN}
             <input type="range" min={3} max={16} step={1} value={topN} onChange={(e) => setTopN(Number(e.target.value))} className="w-40" />
           </label>
@@ -491,9 +491,9 @@ export default function MatchupBets() {
                     onClick={() => setOpenCategory(isOpen ? null : g.category)}
                     className="flex w-full items-center gap-2 py-2.5 text-left"
                   >
-                    <span className={`text-slate-400 transition-transform ${isOpen ? "rotate-90" : ""}`}>›</span>
+                    <span className={`text-slate-500 transition-transform ${isOpen ? "rotate-90" : ""}`}>›</span>
                     <span className="font-semibold text-slate-800">{g.category}</span>
-                    <span className="text-xs text-slate-400">{g.stats.length} stat{g.stats.length === 1 ? "" : "s"}</span>
+                    <span className="text-xs text-slate-500">{g.stats.length} stat{g.stats.length === 1 ? "" : "s"}</span>
                     <span className={`ml-auto inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${bandColor(g.best.band)}`}>
                       Best: {statLabel(g.best.stat)} <b>{g.best.edge.toFixed(1)}</b> · {g.best.band}
                     </span>
@@ -527,7 +527,7 @@ export default function MatchupBets() {
             })}
           </div>
         ) : (
-          <div className="py-4 text-center text-sm text-slate-400">No rank data for this matchup yet.</div>
+          <div className="py-4 text-center text-sm text-slate-500">No rank data for this matchup yet.</div>
         )}
         <div className="mt-2 text-xs text-slate-500">
           Edge = Offense strength (inverted rank) + Opponent allowed rank, on a fixed 2–{mismatches?.length ? mismatches[0].edgeMax : "2N"} scale for this league size.
@@ -541,7 +541,7 @@ export default function MatchupBets() {
           <span className="text-sm font-semibold">Stat Detail Comparison</span>
           <div className="flex flex-wrap items-end gap-3">
             <Select label="Stat" value={selStat} onChange={setStat} groups={buildMismatchStatGroups(numericCols)} />
-            <label className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
+            <label className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-500">
               Set line
               <input type="number" value={setLine} onChange={(e) => setSetLine(e.target.value)} placeholder="set_line" className="w-28 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
             </label>
@@ -567,7 +567,7 @@ export default function MatchupBets() {
       {pivot && (
         <div className="relative mt-3 overflow-x-auto rounded-xl border border-slate-100">
           <table className="w-full border-separate border-spacing-0 text-xs">
-            <thead className="bg-slate-50 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+            <thead className="bg-slate-50 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
               <tr>
                 <th className="px-2 py-2" />
                 <th className={`px-2 py-2 text-left ${stickyColHeadCls}`}>Team</th>
@@ -581,7 +581,12 @@ export default function MatchupBets() {
             </thead>
             <tbody>
               {pivot.players.map((p) => (
-                <tr key={p.player} className={`cursor-pointer border-t border-slate-100 hover:bg-slate-50 ${p.player === selPlayer ? "bg-blue-50" : ""}`} onClick={() => setSelectedPlayer(p.player)}>
+                <tr
+                  key={p.player}
+                  {...clickableRowProps(() => setSelectedPlayer(p.player), `Show ${p.player}'s detail`)}
+                  aria-current={p.player === selPlayer ? "true" : undefined}
+                  className={`${clickableRowCls} border-t border-slate-100 hover:bg-slate-50 ${p.player === selPlayer ? "bg-blue-50" : ""}`}
+                >
                   <td className="px-2 py-1">{meta?.get(p.team)?.logo && <img src={meta.get(p.team)!.logo} alt={p.team} className="h-6 w-6 object-contain" loading="lazy" decoding="async" />}</td>
                   <td
                     className={`sticky left-0 z-10 px-2 py-1 text-left shadow-[2px_0_4px_-2px_rgba(0,0,0,0.15)] ${p.player === selPlayer ? "bg-blue-50" : "bg-white"}`}
@@ -616,7 +621,7 @@ export default function MatchupBets() {
                       to={`/player_analysis/prop_bets_players?season=${season}&team=${p.team}&stat=${selStat}&player=${encodeURIComponent(p.player)}`}
                       title="Open in Prop Bets"
                       onClick={(e) => e.stopPropagation()}
-                      className="flex min-h-11 min-w-11 items-center justify-center text-slate-400 hover:text-[#002f6c] sm:min-h-0 sm:min-w-0"
+                      className="flex min-h-11 min-w-11 items-center justify-center text-slate-500 hover:text-[#002f6c] sm:min-h-0 sm:min-w-0"
                     >
                       →
                     </Link>
@@ -633,7 +638,7 @@ export default function MatchupBets() {
                 type="button"
                 onClick={() => setActiveCellTip(null)}
                 aria-label="Close"
-                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-slate-400 hover:bg-slate-200 hover:text-slate-600"
+                className="tap-expand relative flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-slate-500 hover:bg-slate-200 hover:text-slate-600"
               >
                 ✕
               </button>

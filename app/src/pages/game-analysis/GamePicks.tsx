@@ -135,13 +135,13 @@ function TeamBadge({
       </span>
       <span className="min-h-[13px] whitespace-nowrap text-[10px] leading-tight">
         {prob != null && (
-          <span className={favored ? "font-semibold text-slate-500" : "text-slate-400"} title="Model-consensus win probability — the average pick across every model on Matchup Previews.">
+          <span className={favored ? "font-semibold text-slate-500" : "text-slate-500"} title="Model-consensus win probability — the average pick across every model on Matchup Previews.">
             {Math.round(prob * 100)}%
           </span>
         )}
         {prob != null && elo != null && " · "}
         {elo != null && (
-          <span className="text-slate-400" title="Pre-game Elo power rating (1505 = league average).">
+          <span className="text-slate-500" title="Pre-game Elo power rating (1505 = league average).">
             {Math.round(elo)}
           </span>
         )}
@@ -566,7 +566,7 @@ export default function GamePicks() {
         </h1>
         {unplayedGames.length > 0 && (
           <div className="flex flex-col gap-1">
-            <span className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Prefill picks</span>
+            <span className="text-[11px] font-medium uppercase tracking-wider text-slate-500">Prefill picks</span>
             <div className="flex flex-wrap gap-1.5">
               <button onClick={applyAllFavorite} className={prefillBtnCls(activePrefill === "favorite")} title="Pick every closing-spread favorite">
                 ⭐ All favorites
@@ -602,13 +602,13 @@ export default function GamePicks() {
         )}
         {pickRecord.any && (
           <div className="flex items-center gap-1.5 self-center rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold shadow-sm" title="Your manual picks vs. final results for this week">
-            <span className="uppercase tracking-wider text-slate-400">Your picks</span>
+            <span className="uppercase tracking-wider text-slate-500">Your picks</span>
             <span className="text-[#3C9A5F]">{pickRecord.correct}✓</span>
             <span className="text-[#C8102E]">{pickRecord.wrong}✗</span>
             {pickRecord.correct + pickRecord.wrong > 0 && (
               <span className="text-slate-600">({Math.round((pickRecord.correct / (pickRecord.correct + pickRecord.wrong)) * 100)}%)</span>
             )}
-            {pickRecord.pending > 0 && <span className="text-slate-400">· {pickRecord.pending} pending</span>}
+            {pickRecord.pending > 0 && <span className="text-slate-500">· {pickRecord.pending} pending</span>}
           </div>
         )}
         <Select label="Season" value={season} onChange={setSeason} options={seasons.map((s) => ({ value: String(s), label: String(s) }))} />
@@ -627,14 +627,14 @@ export default function GamePicks() {
       </div>
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-slate-500">
-        <span className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Win types</span>
+        <span className="text-[11px] font-medium uppercase tracking-wider text-slate-500">Win types</span>
         {ORDER.filter((l) => l !== LABEL_FOR_NONE).map((l) => (
           <span key={l} className="inline-flex items-center gap-1.5">
             <span className="h-2.5 w-2.5 rounded-full" style={{ background: COLORS[l] }} />
             {l}
           </span>
         ))}
-        <span className="ml-auto text-slate-400">Unplayed games show a Pick button per team — tap one to record your pick (saved in this browser), tap again to clear it.</span>
+        <span className="ml-auto text-slate-500">Unplayed games show a Pick button per team — tap one to record your pick (saved in this browser), tap again to clear it.</span>
       </div>
 
       <div className={tableWrapCls}>
@@ -712,7 +712,7 @@ export default function GamePicks() {
                       {winType}
                     </span>
                   ) : (
-                    <span className="text-xs text-slate-400">{LABEL_FOR_NONE}</span>
+                    <span className="text-xs text-slate-500">{LABEL_FOR_NONE}</span>
                   )}
                 </td>
                 <td className="px-3 py-2" data-export-exclude="">

@@ -182,18 +182,18 @@ export default function SimilarWeeksWinTypesModal({
         {barOption ? (
           <div className="grid gap-5 lg:grid-cols-3">
             <div className="min-w-0 lg:col-span-2">
-              <div className="mb-1 text-[11px] text-slate-400">Click a bar to see that week&apos;s games below.</div>
+              <div className="mb-1 text-[11px] text-slate-500">Click a bar to see that week&apos;s games below.</div>
               <div ref={barRef} className="h-[320px] sm:h-[360px]" />
             </div>
             {scatterOption && (
               <div className="min-w-0">
-                <div className="mb-1 truncate text-[11px] text-slate-400">Spread per game · hover a dot for the result</div>
+                <div className="mb-1 truncate text-[11px] text-slate-500">Spread per game · hover a dot for the result</div>
                 <div ref={scatterRef} className="h-[320px] sm:h-[360px]" />
               </div>
             )}
           </div>
         ) : (
-          <div className="text-xs text-slate-400">Not enough data to chart win types for these weeks.</div>
+          <div className="text-xs text-slate-500">Not enough data to chart win types for these weeks.</div>
         )}
 
         <div>

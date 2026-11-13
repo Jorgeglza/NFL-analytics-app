@@ -3,6 +3,7 @@ import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import Navbar from "./components/Navbar";
 import { Loading } from "./components/Loading";
 import { ErrorBoundary, NotFound } from "./components/ErrorBoundary";
+import { TouchTitles } from "./components/TouchTitles";
 import Home from "./pages/Home";
 import { NAV_GROUPS } from "./nav";
 import { usePageTitle } from "./lib/hooks/usePageTitle";
@@ -61,7 +62,7 @@ function Placeholder({ name, description }: { name: string; description: string 
       <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-[#002f6c]/8 text-2xl">🚧</div>
       <h1 className="mt-4 text-xl font-bold text-slate-800">{name}</h1>
       <p className="mt-2 text-sm text-slate-500">{description}</p>
-      <p className="mt-4 text-xs text-slate-400">
+      <p className="mt-4 text-xs text-slate-500">
         This page is being ported from the original app — see docs/IMPLEMENTATION_LOG.md (M3).
       </p>
     </div>
@@ -74,6 +75,7 @@ export default function App() {
     <div className="min-h-screen overflow-x-clip">
       <Navbar />
       <RouteTitle />
+      <TouchTitles />
       <main className="safe-bottom mx-auto max-w-screen-2xl px-3 py-6 sm:px-4">
         <SeasonWeekProvider>
           {/* resetKey: navigating away from a crashed page recovers. */}

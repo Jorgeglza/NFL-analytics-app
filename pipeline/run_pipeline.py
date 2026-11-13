@@ -60,6 +60,55 @@ def _committed_meta_seasons():
         return None
 
 
+def _current_season_checks(sched: dict, meta: dict) -> list:
+    """Cheap invariants on the live season (audit P4). Historical seasons are
+    exempt from the duplicate check: upstream nflverse has phantom duplicate
+    (season, week, team) rows there that parity deliberately preserves (see
+    the M1 notes in docs/IMPLEMENTATION_LOG.md)."""
+    import json
+    problems = []
+    c = sched["cols"]
+    ix = {k: c.index(k) for k in ("season", "week", "game_type", "home_score", "spread_line")}
+    rows = sched["rows"]
+
+    # Every played game needs a closing spread (Win Types, Spread Analytics,
+    # Game Picks and every model's market input depend on it).
+    no_spread = sorted({(r[ix["season"]], r[ix["week"]]) for r in rows
+                        if r[ix["home_score"]] is not None and r[ix["spread_line"]] is None})
+    if no_spread:
+        problems.append(f"played games with no spread_line at (season, week): {no_spread[:10]}")
+
+    cur = meta.get("current_season")
+    if cur not in meta.get("seasons", []):
+        return problems  # pre-season grace, already covered by the stale-season check
+    played_reg = [r[ix["week"]] for r in rows
+                  if r[ix["season"]] == cur and r[ix["game_type"]] == "REG" and r[ix["home_score"]] is not None]
+    if not played_reg:
+        return problems
+    latest = max(played_reg)
+
+    tw_path = config.EXTRACTS_DIR / "team_week" / f"{cur}.json"
+    if not tw_path.exists():
+        return problems + [f"team_week/{cur}.json missing"]
+    tw = json.loads(tw_path.read_text())
+    tc = tw["cols"]
+    si, wi, ti = tc.index("season"), tc.index("week"), tc.index("team")
+    seen, dups = set(), set()
+    for r in tw["rows"]:
+        k = (r[si], r[wi], r[ti])
+        (dups if k in seen else seen).add(k)
+    if dups:
+        problems.append(f"duplicate (season, week, team) rows in {cur}: {sorted(dups)[:5]}")
+    if not any(r[wi] == latest for r in tw["rows"]):
+        problems.append(f"latest played week {cur} W{latest} has no team_week rows")
+
+    g = json.loads((config.EXTRACTS_DIR / "grades.json").read_text())
+    gs, gw = g["cols"].index("Season"), g["cols"].index("Week")
+    if not any(r[gs] == cur and r[gw] == latest for r in g["rows"]):
+        problems.append(f"latest played week {cur} W{latest} has no grades")
+    return problems
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--stage", default="all",
@@ -161,6 +210,7 @@ def main():
                 missing = sorted(played_seasons - set(seasons))
                 if missing:
                     problems.append(f"seasons {missing} have played games in schedule but no team_week data")
+                problems += _current_season_checks(sched, meta)
             # A season present in the last committed meta.json must not
             # disappear. Catches the case where the schedule fetch for that
             # season failed too (so the check above can't see it).

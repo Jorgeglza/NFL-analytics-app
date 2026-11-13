@@ -48,7 +48,7 @@ export function InfoDot({ text }: { text: string }) {
   }, [open]);
 
   return (
-    <span ref={rootRef} className="relative inline-block align-middle">
+    <span ref={rootRef} data-no-touch-title className="relative inline-block align-middle">
       <button
         type="button"
         title={text}
@@ -58,7 +58,7 @@ export function InfoDot({ text }: { text: string }) {
           e.stopPropagation();
           setOpen((v) => !v);
         }}
-        className="ml-1.5 inline-flex h-5 w-5 cursor-help items-center justify-center rounded-full bg-slate-200 text-[10px] font-bold text-slate-500"
+        className="tap-expand relative ml-1.5 inline-flex h-5 w-5 cursor-help items-center justify-center rounded-full bg-slate-200 text-[10px] font-bold text-slate-500"
       >
         i
       </button>

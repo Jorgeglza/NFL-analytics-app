@@ -409,7 +409,7 @@ export default function WeeklyBreakdownTab() {
           <button className={stepBtnCls} onClick={() => stepWeek(1)} disabled={weekIdx < 0 || weekIdx >= weeks.length - 1} title="Next week">›</button>
         </div>
         {!anyPlayed && rows.length > 0 && (
-          <span className="pb-2 text-xs text-slate-400">
+          <span className="pb-2 text-xs text-slate-500">
             Week {week} hasn't been played yet — bars and candidates below are colored by <span className="font-semibold">historic upset risk</span>, not results.
           </span>
         )}
@@ -434,7 +434,7 @@ export default function WeeklyBreakdownTab() {
         {spreadOption ? (
           <div ref={spreadRef} style={{ height: Math.max(180, rowChartH(sortedRows.length, 28, 70)) }} />
         ) : (
-          <div className="grid h-[180px] place-items-center text-sm text-slate-400">No games this week</div>
+          <div className="grid h-[180px] place-items-center text-sm text-slate-500">No games this week</div>
         )}
       </div>
 
@@ -449,7 +449,7 @@ export default function WeeklyBreakdownTab() {
             <div ref={rankRef} className="h-[280px]" />
           </LazyMount>
         ) : (
-          <div className="grid h-[280px] place-items-center text-sm text-slate-400">Not enough history yet</div>
+          <div className="grid h-[280px] place-items-center text-sm text-slate-500">Not enough history yet</div>
         )}
       </div>
 
@@ -499,7 +499,7 @@ export default function WeeklyBreakdownTab() {
                       <td className="px-3 py-1.5">{r.rankUpsetRate == null || r.rankN < RISK_MIN_N ? "—" : `${(100 * r.rankUpsetRate).toFixed(0)}% (n=${r.rankN})`}</td>
                       <td className="px-3 py-1.5">
                         {!r.g.played || r.g.winType == null ? (
-                          <span className="text-slate-400">—</span>
+                          <span className="text-slate-500">—</span>
                         ) : r.g.favWin ? (
                           <span className="font-bold text-[#3C9A5F]">✓ Favorite</span>
                         ) : (
@@ -526,7 +526,7 @@ export default function WeeklyBreakdownTab() {
             <div ref={weekAcrossSeasonsRef} className="h-[280px]" />
           </LazyMount>
         ) : (
-          <div className="grid h-[280px] place-items-center text-sm text-slate-400">No history for this week yet</div>
+          <div className="grid h-[280px] place-items-center text-sm text-slate-500">No history for this week yet</div>
         )}
       </div>
 
@@ -567,7 +567,7 @@ export default function WeeklyBreakdownTab() {
                       key={t.team}
                       onClick={() => setSelectedTeam(t.team)}
                       title={`See ${t.team}'s Week ${week} history`}
-                      className={`${trCls} cursor-pointer ${t.games < MIN_TEAM_GAMES ? "text-slate-400" : ""}`}
+                      className={`${trCls} cursor-pointer ${t.games < MIN_TEAM_GAMES ? "text-slate-500" : ""}`}
                     >
                       <td className="px-3 py-1.5 font-medium">{t.team}</td>
                       <td className="px-3 py-1.5">{t.games}</td>
@@ -580,7 +580,7 @@ export default function WeeklyBreakdownTab() {
             </div>
           </>
         ) : (
-          <div className="grid h-[120px] place-items-center text-sm text-slate-400">No played games for Week {week} yet</div>
+          <div className="grid h-[120px] place-items-center text-sm text-slate-500">No played games for Week {week} yet</div>
         )}
       </div>
 
@@ -618,7 +618,7 @@ export default function WeeklyBreakdownTab() {
                         <td className="px-3 py-1.5">{favTeam}</td>
                         <td className="px-3 py-1.5">
                           {!g.played || g.winType == null ? (
-                            <span className="text-slate-400">—</span>
+                            <span className="text-slate-500">—</span>
                           ) : g.favWin ? (
                             <span className="font-bold text-[#3C9A5F]">✓ Favorite</span>
                           ) : (

@@ -69,7 +69,7 @@ function LeagueLeaders({ stat, leaders, meta, onSelectTeam }: {
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="mb-2 flex items-center justify-between">
         <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">League leaders — {statLabel(stat)}</div>
-        <div className="text-[11px] text-slate-400">Click a row to jump to that team →</div>
+        <div className="text-[11px] text-slate-500">Click a row to jump to that team →</div>
       </div>
       <div className="space-y-1.5">
         {leaders.map((p, i) => {
@@ -80,12 +80,12 @@ function LeagueLeaders({ stat, leaders, meta, onSelectTeam }: {
               key={`${p.team}-${p.name}`}
               onClick={() => onSelectTeam(p.team)}
               title={`${p.name} — ${fmtStat(stat, p.value)} (${p.pct.toFixed(1)}% of ${p.team}'s team total) — click to jump to ${p.team}`}
-              className="flex w-full items-center gap-1 rounded-lg px-1 py-0.5 text-left transition-colors hover:bg-slate-50 sm:gap-2"
+              className="flex min-h-11 w-full items-center gap-1 rounded-lg px-1 py-0.5 text-left transition-colors hover:bg-slate-50 sm:min-h-0 sm:gap-2"
             >
-              <span className="w-5 shrink-0 text-right text-xs font-semibold text-slate-400">{i + 1}</span>
+              <span className="w-5 shrink-0 text-right text-xs font-semibold text-slate-500">{i + 1}</span>
               {tm?.logo && <img src={tm.logo} alt={p.team} className="h-5 w-5 shrink-0" loading="lazy" decoding="async" />}
               <span className="w-20 shrink-0 truncate text-sm font-medium text-slate-800 sm:w-40">{p.name}</span>
-              <span className="w-8 shrink-0 text-xs text-slate-400 sm:w-10">{p.team}</span>
+              <span className="w-8 shrink-0 text-xs text-slate-500 sm:w-10">{p.team}</span>
               <div className="relative h-5 min-w-8 flex-1 rounded bg-slate-100">
                 <div
                   className="h-5 rounded"
@@ -93,7 +93,7 @@ function LeagueLeaders({ stat, leaders, meta, onSelectTeam }: {
                 />
               </div>
               <span className="w-14 shrink-0 text-right text-sm font-semibold text-slate-900 sm:w-16">{fmtStat(stat, p.value)}</span>
-              <span className="hidden shrink-0 text-right text-xs text-slate-400 sm:block sm:w-14">{p.pct.toFixed(0)}% team</span>
+              <span className="hidden shrink-0 text-right text-xs text-slate-500 sm:block sm:w-14">{p.pct.toFixed(0)}% team</span>
             </button>
           );
         })}
@@ -299,7 +299,7 @@ export default function PlayerTeamStats() {
         <h1 className="mr-auto flex items-center gap-2.5 text-2xl font-extrabold tracking-tight text-[#002f6c]"><span className="h-6 w-1.5 rounded-full bg-gradient-to-b from-[#002f6c] to-[#164a9c]" />Player Team Stats</h1>
         <Select label="Season Type" value={seasonType} onChange={setSeasonType} options={seasonTypeOptions(seasonTypes)} />
         <Select label="Season" value={season} onChange={setSeason} options={seasons.map((s) => ({ value: String(s), label: String(s) }))} />
-        <div className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
+        <div className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-500">
           Side
           <div className="flex gap-2">
             {(["offense", "defense"] as const).map((sd) => (
@@ -310,7 +310,7 @@ export default function PlayerTeamStats() {
           </div>
         </div>
         <Select label="Stat" value={selStat} onChange={setStat} groups={buildStatGroups(sideCols, side)} />
-        <div className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
+        <div className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wider text-slate-500">
           Weeks: {Math.min(weekLo, weekHi)}–{Math.max(weekLo, weekHi)}
           <RangeSlider
             min={allWeeks[0] ?? 1}
@@ -331,7 +331,7 @@ export default function PlayerTeamStats() {
           <LeagueLeaders stat={selStat} leaders={grid.leaders} meta={meta} onSelectTeam={jumpToTeam} />
 
           <div className="sticky top-[53px] z-20 -mx-1 flex flex-wrap items-center gap-1.5 rounded-xl bg-white/90 px-1 py-2 backdrop-blur">
-            <span className="mr-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Jump to</span>
+            <span className="mr-1 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Jump to</span>
             {grid.blocks.map((b) => (
               <button
                 key={`${b.conf}-${b.div}`}
@@ -376,7 +376,7 @@ export default function PlayerTeamStats() {
           </div>
         </div>
       ) : (
-        <div className="py-8 text-center text-sm text-slate-400">No data for the selected filters.</div>
+        <div className="py-8 text-center text-sm text-slate-500">No data for the selected filters.</div>
       )}
     </div>
   );

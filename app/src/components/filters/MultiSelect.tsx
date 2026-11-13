@@ -38,13 +38,13 @@ export function MultiSelect({ label, values, options, onChange }: MultiSelectPro
 
   return (
     <div ref={ref} className="relative flex flex-col gap-1">
-      <span className="text-[11px] font-medium uppercase tracking-wider text-slate-400">{label}</span>
+      <span className="text-[11px] font-medium uppercase tracking-wider text-slate-500">{label}</span>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
         className="min-w-36 rounded-lg border border-slate-300 bg-white px-3 py-2 text-left text-sm text-slate-900 shadow-sm focus:border-[#002f6c] focus:outline-none focus:ring-2 focus:ring-[#002f6c]/15"
       >
-        {summary} <span className="float-right text-slate-400">▾</span>
+        {summary} <span className="float-right text-slate-500">▾</span>
       </button>
       {open && (
         <div className="absolute top-full z-20 mt-1 max-h-64 w-full min-w-40 max-w-[calc(100vw-1.5rem)] overflow-y-auto rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
